@@ -1,10 +1,8 @@
 package probe
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -428,19 +426,6 @@ func ParseCustomerScenario(data []byte) (CustomerScenario, error) {
 		return CustomerScenario{}, err
 	}
 	return scenario, nil
-}
-func WriteCustomerScenario(path string, scenario CustomerScenario) error {
-	if err := scenario.Validate(); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(scenario, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), privateFileMode)
 }
 
 func validateRelativePath(field, raw string, allowDot bool) error {

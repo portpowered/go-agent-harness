@@ -27,6 +27,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/spf13/cobra"
 )
@@ -374,8 +375,8 @@ func newPersistedProductionDirectCLI(t *testing.T, server *httptest.Server, runt
 	configDir := writePersistedProductionConfig(t, server.URL)
 	store := NewFileWebMCPSelectionStore(configDir)
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 		WithWebMCPProductionSelectionStore(store),
 	)
 	return configDir, store, factory

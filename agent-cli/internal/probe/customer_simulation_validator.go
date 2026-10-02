@@ -39,17 +39,6 @@ type CustomerSimulationValidatorAgent interface {
 	ValidateCustomerSimulation(context.Context, CustomerSimulationValidatorRequest) ([]byte, error)
 }
 
-// CustomerSimulationValidatorAgentFunc adapts a function to the validator
-// agent interface. It is useful for hermetic fake-validator tests.
-type CustomerSimulationValidatorAgentFunc func(context.Context, CustomerSimulationValidatorRequest) ([]byte, error)
-
-func (f CustomerSimulationValidatorAgentFunc) ValidateCustomerSimulation(ctx context.Context, request CustomerSimulationValidatorRequest) ([]byte, error) {
-	if f == nil {
-		return nil, ErrValidatorUnavailable
-	}
-	return f(ctx, request)
-}
-
 type CustomerSimulationValidatorCriterion struct {
 	ID          string `json:"id"`
 	Requirement string `json:"requirement"`
@@ -183,18 +172,6 @@ func (r CustomerSimulationValidatorResult) Pass() bool {
 type CustomerSimulationValidatorRunner struct {
 	Agent   CustomerSimulationValidatorAgent
 	Timeout time.Duration
-}
-
-// RunCustomerSimulationValidator evaluates already-collected typed evidence.
-// For a persisted run, prefer RunFinalizedCustomerSimulationValidator so the
-// runner verifies the on-disk manifest and canonical artifacts before the
-// agent is invoked.
-func RunCustomerSimulationValidator(ctx context.Context, input ValidatorInput, agent CustomerSimulationValidatorAgent, timeout time.Duration) (CustomerSimulationValidatorResult, error) {
-	return (CustomerSimulationValidatorRunner{Agent: agent, Timeout: timeout}).Run(ctx, input)
-}
-
-func (r CustomerSimulationValidatorRunner) Run(ctx context.Context, input ValidatorInput) (CustomerSimulationValidatorResult, error) {
-	return r.run(ctx, input, nil, nil)
 }
 
 func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input ValidatorInput, manifest *CustomerEvidenceManifest, allowedRefs map[string]struct{}) (CustomerSimulationValidatorResult, error) {
@@ -741,4 +718,15 @@ func readCustomerSimulationJSONLines[T any](root, relative string) ([]T, error) 
 		values = append(values, value)
 	}
 	return values, nil
+}
+
+// CustomerSimulationValidatorAgentFunc adapts a function to the validator
+// agent interface. It is useful for hermetic fake-validator tests.
+type CustomerSimulationValidatorAgentFunc func(context.Context, CustomerSimulationValidatorRequest) ([]byte, error)
+
+func (f CustomerSimulationValidatorAgentFunc) ValidateCustomerSimulation(ctx context.Context, request CustomerSimulationValidatorRequest) ([]byte, error) {
+	if f == nil {
+		return nil, ErrValidatorUnavailable
+	}
+	return f(ctx, request)
 }

@@ -24,15 +24,6 @@ func ProcessHostDirs() HostDirs {
 	}
 }
 
-// FixedHostDirs returns lookups that report fixed directories, for embedders
-// and tests that must not depend on the process environment.
-func FixedHostDirs(homeDir, workDir string) HostDirs {
-	return HostDirs{
-		HomeDir: func() (string, error) { return homeDir, nil },
-		WorkDir: func() (string, error) { return workDir, nil },
-	}
-}
-
 // hostDirError is a constant sentinel error for unavailable host directories.
 type hostDirError string
 
@@ -91,15 +82,6 @@ func (f *GlobalFlags) defaultConfigDir() string {
 		return ""
 	}
 	return filepath.Join(home, config.ConfigDirName)
-}
-
-// HostHomeDirOrEmpty returns the injected home directory, or "" when the host
-// cannot report one.
-func (f *GlobalFlags) HostHomeDirOrEmpty() string {
-	if home, err := f.HostHomeDir(); err == nil {
-		return home
-	}
-	return ""
 }
 
 // HostWorkDirOrEmpty returns the injected working directory, or "" when the

@@ -171,7 +171,7 @@ func TestStatefulBrokerRejectsEarlyTerminalWithRetryableFreshnessEnvelope(t *tes
 	if err != nil {
 		t.Fatalf("execute broker tool: %v", err)
 	}
-	envelope, err := webmcptools.UnmarshalToolResult([]byte(response.Content))
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
 	if err != nil {
 		t.Fatalf("decode freshness envelope: %v; content=%s", err, response.Content)
 	}
@@ -228,7 +228,7 @@ func TestStatefulBrokerDoesNotRecommendRetryForUnprovenMutation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute mutation broker tool: %v", err)
 	}
-	envelope, err := webmcptools.UnmarshalToolResult([]byte(response.Content))
+	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
 	if err != nil {
 		t.Fatalf("decode mutation freshness envelope: %v; content=%s", err, response.Content)
 	}

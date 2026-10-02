@@ -141,7 +141,7 @@ func TestPersistedSelectionSurvivesRestartWithExactContinuity(t *testing.T) {
 	}
 
 	inputs, probe := persistenceInputs()
-	service := NewService(Options{
+	service := New(Options{
 		SelectionStore: store,
 		IDMapper:       persistenceBrowserIDMapper{id: persistenceBrowser().ID},
 		WebSocketProbe: probe,

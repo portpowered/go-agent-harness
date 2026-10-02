@@ -46,16 +46,6 @@ func NewBrokerToolSet(broker webmcp.Broker, webCast ...bool) *BrokerToolSet {
 	return set
 }
 
-// NewToolSet is an alias for NewBrokerToolSet.
-func NewToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
-	return NewBrokerToolSet(broker, webCast...)
-}
-
-// NewExecutor creates the direct agent-loop executor for broker.
-func NewExecutor(broker webmcp.Broker, webCast ...bool) *Executor {
-	return NewBrokerToolSet(broker, webCast...).Executor()
-}
-
 // Definitions returns the provider-neutral flat definitions used by the
 // current agent-loop contract. Use DefinitionSchemas when the complete
 // additionalProperties/default-bearing JSON schemas are needed.

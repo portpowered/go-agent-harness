@@ -215,34 +215,12 @@ type TargetCapabilityProbe interface {
 	Probe(context.Context, BrowserCandidate, Target) (TargetCapabilities, error)
 }
 
-// TargetCapabilityProbeFunc adapts a function to TargetCapabilityProbe.
-type TargetCapabilityProbeFunc func(context.Context, BrowserCandidate, Target) (TargetCapabilities, error)
-
-// Probe implements TargetCapabilityProbe.
-func (f TargetCapabilityProbeFunc) Probe(ctx context.Context, browser BrowserCandidate, target Target) (TargetCapabilities, error) {
-	if f == nil {
-		return TargetCapabilities{}, nil
-	}
-	return f(ctx, browser, target)
-}
-
 // TargetLister is an optional runtime seam for browser websocket-only
 // discovery. HTTP endpoints use the standard /json/list request automatically;
 // a target lister lets a neutral fake or a later adapter supply the same
 // records without exposing protocol types here.
 type TargetLister interface {
 	List(context.Context, BrowserCandidate) ([]TargetDescriptor, error)
-}
-
-// TargetListerFunc adapts a function to TargetLister.
-type TargetListerFunc func(context.Context, BrowserCandidate) ([]TargetDescriptor, error)
-
-// List implements TargetLister.
-func (f TargetListerFunc) List(ctx context.Context, browser BrowserCandidate) ([]TargetDescriptor, error) {
-	if f == nil {
-		return nil, nil
-	}
-	return f(ctx, browser)
 }
 
 // OriginPolicy admits or rejects canonical page origins before target
@@ -311,20 +289,6 @@ type TargetAttacher interface {
 // TargetRuntime is a descriptive alias for callers that name the injected
 // attach seam as a runtime.
 type TargetRuntime = TargetAttacher
-
-// TargetAttacherFunc adapts an attach function to TargetAttacher.
-type TargetAttacherFunc func(context.Context, BrowserCandidate, Target) (TargetDetacher, error)
-
-// TargetRuntimeFunc is a descriptive alias for TargetAttacherFunc.
-type TargetRuntimeFunc = TargetAttacherFunc
-
-// Attach implements TargetAttacher.
-func (f TargetAttacherFunc) Attach(ctx context.Context, browser BrowserCandidate, target Target) (TargetDetacher, error) {
-	if f == nil {
-		return nil, nil
-	}
-	return f(ctx, browser, target)
-}
 
 // TargetActivator foregrounds an exact target when selection explicitly asks
 // for it. Selection itself never calls this seam unless Activate is true.
@@ -599,36 +563,4 @@ func (f EventFunc) Emit(event Event) {
 type ConfiguredSource interface {
 	Name() string
 	Resolve(context.Context) (Endpoint, error)
-}
-
-// ConfiguredSourceFunc adapts functions to ConfiguredSource.
-type ConfiguredSourceFunc struct {
-	SourceName  string
-	ResolveFunc func(context.Context) (Endpoint, error)
-}
-
-// Name implements ConfiguredSource.
-func (s ConfiguredSourceFunc) Name() string { return s.SourceName }
-
-// Resolve implements ConfiguredSource.
-func (s ConfiguredSourceFunc) Resolve(ctx context.Context) (Endpoint, error) {
-	if s.ResolveFunc == nil {
-		return Endpoint{}, nil
-	}
-	return s.ResolveFunc(ctx)
-}
-
-// StaticConfiguredSource is useful for resolved configuration and deterministic
-// tests.
-type StaticConfiguredSource struct {
-	SourceName string
-	Value      Endpoint
-}
-
-// Name implements ConfiguredSource.
-func (s StaticConfiguredSource) Name() string { return s.SourceName }
-
-// Resolve implements ConfiguredSource.
-func (s StaticConfiguredSource) Resolve(context.Context) (Endpoint, error) {
-	return s.Value, nil
 }

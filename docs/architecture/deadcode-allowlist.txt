@@ -4,7 +4,4 @@
 # delete dead code instead of adding it here. `make deadcode-check` fails on
 # a dead function missing from this list and on an entry that is no longer
 # dead; `make deadcode-write` rewrites the list after dead code is deleted.
-github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery parseURLError.Error
-github.com/portpowered/go-agent-harness/agent-cli/test/integration dropProbeSession.Close
-github.com/portpowered/go-agent-harness/agent-cli/test/integration dropProbeSession.Done
 github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices openInterruptibleInput

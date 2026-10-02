@@ -76,17 +76,6 @@ type PinnedChromeAcquirer interface {
 	AcquirePinnedChrome(context.Context, PinnedChromeRequest) (ChromeExecutable, error)
 }
 
-// PinnedChromeAcquirerFunc adapts a function to PinnedChromeAcquirer.
-type PinnedChromeAcquirerFunc func(context.Context, PinnedChromeRequest) (ChromeExecutable, error)
-
-// AcquirePinnedChrome implements PinnedChromeAcquirer.
-func (f PinnedChromeAcquirerFunc) AcquirePinnedChrome(ctx context.Context, request PinnedChromeRequest) (ChromeExecutable, error) {
-	if f == nil {
-		return ChromeExecutable{}, errors.New("pinned Chrome acquirer is nil")
-	}
-	return f(ctx, request)
-}
-
 // ManagedChromeAcquisitionError is the one safe operator-facing failure for
 // managed executable selection. The underlying cause remains available for
 // diagnostics through Unwrap, but Error never includes paths, URLs, command

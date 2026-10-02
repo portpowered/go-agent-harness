@@ -315,11 +315,11 @@ func TestScriptedBrowserRuntimeReportsIncompleteCancellationAndClockErrors(t *te
 // valid fixture and returns the decoded script for further checks.
 func loadBrowserScriptThroughAliases(t *testing.T) BrowserScript {
 	t.Helper()
-	loaded, err := DecodeBrowserScript([]byte(validBrowserScriptJSON))
+	loaded, err := LoadBrowserScript([]byte(validBrowserScriptJSON))
 	if err != nil {
 		t.Fatalf("DecodeBrowserScript: %v", err)
 	}
-	if _, err := LoadScript([]byte(validBrowserScriptJSON)); err != nil {
+	if _, err := LoadBrowserScript([]byte(validBrowserScriptJSON)); err != nil {
 		t.Fatalf("LoadScript: %v", err)
 	}
 	if _, err := LoadBrowserScriptReader(strings.NewReader(validBrowserScriptJSON)); err != nil {
@@ -333,7 +333,7 @@ func loadBrowserScriptThroughAliases(t *testing.T) BrowserScript {
 	if _, err := LoadBrowserScriptFile(path); err != nil {
 		t.Fatalf("LoadBrowserScriptFile: %v", err)
 	}
-	if _, err := LoadScriptFile(path); err != nil {
+	if _, err := LoadBrowserScriptFile(path); err != nil {
 		t.Fatalf("LoadScriptFile: %v", err)
 	}
 	return loaded
@@ -343,7 +343,7 @@ func loadBrowserScriptThroughAliases(t *testing.T) BrowserScript {
 // the oracle reset to its initial value.
 func newCheckedStateOracle(t *testing.T) *FixtureStateOracle {
 	t.Helper()
-	oracle, err := NewStateOracle(map[string]any{"value": 1})
+	oracle, err := NewFixtureStateOracle(map[string]any{"value": 1})
 	if err != nil {
 		t.Fatalf("NewStateOracle: %v", err)
 	}
@@ -373,16 +373,16 @@ func TestBrowserScriptLoadAliasesOptionsAndStateOracle(t *testing.T) {
 	oracle := newCheckedStateOracle(t)
 
 	options := []FixtureRuntimeOption{
-		WithRuntimeClock(NewFakeClock(3)),
-		WithRuntimeIDSource(NewDeterministicIDSource("alias")),
+		WithFixtureClock(NewFakeClock(3)),
+		WithFixtureIDSource(NewDeterministicIDSource("alias")),
 		WithFixtureIDFunc(func(string) string { return "alias-id" }),
 		WithFixtureTargetID("tab-1"),
 		WithStateOracle(oracle),
 	}
 	for name, constructor := range map[string]func() (*BrowserScriptRuntime, error){
 		"browser": func() (*BrowserScriptRuntime, error) { return NewBrowserScriptRuntime(loaded, options...) },
-		"fixture": func() (*BrowserScriptRuntime, error) { return NewFixtureRuntime(loaded, options...) },
-		"script":  func() (*BrowserScriptRuntime, error) { return NewScriptRuntime(loaded, options...) },
+		"fixture": func() (*BrowserScriptRuntime, error) { return NewScriptedFixtureRuntime(loaded, options...) },
+		"script":  func() (*BrowserScriptRuntime, error) { return NewScriptedFixtureRuntime(loaded, options...) },
 		"value":   func() (*BrowserScriptRuntime, error) { return NewRuntime(loaded, options...) },
 		"pointer": func() (*BrowserScriptRuntime, error) { return NewRuntime(&loaded, options...) },
 	} {

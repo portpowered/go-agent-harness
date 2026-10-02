@@ -5,9 +5,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 )
@@ -17,16 +14,6 @@ import (
 
 // WebMCPProductionOptions holds the injectable production dependencies.
 type WebMCPProductionOptions = production.Options
-
-// WithWebMCPProductionRuntime injects the raw browser runtime.
-func WithWebMCPProductionRuntime(runtime webmcp.BrowserRuntime) production.Option {
-	return production.WithRuntime(runtime)
-}
-
-// WithWebMCPProductionDiscovery injects the discovery service.
-func WithWebMCPProductionDiscovery(service WebMCPDiscoveryService) production.Option {
-	return production.WithDiscovery(service)
-}
 
 // WithWebMCPProductionConfigDir keeps managed-browser state and selection
 // persistence on the same resolved config directory.
@@ -38,37 +25,6 @@ func WithWebMCPProductionConfigDir(configDir string) production.Option {
 // managed Chrome for Testing lock discovery.
 func WithWebMCPProductionWorkingDir(workingDir string) production.Option {
 	return production.WithWorkingDir(workingDir)
-}
-
-// WithWebMCPProductionManagedBrowserManager injects the managed-browser
-// lifecycle manager.
-func WithWebMCPProductionManagedBrowserManager(manager *chrome.ManagedBrowserManager) production.Option {
-	return production.WithManagedBrowserManager(manager)
-}
-
-// WithWebMCPProductionHTTPClient injects the discovery HTTP client.
-func WithWebMCPProductionHTTPClient(client discovery.HTTPClient) production.Option {
-	return production.WithHTTPClient(client)
-}
-
-// WithWebMCPProductionActivePortReader injects the DevToolsActivePort reader.
-func WithWebMCPProductionActivePortReader(reader discovery.ActivePortReader) production.Option {
-	return production.WithActivePortReader(reader)
-}
-
-// WithWebMCPProductionProcessEnumerator injects the process enumerator.
-func WithWebMCPProductionProcessEnumerator(enumerator discovery.ProcessEnumerator) production.Option {
-	return production.WithProcessEnumerator(enumerator)
-}
-
-// WithWebMCPProductionIDMapper injects the browser ID mapper.
-func WithWebMCPProductionIDMapper(mapper discovery.IDMapper) production.Option {
-	return production.WithIDMapper(mapper)
-}
-
-// WithWebMCPProductionClock injects the discovery and broker clock.
-func WithWebMCPProductionClock(clock discovery.Clock) production.Option {
-	return production.WithClock(clock)
 }
 
 // WithWebMCPProductionSelectionStore injects the selection store.

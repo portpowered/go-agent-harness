@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"unicode/utf8"
 )
@@ -421,18 +420,6 @@ func ValidateEventStream(data []byte) ([]Event, error) {
 		events = append(events, event)
 	}
 	return events, nil
-}
-
-// LoadEvents reads and validates a browser JSONL artifact from a stream.
-func LoadEvents(reader io.Reader) ([]Event, error) {
-	if reader == nil {
-		return nil, newEventValidationError(0, "stream", "reader is nil")
-	}
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("read browser event stream: %w", err)
-	}
-	return ValidateEventStream(data)
 }
 
 func validateEvent(event Event) error {

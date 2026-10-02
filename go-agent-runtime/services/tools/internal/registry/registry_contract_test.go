@@ -329,24 +329,8 @@ func TestBaseContracts(t *testing.T) {
 }
 
 func TestToolResultContracts(t *testing.T) {
-	for _, tc := range []struct {
-		name, llm, user string
-		got             *core.ToolResult
-		silent, isError bool
-		async           bool
-	}{
-		{"basic", "basic", "", core.NewToolResult("basic"), false, false, false},
-		{"silent", "silent", "", core.SilentResult("silent"), true, false, false},
-		{"async", "async", "", core.AsyncResult("async"), false, false, true},
-		{"error", "failure", "", core.ErrorResult("failure"), false, true, false},
-		{"user", "visible", "visible", core.UserResult("visible"), false, false, false},
-	} {
-		if tc.got.ForLLM != tc.llm || tc.got.ForUser != tc.user || tc.got.Silent != tc.silent || tc.got.IsError != tc.isError || tc.got.Async != tc.async {
-			t.Errorf("%s = %#v", tc.name, tc.got)
-		}
-	}
 	wantErr := errors.New("underlying")
-	result := core.UserResult("content").WithError(wantErr)
+	result := (&core.ToolResult{ForLLM: "content", ForUser: "content"}).WithError(wantErr)
 	if !errors.Is(result.Err, wantErr) || result.ForLLM == "" || result.ForUser == "" {
 		t.Fatalf("WithError result = %#v", result)
 	}

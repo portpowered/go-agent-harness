@@ -34,7 +34,7 @@ func newFilesystemPolicyFixture(t *testing.T) filesystemPolicyFixture {
 	if err := os.WriteFile(filepath.Join(additional, "extra.txt"), []byte("extra"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	policy, err := ResolveFilesystemPolicy(FilesystemHost{WorkDir: primary, HomeDir: t.TempDir()}, additional, additional)
+	policy, err := ResolveFilesystemPolicy(FilesystemHost{WorkDir: primary}, additional, additional)
 	if err != nil {
 		t.Fatalf("ResolveFilesystemPolicy: %v", err)
 	}
@@ -65,43 +65,13 @@ func TestFilesystemPolicyCanonicalizesRootsAndScope(t *testing.T) {
 	if fixture.policy.AdditionalRoots()[0] != fixture.canonicalAdditional {
 		t.Fatal("AdditionalRoots exposed mutable policy storage")
 	}
-	writableRoots := fixture.policy.WritableRoots()
-	writableRoots[0] = fixture.additional
-	if fixture.policy.WritableRoots()[0] != fixture.canonicalPrimary {
-		t.Fatal("WritableRoots exposed mutable policy storage")
-	}
-}
-
-func TestFilesystemPolicyAuthorizesRootsAndRejectsEscapes(t *testing.T) {
-	fixture := newFilesystemPolicyFixture(t)
-	for _, path := range []string{"inside.txt", filepath.Join(fixture.primary, "missing", "future.txt"), filepath.Join(fixture.additional, "extra.txt")} {
-		if err := fixture.policy.AuthorizeRead(path); err != nil {
-			t.Errorf("AuthorizeRead(%q) = %v, want allowed", path, err)
-		}
-	}
-	outside := filepath.Join(t.TempDir(), "outside.txt")
-	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.policy.AuthorizeRead(outside); !errors.Is(err, ErrFilesystemAccessDenied) {
-		t.Fatalf("AuthorizeRead(outside) = %v, want access denial", err)
-	}
-	link := filepath.Join(fixture.primary, "outside-link.txt")
-	if err := os.Symlink(outside, link); err != nil {
-		t.Logf("symlink setup unavailable: %v", err)
-	} else if err := fixture.policy.AuthorizeRead(link); !errors.Is(err, ErrFilesystemAccessDenied) {
-		t.Fatalf("AuthorizeRead(symlink outside) = %v, want access denial", err)
-	}
 }
 
 func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 	fixture := newFilesystemPolicyFixture(t)
-	fromRoots, err := NewFilesystemPolicyFromRoots(t.TempDir(), fixture.primary, []string{fixture.additional})
-	if err != nil || fromRoots.PrimaryRoot() != fixture.canonicalPrimary {
-		t.Fatalf("NewFilesystemPolicyFromRoots = %v, %v", fromRoots, err)
-	}
-	if err := (*FilesystemPolicy)(nil).AuthorizeRead("anything"); err != nil {
-		t.Fatalf("nil policy AuthorizeRead = %v", err)
+	direct, err := NewFilesystemPolicy(fixture.primary, fixture.additional)
+	if err != nil || direct.PrimaryRoot() != fixture.canonicalPrimary {
+		t.Fatalf("NewFilesystemPolicy = %v, %v", direct, err)
 	}
 	if got := (*FilesystemPolicy)(nil).ScopeDescription(); got != "filesystem scope unavailable" {
 		t.Fatalf("nil scope description = %q", got)
@@ -112,18 +82,12 @@ func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 	if got := (*FilesystemPolicy)(nil).AdditionalRoots(); got != nil {
 		t.Fatalf("nil additional roots = %v", got)
 	}
-	if got := (*FilesystemPolicy)(nil).WritableRoots(); got != nil {
-		t.Fatalf("nil writable roots = %v", got)
-	}
-	if got := (*FilesystemPolicy)(nil).ProtectedReadRoots(); got != nil {
-		t.Fatalf("nil protected roots = %v", got)
-	}
 	fileRoot := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(fileRoot, []byte("not a directory"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, badRoot := range []string{"", fileRoot, filepath.Join(t.TempDir(), "missing")} {
-		if _, err := NewFilesystemPolicy(t.TempDir(), badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
+		if _, err := NewFilesystemPolicy(badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
 			t.Errorf("NewFilesystemPolicy(%q) = %v, want invalid-root error", badRoot, err)
 		}
 	}

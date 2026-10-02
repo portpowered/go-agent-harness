@@ -143,13 +143,3 @@ func TestSessionPresentationBinaryClassification(t *testing.T) {
 		}
 	}
 }
-
-func TestStreamToWritesContentAndTrailingNewline(t *testing.T) {
-	var out strings.Builder
-	if err := StreamTo(&out, strings.NewReader("hello")); err != nil {
-		t.Fatalf("StreamTo: %v", err)
-	}
-	if got, want := out.String(), "hello\n"; got != want {
-		t.Fatalf("streamed output = %q, want %q", got, want)
-	}
-}

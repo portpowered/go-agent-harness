@@ -3,20 +3,13 @@ package skills
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	SkillFileName = "SKILL.md"
-	// Dir names from Agent Skills spec (optional directories).
-	ScriptsDir    = "scripts"
-	ReferencesDir = "references"
-	AssetsDir     = "assets"
-)
+const SkillFileName = "SKILL.md"
 
 // Meta holds the required frontmatter fields for a skill (metadata only, ~100 tokens).
 type Meta struct {
@@ -104,38 +97,4 @@ func ValidateName(name, dirName string) error {
 		return fmt.Errorf("name must not contain consecutive hyphens")
 	}
 	return nil
-}
-
-// AllowedResourcePath returns true if path is under scripts/, references/, or assets/ and is local (no ..).
-func AllowedResourcePath(rel string) bool {
-	rel = filepath.Clean(rel)
-	if filepath.IsAbs(rel) || strings.Contains(rel, "..") {
-		return false
-	}
-	base := filepath.ToSlash(rel)
-	return strings.HasPrefix(base, ScriptsDir+"/") ||
-		strings.HasPrefix(base, ReferencesDir+"/") ||
-		strings.HasPrefix(base, AssetsDir+"/") ||
-		base == ScriptsDir || base == ReferencesDir || base == AssetsDir
-}
-
-// ReadResource reads a file from the skill directory. rel must be under scripts/, references/, or assets/.
-func ReadResource(skillDir, rel string) ([]byte, error) {
-	if !AllowedResourcePath(rel) {
-		return nil, fmt.Errorf("resource path must be under scripts/, references/, or assets/")
-	}
-	path := filepath.Join(skillDir, filepath.FromSlash(rel))
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	dirAbs, err := filepath.Abs(skillDir)
-	if err != nil {
-		return nil, err
-	}
-	// Ensure no escape outside skill dir
-	if !strings.HasPrefix(abs, dirAbs+string(filepath.Separator)) && abs != dirAbs {
-		return nil, fmt.Errorf("resource path escapes skill directory")
-	}
-	return os.ReadFile(abs)
 }

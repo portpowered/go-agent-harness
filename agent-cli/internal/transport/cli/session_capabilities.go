@@ -31,17 +31,6 @@ func NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor messages
 	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, displaySurface, displaySurface)
 }
 
-// NewSessionToolCapabilitiesFactoryWithDisplayProbe resolves display
-// admission through displayProbe. Options such as
-// servicewire.WithDisplayProbeTimeout tune how long admission waits for it.
-func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displayProbe cliTools.DisplayCapabilityProbe, options ...servicewire.ToolCapabilitiesOption) SessionToolCapabilitiesFactory {
-	surface := cliTools.NewHostDisplaySurface()
-	if displayProbe == nil {
-		displayProbe = surface
-	}
-	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe, options...)
-}
-
 func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, options ...servicewire.ToolCapabilitiesOption) SessionToolCapabilitiesFactory {
 	browserFactory := func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
 		var broker webmcp.Broker

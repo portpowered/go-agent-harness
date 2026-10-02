@@ -200,7 +200,7 @@ func TestChatCommand_AudioWriterErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			textService := newChatTestSessionService(&chatTestInferencer{response: "audio response"}, nil)
+			textService := newChatTestSessionService(&chatTestInferencer{response: "audio response"})
 			global := flags.NewGlobalFlags()
 			global.ConfigDirPath = t.TempDir()
 			ask := flags.NewAskFlags()
@@ -255,7 +255,7 @@ func TestChatCommand_AudioHelperProcessesSpeechAndReportsPipelineErrors(t *testi
 func testAudioSpeechDispatch(t *testing.T) {
 	t.Helper()
 	inf := &chatTestInferencer{response: "audio response"}
-	textService := newChatTestSessionService(inf, nil)
+	textService := newChatTestSessionService(inf)
 	global := flags.NewGlobalFlags()
 	global.ConfigDirPath = t.TempDir()
 	ask := flags.NewAskFlags()
@@ -283,7 +283,7 @@ func testAudioSpeechDispatch(t *testing.T) {
 
 func testAudioPipelineError(t *testing.T) {
 	t.Helper()
-	textService := newChatTestSessionService(&chatTestInferencer{}, nil)
+	textService := newChatTestSessionService(&chatTestInferencer{})
 	global := flags.NewGlobalFlags()
 	global.ConfigDirPath = t.TempDir()
 	ask := flags.NewAskFlags()
@@ -303,7 +303,7 @@ func testAudioPipelineError(t *testing.T) {
 
 func testAudioContextCancellation(t *testing.T) {
 	t.Helper()
-	textService := newChatTestSessionService(&chatTestInferencer{}, nil)
+	textService := newChatTestSessionService(&chatTestInferencer{})
 	global := flags.NewGlobalFlags()
 	global.ConfigDirPath = t.TempDir()
 	ask := flags.NewAskFlags()

@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -81,10 +82,10 @@ func TestSessionManagedDefaultUsesSingleTargetAndFirstClassPageTools(t *testing.
 	browserConfig.Selection.Persist = false
 	factory := NewProductionWebMCPDoctorFactory(
 		WithWebMCPProductionConfigDir(configDir),
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionManagedBrowserManager(manager),
-		WithWebMCPProductionHTTPClient(&http.Client{Transport: managedCompositionVersionTransport{}}),
-		WithWebMCPProductionDiscovery(discoveryService),
+		production.WithRuntime(runtime),
+		production.WithManagedBrowserManager(manager),
+		production.WithHTTPClient(&http.Client{Transport: managedCompositionVersionTransport{}}),
+		production.WithDiscovery(discoveryService),
 	)
 	broker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, factory)
 	if err != nil {

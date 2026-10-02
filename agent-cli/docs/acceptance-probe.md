@@ -26,10 +26,9 @@ fields (`name`, `pass`, `terminal_reason`, and `error`) so it can be consumed
 as a result line by downstream probe tooling. `run_directory` points to the
 durable captured artifacts.
 
-The live and replay paths share the same runner. Replay callers construct a
-`probe.ReplayFixture` with any workspace-created evidence in its safe relative
-`workspace_files` map and pass `probe.NewReplayRunner` to
-`cli.NewProbeAcceptanceCommand`; this changes only the transport, not the
+The live and replay paths share the same runner: `probe.NewRunner` takes any
+`probe.Transport`, so the probe tests drive the acceptance pipeline with a
+recorded replay transport (in `acceptance_replay_test.go`) without changing the
 command or verdict contract. A live probe executable reports its acceptance
 claim as the final JSON line on stdout, for example:
 

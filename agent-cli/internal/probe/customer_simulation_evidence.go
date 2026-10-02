@@ -466,9 +466,6 @@ func (b *CustomerEvidenceBundle) AddArtifactBytes(path string, kind ArtifactKind
 	}
 	return b.RegisterArtifact(path, kind, required)
 }
-func (b *CustomerEvidenceBundle) WriteArtifact(path string, kind ArtifactKind, data []byte, required bool) error {
-	return b.AddArtifactBytes(path, kind, data, required)
-}
 func (b *CustomerEvidenceBundle) RecordMissingArtifact(path string, kind ArtifactKind, required bool, reason string) error {
 	if b == nil {
 		return contractFieldError(ErrInvalidCustomerEvidence, "bundle", "must not be nil")

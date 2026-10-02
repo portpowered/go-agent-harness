@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 )
 
 func TestProductionWebMCPDoctorUsesLaneBTargetsAndNeutralRuntime(t *testing.T) {
@@ -35,8 +36,8 @@ browser:
 `, server.URL+"/json/version?secret=redact#fragment", browserID, targetID))
 
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	command, stdout, stderr := executeDoctorCommand(t, configDir, factory, "--json")
 	if err := command.ExecuteContext(context.Background()); err != nil {
@@ -86,8 +87,8 @@ browser:
     persist: false
 `, server.URL+"/json/version?secret=redact#fragment"))
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 
 	browsers := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
@@ -166,8 +167,8 @@ browser:
 `, server.URL+"/json/version"))
 	newFactory := func() WebMCPDoctorFactory {
 		return NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
+			production.WithRuntime(runtime),
+			production.WithHTTPClient(server.Client()),
 		)
 	}
 
@@ -290,8 +291,8 @@ browser:
 	store := NewFileWebMCPSelectionStore(configDir)
 	newFactory := func() WebMCPDoctorFactory {
 		return NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
+			production.WithRuntime(runtime),
+			production.WithHTTPClient(server.Client()),
 		)
 	}
 
@@ -382,8 +383,8 @@ browser:
     persist: false
 `, server.URL+"/json/version"))
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
 	envelope := decodeDirectEnvelope(t, result.stdout)
@@ -404,7 +405,7 @@ browser:
   selection:
     persist: false
 `)
-	factory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime))
+	factory := NewProductionWebMCPDoctorFactory(production.WithRuntime(runtime))
 	result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
 	envelope := decodeDirectEnvelope(t, result.stdout)
 	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorRemoteEndpointDenied) {
@@ -435,8 +436,8 @@ browser:
     persist: false
 `, server.URL+"/json/version", browserID))
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
 	envelope := decodeDirectEnvelope(t, result.stdout)
@@ -461,8 +462,8 @@ browser:
     persist: false
 `, server.URL+"/json/version", browserID))
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
 	envelope := decodeDirectEnvelope(t, result.stdout)
@@ -483,8 +484,8 @@ browser:
     persist: true
 `, server.URL+"/json/version"))
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 		WithWebMCPProductionSelectionStore(store),
 	)
 	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
@@ -512,8 +513,8 @@ browser:
 `, server.URL+"/json/version"))
 	store := NewFileWebMCPSelectionStore(configDir)
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 
 	selected := executeDirectCommand(t, configDir, store, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
@@ -569,8 +570,8 @@ browser:
 		t.Fatalf("save stale selection: %v", err)
 	}
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	result := executeDirectCommand(t, configDir, store, factory, "context", "--json")
 	if result.err == nil {
@@ -600,8 +601,8 @@ browser:
 `, server.URL+"/json/version"))
 	store := NewFileWebMCPSelectionStore(configDir)
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 	)
 	selected := executeDirectCommand(t, configDir, store, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
 	requireDirectSuccess(t, selected)

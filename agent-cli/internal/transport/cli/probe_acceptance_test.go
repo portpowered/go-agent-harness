@@ -173,7 +173,7 @@ func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 			verifier := acceptanceprobe.RecordedArtifactVerifier{
 				VerifyGoal: func(context.Context, loopprobe.AcceptanceInput, []byte) error { return nil },
 			}
-			runner := acceptanceprobe.NewRunner(acceptanceprobe.TransportFunc(func(_ context.Context, _ loopprobe.AcceptanceInput, artifacts acceptanceprobe.ArtifactSet) (acceptanceprobe.RunResult, error) {
+			runner := acceptanceprobe.NewRunner(acceptanceTransportFunc(func(_ context.Context, _ loopprobe.AcceptanceInput, artifacts acceptanceprobe.ArtifactSet) (acceptanceprobe.RunResult, error) {
 				report := loopprobe.AcceptanceAgentReport{
 					ClaimedSuccess:   true,
 					SubjectiveRating: loopprobe.SubjectiveEasy,
@@ -345,4 +345,11 @@ func linkHangingAgent(t *testing.T) string {
 		}
 	}
 	return agent
+}
+
+// acceptanceTransportFunc adapts a function to acceptanceprobe.Transport.
+type acceptanceTransportFunc func(context.Context, loopprobe.AcceptanceInput, acceptanceprobe.ArtifactSet) (acceptanceprobe.RunResult, error)
+
+func (f acceptanceTransportFunc) Run(ctx context.Context, input loopprobe.AcceptanceInput, artifacts acceptanceprobe.ArtifactSet) (acceptanceprobe.RunResult, error) {
+	return f(ctx, input, artifacts)
 }

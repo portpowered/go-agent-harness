@@ -22,46 +22,11 @@ func WithFixtureClock(clock Clock) FixtureRuntimeOption {
 	}
 }
 
-// WithRuntimeClock is a descriptive alias for WithFixtureClock.
-func WithRuntimeClock(clock Clock) FixtureRuntimeOption { return WithFixtureClock(clock) }
-
-// WithFixtureClockFunc injects a function-backed monotonic clock.
-func WithFixtureClockFunc(clock func() uint64) FixtureRuntimeOption {
-	return WithFixtureClock(ClockFunc(clock))
-}
-
 // WithFixtureIDSource injects deterministic invocation IDs.
 func WithFixtureIDSource(source IDSource) FixtureRuntimeOption {
 	return func(runtime *BrowserScriptRuntime) {
 		if source != nil {
 			runtime.ids = source
-		}
-	}
-}
-
-// WithRuntimeIDSource is a descriptive alias for WithFixtureIDSource.
-func WithRuntimeIDSource(source IDSource) FixtureRuntimeOption { return WithFixtureIDSource(source) }
-
-// WithFixtureIDFunc injects a function-backed deterministic ID source.
-func WithFixtureIDFunc(source func(string) string) FixtureRuntimeOption {
-	return WithFixtureIDSource(IDSourceFunc(source))
-}
-
-// WithFixtureBrowserID sets the opaque browser ID used in neutral events.
-func WithFixtureBrowserID(browserID string) FixtureRuntimeOption {
-	return func(runtime *BrowserScriptRuntime) {
-		if strings.TrimSpace(browserID) != "" {
-			runtime.browserID = browserID
-		}
-	}
-}
-
-// WithFixtureTargetID selects a target by ID. Without this option the first
-// endpoint target is selected.
-func WithFixtureTargetID(targetID string) FixtureRuntimeOption {
-	return func(runtime *BrowserScriptRuntime) {
-		if strings.TrimSpace(targetID) != "" {
-			runtime.targetID = targetID
 		}
 	}
 }
@@ -72,18 +37,6 @@ func WithStateOracle(oracle *FixtureStateOracle) FixtureRuntimeOption {
 	return func(runtime *BrowserScriptRuntime) {
 		if oracle != nil {
 			runtime.state = oracle
-		}
-	}
-}
-
-// WithFixtureState creates an out-of-band state oracle from a JSON value.
-func WithFixtureState(value any) FixtureRuntimeOption {
-	return func(runtime *BrowserScriptRuntime) {
-		oracle, err := NewFixtureStateOracle(value)
-		if err == nil {
-			runtime.state = oracle
-		} else {
-			runtime.optionErr = err
 		}
 	}
 }
@@ -181,32 +134,6 @@ func NewScriptedFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOp
 // NewBrowserScriptRuntime is an alias for NewScriptedFixtureRuntime.
 func NewBrowserScriptRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
 	return NewScriptedFixtureRuntime(script, options...)
-}
-
-// NewFixtureRuntime is an alias for NewScriptedFixtureRuntime.
-func NewFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
-	return NewScriptedFixtureRuntime(script, options...)
-}
-
-// NewScriptRuntime is an alias for NewScriptedFixtureRuntime.
-func NewScriptRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
-	return NewScriptedFixtureRuntime(script, options...)
-}
-
-// NewRuntime accepts either a BrowserScript value or pointer for convenient
-// use by callers that load a script through a pointer-oriented helper.
-func NewRuntime(value any, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
-	switch script := value.(type) {
-	case BrowserScript:
-		return NewScriptedFixtureRuntime(script, options...)
-	case *BrowserScript:
-		if script == nil {
-			return nil, newScriptError("script", "is nil")
-		}
-		return NewScriptedFixtureRuntime(*script, options...)
-	default:
-		return nil, newScriptError("script", "must be a BrowserScript")
-	}
 }
 
 func countScriptEvents(script BrowserScript) int {
@@ -877,11 +804,6 @@ func NewFixtureStateOracle(value any) (*FixtureStateOracle, error) {
 		return nil, fmt.Errorf("state oracle: %w", err)
 	}
 	return NewFixtureStateOracleJSON(raw)
-}
-
-// NewStateOracle is an alias for NewFixtureStateOracle.
-func NewStateOracle(value any) (*FixtureStateOracle, error) {
-	return NewFixtureStateOracle(value)
 }
 
 // NewFixtureStateOracleJSON creates an oracle from one validated JSON value.

@@ -77,14 +77,6 @@ const (
 // to know which capture implementation produced it.
 type ScreenResult = sight.Result
 
-// ScreenToolErrorResult creates the pixel-free result sent when the screen
-// boundary is denied, unavailable, canceled, or otherwise fails. The direct
-// ScreenTool contract still returns the original typed Go error; session
-// adapters use this envelope when they need to keep the session alive.
-func ScreenToolErrorResult(err error) string {
-	return encodeScreenToolErrorResult(err, true)
-}
-
 func encodeScreenToolErrorResult(err error, includeOperatorGuidance bool) string {
 	result := sight.NewError(sight.SourceScreen, err)
 	result.ErrorCode = screenErrorCode(err)

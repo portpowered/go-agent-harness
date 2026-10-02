@@ -124,35 +124,30 @@ func endpointFromActivePort(record ActivePortRecord) (Endpoint, error) {
 	}, nil
 }
 
-type parseURLError struct{ reason string }
+// urlRejection names why an endpoint URL was rejected. Callers map its
+// reason into a classified discovery error.
+type urlRejection struct{ reason string }
 
-func (e *parseURLError) Error() string {
-	if e == nil {
-		return "invalid endpoint"
-	}
-	return e.reason
-}
-
-func parseHTTPURL(raw string) (*url.URL, *parseURLError) {
+func parseHTTPURL(raw string) (*url.URL, *urlRejection) {
 	trimmed := strings.TrimSpace(raw)
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return nil, &parseURLError{reason: "malformed_endpoint"}
+		return nil, &urlRejection{reason: "malformed_endpoint"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
-		return nil, &parseURLError{reason: "unsupported_endpoint_scheme"}
+		return nil, &urlRejection{reason: "unsupported_endpoint_scheme"}
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" {
-		return nil, &parseURLError{reason: "missing_endpoint_host"}
+		return nil, &urlRejection{reason: "missing_endpoint_host"}
 	}
 	if parsed.User != nil {
-		return nil, &parseURLError{reason: "credentials_not_allowed"}
+		return nil, &urlRejection{reason: "credentials_not_allowed"}
 	}
 	if parsed.Port() != "" {
 		port, err := strconv.Atoi(parsed.Port())
 		if err != nil || port < 1 || port > 65535 {
-			return nil, &parseURLError{reason: "invalid_endpoint_port"}
+			return nil, &urlRejection{reason: "invalid_endpoint_port"}
 		}
 	}
 	parsed.RawQuery = ""
@@ -165,32 +160,32 @@ type normalizedWebSocketURL struct {
 	loopback bool
 }
 
-func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *parseURLError) {
+func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *urlRejection) {
 	trimmed := strings.TrimSpace(raw)
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return normalizedWebSocketURL{}, &parseURLError{reason: "malformed_browser_websocket"}
+		return normalizedWebSocketURL{}, &urlRejection{reason: "malformed_browser_websocket"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
-		return normalizedWebSocketURL{}, &parseURLError{reason: "unsupported_websocket_scheme"}
+		return normalizedWebSocketURL{}, &urlRejection{reason: "unsupported_websocket_scheme"}
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" {
-		return normalizedWebSocketURL{}, &parseURLError{reason: "missing_websocket_host"}
+		return normalizedWebSocketURL{}, &urlRejection{reason: "missing_websocket_host"}
 	}
 	if parsed.User != nil {
-		return normalizedWebSocketURL{}, &parseURLError{reason: "credentials_not_allowed"}
+		return normalizedWebSocketURL{}, &urlRejection{reason: "credentials_not_allowed"}
 	}
 	if !strings.HasPrefix(parsed.Path, "/devtools/browser/") || strings.TrimPrefix(parsed.Path, "/devtools/browser/") == "" {
 		if strings.HasPrefix(parsed.Path, "/devtools/page/") {
-			return normalizedWebSocketURL{}, &parseURLError{reason: "page_websocket_not_browser_websocket"}
+			return normalizedWebSocketURL{}, &urlRejection{reason: "page_websocket_not_browser_websocket"}
 		}
-		return normalizedWebSocketURL{}, &parseURLError{reason: "browser_websocket_path_required"}
+		return normalizedWebSocketURL{}, &urlRejection{reason: "browser_websocket_path_required"}
 	}
 	if parsed.Port() != "" {
 		port, err := strconv.Atoi(parsed.Port())
 		if err != nil || port < 1 || port > 65535 {
-			return normalizedWebSocketURL{}, &parseURLError{reason: "invalid_websocket_port"}
+			return normalizedWebSocketURL{}, &urlRejection{reason: "invalid_websocket_port"}
 		}
 	}
 	parsed.RawQuery = ""

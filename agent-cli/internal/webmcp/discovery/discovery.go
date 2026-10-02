@@ -212,9 +212,6 @@ func New(options Options) *Service {
 	}
 }
 
-// NewService is a descriptive constructor alias.
-func NewService(options Options) *Service { return New(options) }
-
 // Browser returns the normalized browser candidate currently known for an
 // exact public browser ID. It is a read-only lookup for model-facing adapters;
 // the returned value contains no endpoint credentials or transport URLs.
@@ -695,7 +692,7 @@ func browserInstanceMetadata(version BrowserVersion) string {
 	return ""
 }
 
-func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLError) {
+func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *urlRejection) {
 	wsRaw := strings.TrimSpace(version.WebSocketDebuggerURL)
 	if wsRaw == "" && fallback != nil {
 		wsRaw = fallback.String()

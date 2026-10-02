@@ -1,12 +1,9 @@
 package input
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Minimal valid file headers for each format.
@@ -33,7 +30,7 @@ func webpHeader() []byte {
 	return []byte{'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P'}
 }
 
-func TestDetectMimeType_MagicBytes(t *testing.T) {
+func TestDetectMimeTypeFromBytes_MagicBytes(t *testing.T) {
 	tests := []struct {
 		name     string
 		header   []byte
@@ -45,86 +42,33 @@ func TestDetectMimeType_MagicBytes(t *testing.T) {
 		{name: "GIF by magic bytes", header: []byte(gifHeader), ext: ".gif", expected: "image/gif"},
 		{name: "WebP by magic bytes", header: webpHeader(), ext: ".webp", expected: "image/webp"},
 		{name: "PDF by magic bytes", header: []byte(pdfHeader), ext: ".pdf", expected: "application/pdf"},
+		// A .txt extension with PNG magic bytes is detected as PNG.
+		{name: "magic bytes take precedence", header: []byte(pngHeader), ext: ".txt", expected: "image/png"},
+		// Unrecognized bytes fall back to the extension.
+		{name: "extension fallback", header: []byte{0x00, 0x01, 0x02, 0x03}, ext: ".webp", expected: "image/webp"},
+		{name: "WebP without extension", header: webpHeader(), ext: ".bin", expected: "image/webp"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, "testfile"+tt.ext)
-			require.NoError(t, os.WriteFile(path, tt.header, 0o644))
-
-			result, err := DetectMimeType(path)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected, detectMimeTypeFromBytes(tt.header, tt.ext))
 		})
 	}
 }
 
-func TestDetectMimeType_MagicBytesTakePrecedence(t *testing.T) {
-	// A file with .txt extension but PNG magic bytes should be detected as PNG.
-	dir := t.TempDir()
-	path := filepath.Join(dir, "nottext.txt")
-	require.NoError(t, os.WriteFile(path, []byte(pngHeader), 0o644))
-
-	result, err := DetectMimeType(path)
-	require.NoError(t, err)
-	assert.Equal(t, "image/png", result)
+func TestDetectMimeTypeFromBytes_TIFF(t *testing.T) {
+	// net/http does not sniff TIFF and .tiff is not an attachment extension,
+	// so a TIFF is reported as a generic binary attachment.
+	assert.Equal(t, "application/octet-stream", detectMimeTypeFromBytes([]byte(tiffHeader), ".tiff"))
 }
 
-func TestDetectMimeType_ExtensionFallback(t *testing.T) {
-	// When magic bytes return application/octet-stream, fall back to extension.
-	dir := t.TempDir()
-	// Random bytes that don't match any known signature, but .webp extension.
-	path := filepath.Join(dir, "fake.webp")
-	require.NoError(t, os.WriteFile(path, []byte{0x00, 0x01, 0x02, 0x03}, 0o644))
-
-	result, err := DetectMimeType(path)
-	require.NoError(t, err)
-	assert.Equal(t, "image/webp", result)
-}
-
-func TestDetectMimeType_WebPDetection(t *testing.T) {
-	// Verify WebP is detected even without the .webp extension.
-	dir := t.TempDir()
-	path := filepath.Join(dir, "image.bin")
-	require.NoError(t, os.WriteFile(path, webpHeader(), 0o644))
-
-	result, err := DetectMimeType(path)
-	require.NoError(t, err)
-	assert.Equal(t, "image/webp", result)
-}
-
-func TestDetectMimeType_TIFF(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "photo.tiff")
-	require.NoError(t, os.WriteFile(path, []byte(tiffHeader), 0o644))
-
-	result, err := DetectMimeType(path)
-	require.NoError(t, err)
-	// Go's http.DetectContentType does not detect TIFF — extension fallback not in mimeByExt.
-	// We just verify it returns something reasonable.
-	assert.NotEmpty(t, result)
-}
-
-func TestDetectMimeType_UnknownType(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "mystery.xyz")
-	// Use bytes that http.DetectContentType cannot match to a known type.
-	// Include a mix of non-text control characters to avoid text/plain detection.
+func TestDetectMimeTypeFromBytes_UnknownType(t *testing.T) {
+	// Non-text control characters that match no known signature or extension.
 	data := make([]byte, 64)
 	for i := range data {
 		data[i] = byte(i)
 	}
-	require.NoError(t, os.WriteFile(path, data, 0o644))
-
-	result, err := DetectMimeType(path)
-	require.NoError(t, err)
-	assert.Equal(t, "application/octet-stream", result)
-}
-
-func TestDetectMimeType_FileNotFound(t *testing.T) {
-	_, err := DetectMimeType("/nonexistent/file.png")
-	assert.Error(t, err)
+	assert.Equal(t, "application/octet-stream", detectMimeTypeFromBytes(data, ".xyz"))
 }
 
 func TestDetectMimeTypeFromBytes(t *testing.T) {

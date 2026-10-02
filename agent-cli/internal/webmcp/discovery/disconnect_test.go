@@ -87,7 +87,7 @@ func TestDisconnectAliasesAndMarkersRemainSafe(t *testing.T) {
 	}
 
 	cause := errors.New("transport cause")
-	marker := NewBrowserDisconnectError("browser-alias", "target-alias", "version", cause)
+	marker := NewBrowserDisconnectedError("browser-alias", "target-alias", "version", cause)
 	if marker.Error() != browserDisconnectedMessage || !errors.Is(marker, cause) || !errors.Is(marker, ErrBrowserDisconnected) || !IsBrowserDisconnected(marker) {
 		t.Fatalf("disconnect marker = %v, want safe cause and classified matching", marker)
 	}

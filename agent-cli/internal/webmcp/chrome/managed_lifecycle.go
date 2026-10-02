@@ -57,17 +57,6 @@ type ManagedBrowserState struct {
 	ExecutablePath    string `json:"executable_path,omitempty"`
 }
 
-// ManagedBrowserStatePath returns the default state location. An empty result
-// means the config directory could not be resolved; callers that need the
-// reason should use ManagedBrowserManager.Acquire.
-func ManagedBrowserStatePath(configDir string) string {
-	profileDir, err := managedBrowserProfileDir(configDir)
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(profileDir, managedBrowserStateName)
-}
-
 // ManagedBrowserProcessInfo is the identity observed for one operating-system
 // process. Identity is an incarnation marker, not a user-facing identifier.
 type ManagedBrowserProcessInfo struct {
@@ -946,4 +935,15 @@ const managedBrowserStateResponseLimit = 64 << 10
 // avoids exposing any state URL in diagnostic errors.
 func urlParseManaged(raw string) (*url.URL, error) {
 	return url.Parse(strings.TrimSpace(raw))
+}
+
+// ManagedBrowserStatePath returns the default state location. An empty result
+// means the config directory could not be resolved; callers that need the
+// reason should use ManagedBrowserManager.Acquire.
+func ManagedBrowserStatePath(configDir string) string {
+	profileDir, err := managedBrowserProfileDir(configDir)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(profileDir, managedBrowserStateName)
 }

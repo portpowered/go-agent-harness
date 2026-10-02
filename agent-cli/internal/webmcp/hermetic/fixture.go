@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"unicode/utf8"
 )
@@ -431,38 +430,11 @@ func LoadBrowserScript(data []byte) (BrowserScript, error) {
 	return script, nil
 }
 
-// DecodeBrowserScript is an alias for LoadBrowserScript.
-func DecodeBrowserScript(data []byte) (BrowserScript, error) {
-	return LoadBrowserScript(data)
-}
-
-// LoadScript is an alias for LoadBrowserScript.
-func LoadScript(data []byte) (BrowserScript, error) {
-	return LoadBrowserScript(data)
-}
-
 // LoadBrowserScriptFile reads and validates a fixture from disk.
 func LoadBrowserScriptFile(path string) (BrowserScript, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return BrowserScript{}, fmt.Errorf("read browser script %q: %w", path, err)
-	}
-	return LoadBrowserScript(data)
-}
-
-// LoadScriptFile is an alias for LoadBrowserScriptFile.
-func LoadScriptFile(path string) (BrowserScript, error) {
-	return LoadBrowserScriptFile(path)
-}
-
-// LoadBrowserScriptReader loads a complete script from a reader.
-func LoadBrowserScriptReader(reader io.Reader) (BrowserScript, error) {
-	if reader == nil {
-		return BrowserScript{}, newScriptError("script", "reader is nil")
-	}
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return BrowserScript{}, fmt.Errorf("read browser script: %w", err)
 	}
 	return LoadBrowserScript(data)
 }

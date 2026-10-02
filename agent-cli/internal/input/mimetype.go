@@ -2,9 +2,15 @@ package input
 
 import (
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
+)
+
+// Image media types the input boundary detects.
+const (
+	mimeJPEG = "image/jpeg"
+	mimePNG  = "image/png"
+	mimeGIF  = "image/gif"
+	mimeWebP = "image/webp"
 )
 
 const (
@@ -14,24 +20,12 @@ const (
 	sniffLimitBytes = 512
 )
 
-// DetectMimeType detects the MIME type of the file at path using both magic
-// bytes (first 512 bytes via net/http.DetectContentType) and file extension.
-// When both methods produce a result, magic bytes take precedence — except when
-// magic bytes return the generic "application/octet-stream", in which case the
-// extension-based type is preferred.
-//
-// Go's http.DetectContentType does not recognise WebP. This function adds a
-// special case: if the first 12 bytes contain the RIFF header with a WEBP
-// signature at bytes 8–11, "image/webp" is returned directly.
-func DetectMimeType(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return detectMimeTypeFromBytes(data, filepath.Ext(path)), nil
-}
-
-// detectMimeTypeFromBytes is the pure logic, separated for testability.
+// detectMimeTypeFromBytes detects the MIME type of data using both magic
+// bytes (net/http.DetectContentType) and the file extension ext. Magic bytes
+// take precedence, except when they return the generic
+// "application/octet-stream" or "text/plain", in which case the
+// extension-based type is preferred. WebP (which net/http does not recognise)
+// is detected from its RIFF....WEBP header.
 func detectMimeTypeFromBytes(data []byte, ext string) string {
 	magic := detectByMagicBytes(data)
 	extType := mimeTypeForExtension(strings.ToLower(ext))

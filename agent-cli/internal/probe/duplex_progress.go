@@ -255,14 +255,6 @@ type DuplexProgress struct {
 	state *duplexProgressState
 }
 
-// Snapshot returns the progress observed so far.
-func (p *DuplexProgress) Snapshot() DuplexProgressSnapshot {
-	if p == nil || p.state == nil {
-		return DuplexProgressSnapshot{}
-	}
-	return p.state.snapshot()
-}
-
 // WaitForOutputBytes waits until at least minimum output bytes crossed the
 // child stdout boundary. A non-positive minimum returns immediately.
 func (p *DuplexProgress) WaitForOutputBytes(ctx context.Context, minimum int64) error {
@@ -284,16 +276,6 @@ func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) er
 		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
 	}
 	return p.state.waitForOutput(ctx, int64(minimum), true)
-}
-
-// Elapsed returns the runner's monotonic elapsed time at the instant of the
-// snapshot. Segment gates use this to drive event-based policies while the
-// child remains open.
-func (p *DuplexProgress) Elapsed() time.Duration {
-	if p == nil || p.state == nil {
-		return 0
-	}
-	return p.state.elapsed()
 }
 
 // OutputEvents returns a copy of every stdout read observed so far. The

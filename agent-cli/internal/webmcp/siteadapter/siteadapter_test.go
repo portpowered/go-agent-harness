@@ -139,7 +139,7 @@ func adapterInstallStem(name string) string {
 }
 
 func TestYouTubeScriptIsOriginGatedAndRegistersStableTools(t *testing.T) {
-	script := YouTubeSource()
+	script, _ := Source(YouTubeName)
 	for _, host := range []string{"youtube.com", "www.youtube.com", "m.youtube.com"} {
 		if !strings.Contains(script, `"`+host+`"`) {
 			t.Errorf("script omits origin gate for %s", host)

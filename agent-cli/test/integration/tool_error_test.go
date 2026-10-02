@@ -13,7 +13,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -227,7 +226,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 func runOverrideCLIInDir(executor messages.ToolExecutor, configDir string) (string, string, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
-	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, services.DefaultToolDefs(nil))
+	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, nil)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	router := cli.NewRouter(
