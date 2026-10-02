@@ -227,7 +227,8 @@ func (s *liveSession) watchLocked(ctx context.Context) {
 }
 
 // watch closes segments and utterances that go quiet, on the session clock.
-// It exits when nothing is pending or the session ends.
+// It exits when nothing is pending or the session ends. ctx is the session's
+// lifetime context, which only the session's end stops.
 func (s *liveSession) watch(ctx context.Context) {
 	source := s.base.Clock()
 	for {
@@ -243,9 +244,6 @@ func (s *liveSession) watch(ctx context.Context) {
 		select {
 		case <-timer.C():
 		case <-s.base.Done():
-			timer.Stop()
-			return
-		case <-ctx.Done():
 			timer.Stop()
 			return
 		}

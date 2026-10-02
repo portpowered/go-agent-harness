@@ -2,7 +2,7 @@ package openailive
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -81,14 +81,8 @@ func (s *liveSession) appendAudio(ctx context.Context, audio []byte) messages.Se
 	if len(audio) == 0 {
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	}
-	event, err := NewInputAudioAppend(audio, s.format)
-	if err != nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-	}
-	data, err := json.Marshal(event)
-	if err != nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
-	}
+	// Standard base64 needs no JSON escaping, so the body is built directly.
+	data := []byte(`{"audio":"` + base64.StdEncoding.EncodeToString(audio) + `"}`)
 	return s.base.EnqueueEvents(ctx, []models.SessionEvent{{Type: TypeInputAudioAppend, Data: data}})
 }
 

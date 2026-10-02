@@ -22,18 +22,11 @@ func (s *liveSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.
 	if s.format.Type != AudioTypePCM {
 		return errMediaNeedsPCM
 	}
-	encoded, err := codec.EncodePCM16WithLimit(frame.Samples, codec.MaxPCM16Bytes)
-	if err != nil {
-		return fmt.Errorf("encode OpenAI Live RTC audio: %w", err)
-	}
-	outcome := s.appendAudio(ctx, encoded)
+	outcome := s.appendAudio(ctx, codec.EncodePCM16(frame.Samples))
 	if outcome.OK() {
 		return nil
 	}
-	if outcome.Err != nil {
-		return outcome.Err
-	}
-	return fmt.Errorf("openai live RTC media write: %s", outcome.Status)
+	return errors.Join(fmt.Errorf("openai live RTC media write: %s", outcome.Status), outcome.Err)
 }
 
 // publishRTCMedia mirrors segment audio onto the RTC media path without

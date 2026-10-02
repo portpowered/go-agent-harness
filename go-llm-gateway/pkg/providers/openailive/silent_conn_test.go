@@ -8,13 +8,21 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-var errSilentClosed = errors.New("silent conn closed")
+var (
+	errSilentClosed = errors.New("silent conn closed")
+	errSilentWrite  = errors.New("silent conn write refused")
+)
 
 // silentConn answers session.start with session.started (unless
 // withholdStart is set) and then never sends another frame, so a close
 // handshake can only end by timeout.
 type silentConn struct {
 	withholdStart bool
+	// firstFrame replaces the session.started reply when set.
+	firstFrame []byte
+	// failWritesAfterStart fails every write after session.start.
+	failWritesAfterStart bool
+	writes               int
 
 	once    sync.Once
 	closed  chan struct{}
@@ -31,6 +39,9 @@ func (c *silentConn) ReadMessage() (int, []byte, error) {
 	reply := !c.replied && !c.withholdStart
 	c.replied = true
 	c.mu.Unlock()
+	if reply && c.firstFrame != nil {
+		return 1, c.firstFrame, nil
+	}
 	if reply {
 		frame, err := live.EncodeEvent(live.SessionStarted{Session: live.SessionResource{ID: "live_silent", SessionConfig: live.SessionConfig{Model: live.Model1}}})
 		return 1, frame, err
@@ -40,6 +51,13 @@ func (c *silentConn) ReadMessage() (int, []byte, error) {
 }
 
 func (c *silentConn) WriteMessage(int, []byte) error {
+	c.mu.Lock()
+	c.writes++
+	fail := c.failWritesAfterStart && c.writes > 1
+	c.mu.Unlock()
+	if fail {
+		return errSilentWrite
+	}
 	select {
 	case <-c.closed:
 		return errSilentClosed

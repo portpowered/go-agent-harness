@@ -102,6 +102,25 @@ func TestResolveDeviceProbeProviderGrok(t *testing.T) {
 	}
 }
 
+// GPT-Live probes use the OpenAI API key, which is their only credential, and
+// default to gpt-live-1; without a key they fail before any session is built.
+func TestResolveDeviceProbeProviderOpenAILive(t *testing.T) {
+	clearProbeCredentials(t)
+	resolved, err := resolveDeviceProbeProvider(probeRequest(t, config.ProviderOpenAILive, probeOpenAIKey, ""))
+	if err != nil {
+		t.Fatalf("resolve GPT-Live probe: %v", err)
+	}
+	if resolved.provider != config.ProviderOpenAILive || resolved.apiKey != probeOpenAIKey || resolved.model != runtimeProviders.OpenAILive1Model {
+		t.Fatalf("GPT-Live probe provider = %+v", resolved)
+	}
+	if custom, err := resolveDeviceProbeProvider(probeRequest(t, config.ProviderOpenAILive, probeOpenAIKey, "gpt-live-next")); err != nil || custom.model != "gpt-live-next" {
+		t.Fatalf("GPT-Live probe with --model = %+v, %v", custom, err)
+	}
+	if _, err := resolveDeviceProbeProvider(probeRequest(t, config.ProviderOpenAILive, "", "")); err == nil || !strings.Contains(err.Error(), "requires an OpenAI API key") {
+		t.Fatalf("missing GPT-Live key error = %v, want the API-key diagnostic", err)
+	}
+}
+
 func TestResolveDeviceProbeProviderRejectsUnsupportedProvider(t *testing.T) {
 	clearProbeCredentials(t)
 	if _, err := resolveDeviceProbeProvider(probeRequest(t, "claude", probeOpenAIKey, "")); err == nil || !strings.Contains(err.Error(), "supports realtime providers") {
