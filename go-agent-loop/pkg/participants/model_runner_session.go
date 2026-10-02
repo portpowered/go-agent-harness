@@ -32,6 +32,11 @@ func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 
 	state := sessionRunState{}
 	for {
+		// A consumer that stopped reading long enough to overflow the
+		// session outbox ends the session instead of growing it.
+		if overflowErr := r.sessionOut.overflowErr(); overflowErr != nil {
+			return r.endSession(ctx, &state, overflowErr)
+		}
 		// Observe already-queued provider lifecycle messages before admitting
 		// pending user input. In particular, MESSAGE.END is authoritative for
 		// the response that just completed; peer audio queued in the same
@@ -256,9 +261,7 @@ func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session m
 // deferred send failures are flushed, and err is returned unchanged.
 func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, err error) error {
 	if err != nil && ctx.Err() == nil {
-		// The terminal failure must follow every queued delta.
-		r.sessionOut.flush(ctx)
-		r.publishSessionAudioFailure(err, state.Response.HasOutput)
+		r.publishSessionAudioFailure(ctx, err, state.Response.HasOutput)
 	}
 	r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
 	return err

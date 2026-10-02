@@ -206,7 +206,7 @@ func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Ses
 // audio failure.
 func (r *ModelRunner) flushHeldAudio(ctx context.Context, session messages.Session, state *sessionRunState) {
 	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
-		r.publishSessionAudioFailure(err, state.Response.HasOutput)
+		r.publishSessionAudioFailure(ctx, err, state.Response.HasOutput)
 	}
 }
 

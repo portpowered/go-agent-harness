@@ -68,3 +68,19 @@ every program that imports `pkg/probe`. These names have no replacement:
 - `messages.(*TypedBuffer).Shed` records a value as dropped by a full buffer
   without writing it, for an owner that queues ahead of the buffer and sheds
   overload there.
+- `participants.ErrSessionDeltaOverflow`: a session model runner whose delta
+  consumer stops reading ends with this error once its outbox queue (4096
+  deltas) is full, and publishes it as a terminal ERROR classified
+  `session_delta_overflow`.
+
+### Changed
+
+- The session model runner no longer blocks its event loop on a full
+  `DeltaOutbox`, so barge-in is decided even while the delta consumer is
+  stalled. A must-deliver delta that meets a full outbox is queued in order
+  and written by a separate goroutine. While that queue is non-empty, audio
+  and other ordinary deltas beyond the outbox capacity are shed and counted
+  in `DeltaOutbox` drops; previously the event loop waited and they were
+  delivered late. Terminal session failures queue behind every delta the
+  session already produced instead of evicting the oldest queued delta; they
+  still evict once the session context has ended.

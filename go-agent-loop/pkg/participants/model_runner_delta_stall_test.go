@@ -2,10 +2,14 @@ package participants
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // A stalled delta consumer must not delay barge-in. MESSAGE.START and
@@ -100,5 +104,102 @@ func TestSessionOutbox_OrdinaryDeltasShedBehindStalledMustDeliver(t *testing.T) 
 			}
 		}
 		runner.sessionOut.flush(ctx)
+	})
+}
+
+// A terminal failure published while must-deliver deltas are still queued
+// for a stalled consumer follows them: the held onset frame released at
+// MESSAGE.END fails to send, and its ERROR must not overtake or evict that
+// MESSAGE.END.
+func TestSessionModelRunner_HeldAudioFailureFollowsQueuedMessageEnd(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		session := &outcomeRecordingSession{
+			recordingSession: newRecordingSession(),
+			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
+				messages.StreamTypeAudioDelta: {Status: messages.SessionSendClosed},
+			},
+		}
+		runner := NewSessionModelRunner(nil, 1, nil)
+		state := newInFlightRunState(t, session, runner, "resp-1") // MESSAGE.START fills the outbox
+		state.Onset.Hold(loudPCM(), clock.Real{}, time.Second)
+
+		runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-1"))
+		synctest.Wait()
+
+		want := []messages.StreamMessageType{messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeError}
+		for _, kind := range want {
+			got, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+			if !ok || got.Type != kind {
+				t.Fatalf("delivered %s (ok=%t), want %s; order must be %v", got.Type, ok, kind, want)
+			}
+		}
+		if drops := runner.DeltaOutbox.Drops(); drops != 0 {
+			t.Fatalf("outbox drops = %d, want none", drops)
+		}
+		runner.sessionOut.flush(ctx)
+	})
+}
+
+// A consumer that never reads cannot grow the session outbox without bound:
+// at the queue limit the session ends with ErrSessionDeltaOverflow and
+// publishes that failure as its terminal ERROR.
+func TestSessionModelRunner_StalledConsumerOverflowEndsSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 1, nil)
+		runner.sessionDeltas().limit = 3
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		errCh := make(chan error, 1)
+		go func() { errCh <- runner.Run(ctx) }()
+
+		for index := range 8 {
+			session.recv.Write(ctx, messages.StreamMessage{
+				Type:       messages.StreamTypeToolCallStart,
+				ResponseID: "resp-1",
+				Value:      messages.NewToolCallStartValue(fmt.Sprintf("call-%d", index), "lookup"),
+			})
+		}
+		synctest.Wait()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, ErrSessionDeltaOverflow) {
+				t.Fatalf("Run error = %v, want ErrSessionDeltaOverflow", err)
+			}
+		default:
+			t.Fatal("Run kept running with an overflowed session outbox")
+		}
+		got, ok := runner.DeltaOutbox.Read()
+		value, isError := got.Value.(*messages.ErrorValue)
+		if !ok || !isError || value.Classification != sessionDeltaOverflowClassification || !errors.Is(value.Err, ErrSessionDeltaOverflow) {
+			t.Fatalf("terminal delta = %#v, want the session_delta_overflow ERROR", got)
+		}
+	})
+}
+
+// Once the session context ends, the pump writes nothing more that is not
+// terminal, and flush returns only after it exited: no delta is written to
+// DeltaOutbox after the session is done with it.
+func TestSessionOutbox_NothingWrittenAfterSessionEnds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		runner := NewSessionModelRunner(nil, 1, nil)
+		start := messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}
+		end := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+		runner.writeSessionDelta(ctx, start)
+		runner.writeSessionDelta(ctx, end) // queued behind the full outbox
+		cancel()
+		runner.sessionOut.flush(ctx)
+
+		if got, _ := runner.DeltaOutbox.Read(); got.Type != messages.StreamTypeMessageStart {
+			t.Fatalf("outbox head = %s, want the MESSAGE.START written before the session ended", got.Type)
+		}
+		synctest.Wait()
+		if queued := runner.DeltaOutbox.Len(); queued != 0 {
+			t.Fatalf("outbox holds %d deltas written after the session ended", queued)
+		}
 	})
 }
