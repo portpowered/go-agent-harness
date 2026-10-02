@@ -485,10 +485,11 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
    the configured provider otherwise.
 4. **Order of work:**
    1. Login and token store (this phase 2 PR).
-   2. Responses-over-ChatGPT client, which also gives `yui ask`/`yui chat` a
-      no-key path.
-   3. `gpt-live-provider.md` PRs 1 to 3 (public route, API key).
-   4. A route C transport: a pion peer, Opus through `go-audio/pkg/codec`,
+   2. `gpt-live-provider.md` PRs 1 to 3 (public route, API key only).
+   3. The Responses-over-ChatGPT client, the `openai-chatgpt` provider
+      (`gpt-live-provider.md` PR 3a), before the delegation executor (PR 4).
+      It also gives `yui ask`/`yui chat` a path with no API key.
+   4. A route C transport (`gpt-live-provider.md` PR 9): a pion peer, Opus through `go-audio/pkg/codec`,
       call creation, the sideband, and a codec for the quicksilver-v2 dialect
       behind the same `openailive` session state machine.
 
@@ -561,18 +562,19 @@ Put the core in **`go-llm-gateway/pkg/providers/openai/chatgptauth`**:
   inherits from the config directory, which is under the user's profile by
   default. Elsewhere, a pre-existing store directory with looser permissions
   is tightened to `0700`.
-- Locking: `<file>.lock` is a directory that holds an `owner` file with a
-  random per-holder token. It is staged under a unique name and renamed into
-  place, so it is never visible without its owner. Renaming onto an
-  existing, non-empty lock fails on every supported OS.
-  - A lock older than two minutes, by its modification time on the injected
-    clock, is stale. A waiter breaks it by first renaming it to a unique
-    name. Only one waiter's rename can succeed, so two waiters never both
-    break it and both refresh with the same rotating token. If the lock it
-    took has a different owner than the one it judged stale, it is renamed
-    back.
-  - Release removes the lock only while it still carries the holder's
-    token, so a holder whose lock was broken never deletes its successor's
+- Locking: an OS advisory lock on the sibling file `<file>.lock`, taken
+  without blocking: `flock(LOCK_EX|LOCK_NB)` on Unix and `LockFileEx`
+  (exclusive, fail-immediately) on Windows, through `golang.org/x/sys`.
+  - The operating system releases the lock when its holder exits or
+    crashes. There is no stale lock to judge or break, and no window in
+    which two processes both hold it. (An earlier directory lock with owner
+    tokens and stale-lock breaking was replaced in review: reading the
+    staleness and the owner at different times, and the rename-away and
+    rename-back steps, let two holders exist at once.)
+  - The lock belongs to the open file, so two `Lock` calls in one process
+    also exclude each other.
+  - The lock file is never deleted. Deleting it would let a waiter that
+    holds the old file and a caller that creates a new one both hold "the"
     lock.
   - Waiters poll through an injected sleeper. Inside the lock the manager
   **reloads** the file before refreshing. If another process already rotated
@@ -602,7 +604,7 @@ Put the core in **`go-llm-gateway/pkg/providers/openai/chatgptauth`**:
 
 **Scopes (checked in the Codex source).** Codex requests
 `api.connectors.read api.connectors.invoke` only in its browser authorize URL
-(`login/src/server.rs:590` and the TUI onboarding URL). Nothing in `core` or
+(`login/src/server.rs:590`). Nothing in `core` or
 `codex-api` checks them for `/backend-api/codex/responses` or for realtime
 calls. Codex's device-code flow sends no scope at all and still drives both.
 OpenClaw's minimal-scope login drives `gpt-live-1-codex` and Codex
@@ -630,7 +632,8 @@ not a new provider name:
   (section 2). Add a provider name **`openai-chatgpt`**. It is a different
   wire protocol (Responses SSE) and a different host, which follows the same
   convention. `yui ask --provider openai-chatgpt` and the `livedelegation`
-  backend use it.
+  backend use it. It is `gpt-live-provider.md` PR 3a, with its file list in
+  that document's 2.10.
 - Config: `model.openai.auth: auto | api_key | chatgpt` (default `auto`)
   selects the source for both. `auto` applies the order in 3.5.
 

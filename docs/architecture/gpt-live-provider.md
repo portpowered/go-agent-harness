@@ -130,8 +130,10 @@ sideband path is `.../live/sessions/{session_id}/attach`.
 - **UNCONFIRMED:** whether any beta header (such as `OpenAI-Beta`) is needed.
   The WebSocket guide says "include the connection headers shown in the
   example", but that example uses the SDK and shows only the bearer token.
-- **UNCONFIRMED:** whether a ChatGPT OAuth token (the `yui auth chatgpt`
-  credential) is accepted. No GPT-Live page mentions one. See 2.3.
+- **Answered** (`chatgpt-oauth.md` 3.1): a ChatGPT OAuth token (the
+  `yui auth chatgpt` credential) is **not** accepted for `gpt-live-1`. It
+  reaches GPT-Live only as `gpt-live-1-codex` over WebRTC plus a sideband
+  (2.3, PR 9).
 - Azure accepts "An API key or Microsoft Entra ID credentials". Its example
   sends `Authorization: Bearer ${accessToken}`. **UNCONFIRMED:** the Azure
   `api-key` header form.
@@ -1096,8 +1098,12 @@ token store, refresh and endpoint evidence are in
   credential provider supplies.
 - **No Platform API-key exchange** from the ChatGPT login.
 - **Credential check.** `providers/internal/service/credentials.go`, which
-  today requires an API key for `api.openai.com`, must accept the auth store
-  for `openai-live`.
+  today requires an API key for `api.openai.com`, accepts the auth store for
+  `openai-live` only in PR 9, and only for `gpt-live-1-codex`.
+- **Phasing.** PRs 1 to 8 ship `gpt-live-1` only, so until PR 9
+  `openai-live` is **API-key only** and its default model stays `gpt-live-1`.
+  PR 9 adds `gpt-live-1-codex`, the ChatGPT auth store and the ChatGPT-first
+  credential order above, scoped to that model.
 
 ## 2.4 Delegation mode: client (decided)
 
@@ -1207,7 +1213,7 @@ continuation and interrupt handling would still need special cases.
 - **Concurrency.** A bounded worker pool. The default limit is 2 (open
   question Q11). Work that waits beyond the limit is queued, not dropped.
   Each worker runs a nested turn-based `agentloop` using:
-  - the configured stateless backend provider and model (Q8);
+  - the configured stateless backend provider and model (Q8). It stays configurable. With a ChatGPT login its default is the `openai-chatgpt` provider (PR 3a) with the account's default Codex Responses model;
   - the backend prompt prefix from 1.10.1;
   - the session's ordinary tool executor;
   - its own budget (iterations, wall time on the injected clock, tokens).
@@ -1415,12 +1421,12 @@ PR 2 (provider session without delegation):
 - `go-llm-gateway/pkg/providers/openailive/{provider,options,session,session_inbound,session_outbound,segments,close}.go`
 - `go-llm-gateway/pkg/providers/internal/realtime/`: the close hook and clock injection.
 - `go-agent-runtime/services/providers/internal/service/session.go`: `openai-live` branches in `buildSessionProvider` and `sessionDialer`, passing a credential provider (2.3).
-- `go-agent-runtime/services/providers/internal/service/credentials.go`: accept the ChatGPT auth store as a credential for `openai-live` (2.3).
+- `go-agent-runtime/services/providers/internal/service/credentials.go`: no change. Until PR 9, `openai-live` is API-key only, and the existing check already requires a key for `api.openai.com`.
 - `go-agent-runtime/services/audioio/internal/service/service.go` (and the `audioio` contract): treat `openai-live` as a 24 kHz provider. Today it would fall back to `DefaultSampleRate`, 16 kHz.
 - `agent-cli/internal/services/livehost/events.go`:
   - `selectProvider` must stop turning `openai-live` into `openai`;
-  - `providerConfig` must accept it and resolve credentials through the credential provider (ChatGPT auth store first, then the `model.openai` API key);
-  - the default model for `openai-live` follows the credential (2.3): `gpt-live-1` with an API key, `gpt-live-1-codex` with the ChatGPT login once PR 9 lands;
+  - `providerConfig` must accept it and resolve the `model.openai` API key through the credential provider (API-key only until PR 9, which adds the ChatGPT store and the ChatGPT-first order for `gpt-live-1-codex`);
+  - the default model stays `gpt-live-1` on an API key until PR 9; PR 9 makes it follow the credential (2.3);
   - the `/realtime` suffix rule must not apply; the Live path is `/live/sessions`.
 - `agent-cli/internal/config/{interface,overrides,loading}.go`, `services/session_host.go`, `services/wire/device_probe_session.go`, and the `--provider` help text: `ProviderOpenAILive = "openai-live"`.
 
@@ -1435,7 +1441,14 @@ PR 3 (stream vocabulary):
 - Exhaustive switches over `StreamMessageType` must list both new types. This includes `observeFiniteResponseMessage` in `go-agent-runtime/services/session/internal/live/observation.go` (near line 339). PR 3 must find every other exhaustive switch over the type, for example by grepping for `exhaustive`-checked switches on `StreamMessageType` and letting `make lint` flag the rest.
 - The `openailive` mapping for both.
 
-PR 4 (executor, if client delegation is chosen):
+PR 3a (`openai-chatgpt` text provider, the delegation backend):
+
+- `go-llm-gateway/pkg/providers/openaichatgpt/{provider,options,request,stream,models}.go`: an `llmproviders.Provider` (`Infer`, `InferStream`) over `POST https://chatgpt.com/backend-api/codex/responses` (Responses SSE). It sends `store:false`, `stream:true`, `instructions` and `include:["reasoning.encrypted_content"]`, plus the headers `Authorization`, `chatgpt-account-id`, `originator`, `OpenAI-Beta: responses=experimental` and `accept: text/event-stream`, all taken from a credential provider backed by `chatgptauth.Manager`. `models.go` lists the account's models from `GET /backend-api/codex/models?client_version=...`. Plan-allowance errors (`usage_limit_reached`, `usage_not_included`) map to typed errors.
+- `go-llm-gateway/pkg/providers/openaichatgpt/*_test.go`: an `httptest` fake Responses SSE server; no real network.
+- `go-agent-runtime/services/providers/internal/service/service.go` (`buildConfiguredProvider`) and `models.go`: the `openai-chatgpt` provider name. Its models come from the account's list, not the static catalog.
+- `agent-cli/internal/config/{interface,overrides,loading}.go` and `services/session_host.go` (`resolvedProvider`): `ProviderOpenAIChatGPT = "openai-chatgpt"`, which reads the auth store at `<config-dir>/auth/chatgpt.json`; `yui ask`/`yui chat --provider openai-chatgpt`.
+
+PR 4 (client-delegation executor):
 
 - `go-agent-runtime/services/livedelegation/...` (service, worker pool, nested `agentloop`, wire).
 - `go-agent-runtime/services/session/internal/live/observation.go`: route `DELEGATION.CREATED` to the executor.
@@ -1444,6 +1457,16 @@ PR 6 (replay):
 
 - `go-agent-runtime/services/replay/internal/strict/runtime.go`: accept `openai-live` and build the `openailive` adapter (today it is OpenAI-only).
 - `go-llm-gateway/pkg/testing/testdata/session-fixtures/openai-live/*.session.json`.
+
+PR 9 (`gpt-live-1-codex` on the ChatGPT login; `chatgpt-oauth.md` 3.2 and 3.5):
+
+- `go-llm-gateway/pkg/providers/openailive/codex/{protocol,codec}.go`: the quicksilver-v2 dialect, with client `input_audio.append`, `session.update`, `session.context.append` and `delegation.context.append` (with `channel`), and server `output_audio.delta`, `input_transcript.added`, `output_transcript.added`, `turn.done`, `delegation.created`, `output_audio_buffer.cleared` and `error`, mapped onto the same session state machine and stream types as the public dialect.
+- `go-llm-gateway/pkg/providers/openailive/codex/{call,peer,sideband}.go`: call creation with JSON `{sdp, session}` at `POST https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas`, with `OpenAI-Alpha: quicksilver=v2`. The response is a raw SDP answer; the call id comes from `Location`. A provider-side pion WebRTC peer carries the audio, with Opus through `go-audio/pkg/codec`. The sideband dials `wss://api.openai.com/v1/live/{call_id}` and redials through the credential provider.
+- A fake codex backend (test support) for call creation and the sideband, plus a pion loopback peer for media tests.
+- `go-agent-runtime/services/providers/internal/catalog/catalog.go`: add `gpt-live-1-codex` under `openai-live`, with admission tests.
+- `go-agent-runtime/services/providers/internal/service/{session,credentials}.go`: route `gpt-live-1-codex` to the codex transport, and accept the ChatGPT auth store as its credential.
+- `agent-cli/internal/services/livehost/events.go`: `providerConfig` resolves the ChatGPT store first and the API key second (2.3); `--model` narrows the order; the default model follows the credential.
+- The voice registry: the codex voices (`cove` as default, `arbor`, `breeze`, `ember`, `juniper`, `maple`, `sol`, `spruce`, `vale`).
 
 ## 2.11 Test strategy
 
@@ -1537,6 +1560,7 @@ no wall-clock sleeps.
 | **1** | `openailive` protocol types, codec, `session.start` builder, goldens, `fakelive`, the catalog entry `openai-live`/`gpt-live-1`, the admission restriction and the error provider name. | No production path reaches it yet: `BuildSession` still rejects the provider. Pure additions plus tests. |
 | **2** | The `openailive` provider session: handshake, inbound audio and transcripts, speech segments, outbound audio, the fail-closed mappings, graceful close, and the close-reason mapping. Also the skeleton hooks, provider-service branches, the `audioio` rate, the tool-acknowledgement regression pin (no code change), the `livehost` and CLI provider plumbing, and `--provider openai-live`. Delegations are logged and dropped. | An end-to-end voice conversation works with no tools. |
 | **3** | `DELEGATION.CREATED` and `CONTEXT.APPEND` stream types: kept out of response state and reconstruction, `DELEGATION.CREATED` added to `MustDeliver`, both registered in the three capture decoders and every exhaustive switch, and their `openailive` mappings. Plus the transcript ring, the settle window, and an optional greeting. | New vocabulary that other providers decline. |
+| **3a** | The `openai-chatgpt` text provider: Responses over `chatgpt.com/backend-api/codex/responses` on the ChatGPT login (`chatgpt-oauth.md` 2 and 4.4). It is the default delegation backend when a ChatGPT login exists (Q8). | `yui ask`/`yui chat` and the delegation backend run on the ChatGPT login with no API key. |
 | **4** | Client delegation (2.4): the `livedelegation` asynchronous executor: worker pool, nested `agentloop`, observer hookup, result and progress appends, session-scoped lifetime. | Tools work through the harness backend, concurrently and independently of speech and interrupts. |
 | **5** | Task revisions and `Cancel(delegationID)`, stale-result handling, budgets and failure commentary, result splitting, mute and unmute. | Hardening on top of PR 4. |
 | **6** | Replay and recording support (`replay/internal/strict/runtime.go`), synthetic fixtures, and the opt-in smoke test. | Regression coverage. |
@@ -1566,8 +1590,9 @@ no wall-clock sleeps.
    backend prompt, split by the provider, or both? The proposal is both.
 7. **Q7 Usage accounting.** Should `USAGE.INFO` gain a voice-seconds field, or
    should Live usage stay provider-internal?
-8. **Q8 Backend model.** What should the default `livedelegation` backend
-   provider and model be?
+8. **Q8 Backend model. Decided:** the backend stays configurable. With a
+   ChatGPT login its default is the `openai-chatgpt` provider (PR 3a) with
+   the account's default Codex Responses model.
 9. **Q9 Barge-in observability.** Is it acceptable that barge-in and
    turn-latency metrics are approximate (segment-derived) for this provider?
 10. **Q10 Greeting default.** Should a session send a default greeting
