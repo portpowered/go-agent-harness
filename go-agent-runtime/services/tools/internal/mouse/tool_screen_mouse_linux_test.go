@@ -323,29 +323,6 @@ func TestLinuxProcessErrorIdentity(t *testing.T) {
 	}
 
 }
-<<<<<<< HEAD
-||||||| parent of 2ea5bfe58 (ci(nightly-e2e): own cache names, pinned action, split pinned Chrome; scrot --overwrite)
-
-// screenDisplayBounds reports the host display's bounds, or empty when
-// discovery fails.
-func screenDisplayBounds(index int) image.Rectangle {
-	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
-	if err != nil {
-		return image.Rectangle{}
-	}
-	return bounds
-}
-=======
-
-// screenDisplayBounds reports the host display's bounds, or empty when
-// discovery fails.
-func screenDisplayBounds(index int) image.Rectangle {
-	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
-	if err != nil {
-		return image.Rectangle{}
-	}
-	return bounds
-}
 
 // TestLinuxScreenCaptureWritesIntoTheReservedTempFile covers scrot's
 // no-overwrite default: the capture reserves its temp file before running
@@ -360,4 +337,3 @@ func TestLinuxScreenCaptureWritesIntoTheReservedTempFile(t *testing.T) {
 		t.Fatalf("captured image bounds = %v, want the 2x2 fixture", got)
 	}
 }
->>>>>>> 2ea5bfe58 (ci(nightly-e2e): own cache names, pinned action, split pinned Chrome; scrot --overwrite)
