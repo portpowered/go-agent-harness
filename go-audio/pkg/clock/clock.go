@@ -343,8 +343,12 @@ func Wait(ctx context.Context, source Source, duration time.Duration) error {
 }
 
 // WithDeadline uses source's timer domain. It returns an error instead of
-// falling back to host time when source lacks scheduling support.
+// falling back to host time when source lacks scheduling support, and
+// contract.ErrNilContext for a nil parent.
 func WithDeadline(parent context.Context, source Source, deadline time.Time) (context.Context, context.CancelFunc, error) {
+	if parent == nil {
+		return nil, nil, contract.ErrNilContext
+	}
 	timerSource, err := RequireTimerSource(source)
 	if err != nil {
 		return nil, nil, err
@@ -354,8 +358,12 @@ func WithDeadline(parent context.Context, source Source, deadline time.Time) (co
 }
 
 // WithTimeout uses source's timer domain. It returns an error instead of
-// falling back to host time when source lacks scheduling support.
+// falling back to host time when source lacks scheduling support, and
+// contract.ErrNilContext for a nil parent.
 func WithTimeout(parent context.Context, source Source, timeout time.Duration) (context.Context, context.CancelFunc, error) {
+	if parent == nil {
+		return nil, nil, contract.ErrNilContext
+	}
 	timerSource, err := RequireTimerSource(source)
 	if err != nil {
 		return nil, nil, err

@@ -19,9 +19,6 @@ type pacedPlaybackBackendForTest interface {
 	DeviceFormat() audio.DeviceFormat
 }
 
-// testPacedPlaybackBackend drives a provider-shaped burst through one native
-// queue contract while callbacks consume it. Platform tests supply their real
-// callback seam; the shared assertions require exact FIFO PCM and zero loss.
 // awaitQueuedFrame waits, polling on a ticker, until the producer has queued
 // at least one frame for the next render callback.
 func awaitQueuedFrame(t *testing.T, backend pacedPlaybackBackendForTest, frameIndex int) {
@@ -39,6 +36,9 @@ func awaitQueuedFrame(t *testing.T, backend pacedPlaybackBackendForTest, frameIn
 	}
 }
 
+// testPacedPlaybackBackend drives a provider-shaped burst through one native
+// queue contract while callbacks consume it. Platform tests supply their real
+// callback seam; the shared assertions require exact FIFO PCM and zero loss.
 func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest, render func([]byte)) {
 	t.Helper()
 	const frameCount = 40
