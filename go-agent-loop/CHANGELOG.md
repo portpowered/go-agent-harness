@@ -128,6 +128,8 @@ every program that imports `pkg/probe`. These names have no replacement:
     flushed outside the history lock with a bounded context, which
     `agentloop.WithSettleRecordTimeout` (`Engine.SetSettleRecordTimeout`)
     configures; the default is `engine.DefaultSettleRecordTimeout` (3s).
+    The new `subsystems.Recorder.Flush(ctx, []messages.Message)` records
+    that settled history copy.
   - Only assistant response content opens a response. A user's input
     transcription (TRANSCRIPT deltas with RoleUser from realtime providers)
     and session events such as SESSION.OPEN do not hold typed turns.
