@@ -150,8 +150,6 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 ANALYZER_TOOL_DIR ?= .cache/go-tools
 ARCHITECTURE_POLICY := docs/architecture/architecture-policy.json
-ARCHITECTURE_BASELINE := docs/architecture/baselines
-ARCHITECTURE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 # Race test binaries sleep 1s at exit by default (GORACE atexit_sleep_ms);
@@ -196,7 +194,7 @@ define agent_cli_split_tests
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-size-check test-architecture-gate verify-architecture embed-check
+.PHONY: architecture-check test-architecture-gate verify-architecture embed-check
 .PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
@@ -376,15 +374,18 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 		fi; \
 	done
 
-architecture-size-check: ## Enforce architecture and size budgets in one shared inventory pass.
-	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture,size
+# Size, complexity, package-global and init limits are golangci-lint's (make
+# lint); the gate checks service shape and the boundaries depguard cannot
+# express. See docs/architecture/lint-policy.md.
+architecture-check: ## Enforce service shape, public-surface and boundary rules (tools/architecturegate).
+	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY)
 
-# -count=1: its tests read docs/architecture at the repository root, outside
+# -count=1: its tests read docs/architecture and .golangci.yml at the repository root, outside
 # the module, where Go's test cache cannot see a change.
 test-architecture-gate: ## Verify architecture enforcement against positive and negative fixtures.
 	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"
 
-verify-architecture: architecture-size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
+verify-architecture: architecture-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
 
 embed-check: ## Exercise the public runtime API from an independent headless consumer module.
 	@cd tests/embedding && GOWORK=off CGO_ENABLED=0 $(GO) test -mod=readonly ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"

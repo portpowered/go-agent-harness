@@ -12,9 +12,8 @@ import (
 
 func architectureIssues(pkg *Package, module *Module, service serviceInfo, policy Policy) []Issue {
 	issues := moduleShapeIssues(pkg, module, policy)
-	globalState := service.Role != roleNone || matchesAny(policy.GlobalStateScopes, pkg.ImportPath, module.Path)
 	for _, source := range pkg.Files {
-		issues = append(issues, sourceArchitectureIssues(pkg, module, service, source, policy, globalState)...)
+		issues = append(issues, sourceArchitectureIssues(pkg, module, service, source, policy)...)
 	}
 	if service.Role == roleRoot {
 		issues = append(issues, serviceInterfaceIssue(pkg, module)...)
@@ -38,12 +37,14 @@ func moduleShapeIssues(pkg *Package, module *Module, policy Policy) []Issue {
 	return []Issue{moduleShapeIssue(pkg, module)}
 }
 
-func sourceArchitectureIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, policy Policy, globalState bool) []Issue {
+func sourceArchitectureIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, policy Policy) []Issue {
 	if source.Generated && registeredGenerated(source.Path, module, policy) {
 		return nil
 	}
 	issues := generatedSourceIssues(pkg, module, source, policy)
-	issues = append(issues, declarationIssues(pkg, module, service, source, policy, globalState)...)
+	if service.Role == roleRoot && !source.Test {
+		issues = append(issues, rootExportIssues(pkg, module, source, policy)...)
+	}
 	issues = append(issues, sourceImportIssues(pkg, module, service, source, policy)...)
 	issues = append(issues, sourcePatternIssues(pkg, module, source, policy)...)
 	issues = append(issues, serviceRoleIssues(pkg, module, service, source)...)
@@ -56,31 +57,6 @@ func generatedSourceIssues(pkg *Package, module *Module, source *SourceFile, pol
 		return nil
 	}
 	return []Issue{{Rule: "generated-file-spoof", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Message: "generated header is not registered with a reproducible generator"}}
-}
-
-func declarationIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, policy Policy, globalState bool) []Issue {
-	issues := make([]Issue, 0)
-	for _, declaration := range source.AST.Decls {
-		issues = append(issues, declarationIssue(pkg, module, source, declaration, policy, globalState)...)
-	}
-	if service.Role == roleRoot && !source.Test {
-		issues = append(issues, rootExportIssues(pkg, module, source, policy)...)
-	}
-	return issues
-}
-
-func declarationIssue(pkg *Package, module *Module, source *SourceFile, declaration ast.Decl, policy Policy, globalState bool) []Issue {
-	switch declaration := declaration.(type) {
-	case *ast.GenDecl:
-		if declaration.Tok == token.VAR && globalState {
-			return globalIssues(pkg, module, source, declaration, policy)
-		}
-	case *ast.FuncDecl:
-		if declaration.Name.Name == "init" && declaration.Recv == nil && globalState {
-			return []Issue{{Rule: "init-function", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Symbol: "init", Message: "service packages must not use package initialization"}}
-		}
-	}
-	return nil
 }
 
 func serviceRoleIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile) []Issue {
@@ -118,42 +94,7 @@ func wireBusinessMethodIssues(pkg *Package, module *Module, service serviceInfo,
 	return issues
 }
 
-func globalIssues(pkg *Package, module *Module, source *SourceFile, declaration *ast.GenDecl, policy Policy) []Issue {
-	if source.Generated && registeredGenerated(source.Path, module, policy) && classifyGenerated(source.Path, module, policy) == "wire" {
-		return nil
-	}
-	issues := make([]Issue, 0, len(declaration.Specs))
-	for _, spec := range declaration.Specs {
-		valueSpec, ok := spec.(*ast.ValueSpec)
-		if !ok {
-			continue
-		}
-		issues = append(issues, globalValueIssues(pkg, module, source, valueSpec, policy)...)
-	}
-	return issues
-}
-
-func globalValueIssues(pkg *Package, module *Module, source *SourceFile, valueSpec *ast.ValueSpec, policy Policy) []Issue {
-	issues := make([]Issue, 0, len(valueSpec.Names))
-	for _, name := range valueSpec.Names {
-		if name.Name == "_" || globalExceptionMatches(pkg, source, name.Name, policy) {
-			continue
-		}
-		issues = append(issues, Issue{Rule: "mutable-global", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Symbol: name.Name, Message: "mutable package state must be owned by an injected service"})
-	}
-	return issues
-}
-
-func globalExceptionMatches(pkg *Package, source *SourceFile, name string, policy Policy) bool {
-	for _, exception := range policy.GlobalExceptions {
-		if exceptionMatches(exception, pkg.ImportPath, source, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func exceptionMatches(exception GlobalException, packagePath string, source *SourceFile, name string) bool {
+func exceptionMatches(exception SymbolException, packagePath string, source *SourceFile, name string) bool {
 	if !globMatch(exception.Package, packagePath) || exception.Name != name {
 		return false
 	}
@@ -171,7 +112,6 @@ func sourceImportIssues(pkg *Package, module *Module, service serviceInfo, sourc
 
 func importIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, importPath string, policy Policy) []Issue {
 	issues := forbiddenImportIssues(pkg, module, source, importPath, policy)
-	issues = append(issues, reusableImportIssues(pkg, module, source, importPath, policy)...)
 	issues = append(issues, testImportIssues(pkg, module, service, source, importPath)...)
 	if service.Role == roleNone && !registeredCompositionSource(pkg, module, source, policy) {
 		if moduleOwnsImport(module, importPath) && isServiceWireImport(importPath) {
@@ -195,13 +135,6 @@ func forbiddenImportIssues(pkg *Package, module *Module, source *SourceFile, imp
 		}
 	}
 	return issues
-}
-
-func reusableImportIssues(pkg *Package, module *Module, source *SourceFile, importPath string, policy Policy) []Issue {
-	if !moduleIsReusable(module, policy) || !matchesAny(policy.CLIModules, importPath) {
-		return nil
-	}
-	return []Issue{{Rule: "reusable-cli-import", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Message: fmt.Sprintf("reusable module imports CLI module %s", importPath)}}
 }
 
 func testImportIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, importPath string) []Issue {

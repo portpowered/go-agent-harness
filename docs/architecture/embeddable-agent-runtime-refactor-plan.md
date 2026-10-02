@@ -168,9 +168,9 @@ Raw provider capture and paced transport replay must use that same clock domain.
 
 ## 6. Enforced shape and complexity policy
 
-At the starting revision, `.golangci.yml` enabled only `funlen`, `gocognit`, and a revive file-length rule, with ceilings of 296 function lines, 124 cognitive complexity, and 1,307 file lines; it excluded tests. The working implementation now enables the correctness, literal, global-state and suppression checks below, including tests. Separate Make targets retain vet, Staticcheck, pinned analyzer resolution, builds and Wire drift checks. The architecture gate supplies the stricter per-symbol budgets without raising global ceilings to accommodate old code.
+At the starting revision, `.golangci.yml` enabled only `funlen`, `gocognit`, and a revive file-length rule, with ceilings of 296 function lines, 124 cognitive complexity, and 1,307 file lines; it excluded tests. The working implementation now enables the correctness, literal, global-state and suppression checks below, including tests. Separate Make targets retain vet, Staticcheck, pinned analyzer resolution, builds and Wire drift checks. The architecture gate supplied stricter per-symbol budgets with a deletion-only baseline; those budgets were later retired in favour of one golangci-lint limit set for all code with no baseline (see [lint-policy.md](lint-policy.md#size-and-complexity)).
 
-The [size-baseline documentation](size-baselines.md) now describes the maintained-module inventory, pinned analyzer versions, stronger budgets, and exact historical debt. Its former three-module inventory and maximum-holder paths were stale; P0 uses fresh source measurements rather than treating those holders as current. Existing AST import tests in CLI and agent-loop protect selected audio/device boundaries. Port their invariants into the general gate with negative fixtures before retiring redundant tests; checking only the old `/services/internal/` string would miss the new layout.
+The size-baseline documentation (since retired: size and complexity limits now live in golangci-lint, see [lint-policy.md](lint-policy.md)) described the maintained-module inventory, pinned analyzer versions, stronger budgets, and exact historical debt. Its former three-module inventory and maximum-holder paths were stale; P0 uses fresh source measurements rather than treating those holders as current. Existing AST import tests in CLI and agent-loop protect selected audio/device boundaries. Port their invariants into the general gate with negative fixtures before retiring redundant tests; checking only the old `/services/internal/` string would miss the new layout.
 
 The checked-in architecture policy applies the limits below to new/extracted packages. Historical exceptions are measured individually and may only shrink. These are reviewable engineering budgets, not claims that a metric proves good design.
 
@@ -213,12 +213,12 @@ Use `go/analysis` for package-local semantic rules and a graph/inventory driver 
 Implemented command entrypoints (their existence does not imply the complete repository currently passes):
 
 ```text
-make architecture-size-check  ownership, service shape, public API, DI boundaries,
-                              package/files/functions and exact legacy baseline
+make architecture-check       ownership, service shape, public API, DI boundaries
+                              (size and complexity moved to make lint)
 make lint                     existing analyzer gate plus approved new checks
 make wire-check               every registered injector, generated diff clean
 make embed-check              independent external consumer and host parity
-make verify-architecture      architecture, size, gate fixtures and Wire drift
+make verify-architecture      architecture, gate fixtures and Wire drift
 ```
 
 Extend existing Make/CI infrastructure rather than introducing a second analyzer installer. Fast PR checks cover formatting, compilation, architecture, size, analyzers and generated drift; required CI also retains behavioral/race/replay/platform tests. The final aggregate must run full ownership checks, even when local commands offer changed-package optimization. CI rejects skip flags for required gates.

@@ -13,8 +13,8 @@ run:
   # relative to the repository root (e.g. agent-cli/internal/...) so that
   # exclusion rules can name a module.
   relative-path-mode: gitroot
-  # Tests follow the same policy as production. The architecture gate
-  # separately keeps the stronger physical test budgets.
+  # Tests follow the same policy as production, including the size and
+  # complexity limits below (the architecture gate no longer measures size).
   tests: true
   # Opt-in build tags are linted with the same limits as default-tag code.
   # e2e_internal files depend on live helpers, so the tags load together.
@@ -92,9 +92,15 @@ linters:
     - thelper
 
   settings:
+    # Size and complexity limits are owned here, for all code, with no baseline
+    # (tools/architecturegate checks only service shape and boundaries). Each
+    # value is the tightest one every current file passes on every lint lane;
+    # lower a value when the code allows it, never raise it (the hard caps are
+    # 1000 lines per file and 100 lines per function).
+    # See docs/architecture/lint-policy.md#size-and-complexity.
     funlen:
       lines: 100
-      statements: -1
+      statements: 78
       ignore-comments: false
     gocyclo:
       min-complexity: 30
@@ -108,7 +114,7 @@ linters:
       rules:
         - name: file-length-limit
           arguments:
-            - max: 1000
+            - max: 978
               skip-comments: false
               skip-blank-lines: false
     errcheck:
@@ -192,6 +198,86 @@ linters:
           files: ["$all", "!$test", "!**/cmd/**", "!**/main.go"]
           deny:
             - {pkg: "log$", desc: inject a logger; library code must not write to the global log}
+        # Module dependency direction and contract boundaries. Paths are
+        # anchored at the repository root (the directory of this file). A deny
+        # entry is an import-path prefix unless it ends in $ (exact match).
+        # tools/architecturegate keeps the rules depguard cannot express
+        # (service shape, glob import patterns); see lint-policy.md.
+        reusable-modules:
+          files:
+            - "${config-path}/go-agent-loop/**"
+            - "${config-path}/go-audio/**"
+            - "${config-path}/go-device-gateway/**"
+            - "${config-path}/go-llm-gateway/**"
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-runtime, desc: lower reusable modules must not depend on the extracted runtime}
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli, desc: reusable modules must not import the CLI module}
+        runtime-module:
+          files: ["${config-path}/go-agent-runtime/**"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli, desc: reusable modules must not import the CLI module}
+        agent-loop:
+          files: ["${config-path}/go-agent-loop/**"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/go-device-gateway, desc: the execution loop stays independent of device and provider adapters}
+            - {pkg: github.com/portpowered/go-agent-harness/go-llm-gateway, desc: the execution loop stays independent of device and provider adapters}
+        agent-loop-production:
+          files: ["${config-path}/go-agent-loop/**", "!$test"]
+          deny:
+            - {pkg: "encoding/binary$", desc: the loop exchanges PCM through go-audio/pkg/codec; it never parses audio bytes itself}
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock, desc: the loop takes clocks from go-audio}
+        go-audio:
+          files: ["${config-path}/go-audio/**"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli, desc: audio primitives remain independent of orchestration and host adapters}
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-loop, desc: audio primitives remain independent of orchestration and host adapters}
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-runtime, desc: audio primitives remain independent of orchestration and host adapters}
+            - {pkg: github.com/portpowered/go-agent-harness/go-device-gateway, desc: audio primitives remain independent of orchestration and host adapters}
+            - {pkg: github.com/portpowered/go-agent-harness/go-llm-gateway, desc: audio primitives remain independent of orchestration and host adapters}
+        gateway-functional-tests:
+          # Lax: only the deny entry is checked, and the longer allow entry
+          # re-admits the shared message contract.
+          list-mode: lax
+          files: ["${config-path}/go-llm-gateway/test/functional/*.go"]
+          allow:
+            - "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages$"
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-loop, desc: the gateway consumer proof depends on the loop only through the shared message contract}
+        session-contract:
+          files: ["${config-path}/agent-cli/internal/services/agentsession/interface.go"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/go-device-gateway, desc: the public session contract stays independent of concrete device and provider gateways}
+            - {pkg: github.com/portpowered/go-agent-harness/go-llm-gateway, desc: the public session contract stays independent of concrete device and provider gateways}
+        tool-contract:
+          files: ["${config-path}/agent-cli/internal/services/tools/interface.go"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal, desc: the public tool contract does not expose private service implementations}
+        device-contract:
+          files:
+            - "${config-path}/agent-cli/internal/services/devices/interface.go"
+            - "${config-path}/agent-cli/internal/transport/cli/devices.go"
+            - "${config-path}/agent-cli/internal/transport/cli/probe.go"
+            - "${config-path}/agent-cli/internal/transport/cli/probe_output.go"
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/go-device-gateway, desc: the device contract and the device list/probe transports reach devices only through the public device service}
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal, desc: the device contract and the device list/probe transports reach devices only through the public device service}
+        cli-transports:
+          files: ["${config-path}/agent-cli/internal/transport/cli/**", "!$test"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal, desc: CLI transports use public service boundaries, never private service implementations}
+        agent-cli-production:
+          files: ["${config-path}/agent-cli/internal/**", "!$test"]
+          deny:
+            - {pkg: github.com/portpowered/go-agent-harness/agent-cli/internal/audio, desc: application code reaches audio payloads through go-audio}
+            - {pkg: github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio, desc: application code reaches audio payloads through go-audio}
+            - {pkg: github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock, desc: application code takes clocks from go-audio}
+        agent-cli-binary:
+          files:
+            - "${config-path}/agent-cli/internal/**"
+            - "!$test"
+            - "!${config-path}/agent-cli/internal/webmcp/testkit/**"
+          deny:
+            - {pkg: "encoding/binary$", desc: application code does not parse audio payload bytes; browser testkit binary identifiers are the reviewed exception}
     forbidigo:
       # Patterns match the resolved package path and receiver type, so an
       # aliased import or a method value cannot hide a call.
