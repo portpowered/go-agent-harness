@@ -130,6 +130,8 @@ sideband path is `.../live/sessions/{session_id}/attach`.
 - **UNCONFIRMED:** whether any beta header (such as `OpenAI-Beta`) is needed.
   The WebSocket guide says "include the connection headers shown in the
   example", but that example uses the SDK and shows only the bearer token.
+- **UNCONFIRMED:** whether a ChatGPT OAuth token (the `yui auth chatgpt`
+  credential) is accepted. No GPT-Live page mentions one. See 2.3.
 - Azure accepts "An API key or Microsoft Entra ID credentials". Its example
   sends `Authorization: Bearer ${accessToken}`. **UNCONFIRMED:** the Azure
   `api-key` header form.
@@ -165,7 +167,7 @@ Conflicts and unknowns:
 - Azure describes WebSocket audio as fixed at 24 kHz PCM16 and does not list
   16 kHz or G.711. The OpenAI reference lists all four formats.
 - **UNCONFIRMED:** whether the server sends output audio at playback pace or
-  in bursts faster than real time. This matters for local buffering; see 2.6.
+  in bursts faster than real time. This matters for local buffering; see 2.6.2.
 
 ## 1.5 Session config schema (`session.start.session`, `SessionConfig`)
 
@@ -619,17 +621,19 @@ Conflicts between OpenAI and Azure:
 
 1. Connect with no query parameters and the bearer header.
 2. Send `session.start` as the first message. If startup fails, an `error` is
-   sent and `session.started` never arrives: "A startup error prevents
-   `session.started`." An HTTP error on session creation means "the session
-   did not reach `session.started`."
+   sent and `session.started` never arrives. Azure states this directly
+   ("A startup error prevents `session.started`."). OpenAI says it for WebRTC
+   creation: an HTTP error on session creation means "the session did not
+   reach `session.started`."
 3. Wait for `session.started` before sending audio or commands.
 4. Stream audio continuously, including silence: "Keep input audio running
    throughout this sequence, including silence before the caller speaks."
    "EOF on the audio source does not end the conversation."
 5. Handle interleaved server events.
 6. Close: install a `session.closed` handler, then send `session.close`, then
-   keep reading until `session.closed` arrives. "On close, the service stops
-   accepting new work, drains active delegation and output work". "Sending
+   keep reading until `session.closed` arrives. Azure: "On close, the service
+   stops accepting new work, drains active delegation and output work".
+   OpenAI: "Sending
    `session.close` cancels queued Responses and rejects further commands."
    "Closing the session returns errors for appends that are still pending."
    If the socket closes without `session.closed`, final usage is unconfirmed.
@@ -814,8 +818,8 @@ If the outcome is unclear, state that and explain what needs to be checked.
 
 2. GPT-Live calls the configured Responses model and supplies the
    conversation context itself. Backend stream events arrive wrapped in
-   `response.event`. "Don't treat top-level `response.*` values as unwrapped
-   Responses events."
+   `response.event`. Azure: "Don't treat top-level `response.*` values as
+   unwrapped Responses events."
 3. Hosted tools (`web_search`) run on the server. Function tools are returned
    to the client. Read a completed call from the nested
    `response.output_item.done`; "an arguments-done event alone is not
@@ -852,15 +856,17 @@ If the outcome is unclear, state that and explain what needs to be checked.
    }
    ```
 
-   "Appending a function result doesn't automatically continue the response,
-   and it has no standalone success acknowledgment."
+   Azure: "Appending a function result doesn't automatically continue the
+   response, and it has no standalone success acknowledgment." OpenAI says
+   the same in its own words: "`response.item.create` has no separate success
+   acknowledgment".
 5. Read lifecycle events until a terminal nested event such as
    `response.completed`. Forwarded lifecycle snapshots have `output: []`,
    `tools: []`, `instructions: null` and no `input`, so function calls must be
    collected from the individual `output_item.done` events. Backend token
    usage arrives only in nested `response.completed`.
-6. "Delegated output text is also injected into the live session".
-   The Live model speaks it.
+6. Azure: "Delegated output text is also injected into the live session, so
+   it can surface as normal transcript and audio output."
 
 Typed user text in Responses mode is queued with `response.item.create`
 (`type:"message", role:"user"`) followed by `response.create`. In client mode,
@@ -914,15 +920,17 @@ One envelope is used for every error:
 
 (The third example is from Azure.)
 
-- `error.type` is a string. The documented values are `invalid_request_error`
-  and `server_error`. `call_error` is used only in `transport.failed`.
+- `error.type` is a string. The only documented value is
+  `invalid_request_error`. `call_error` appears only in `transport.failed`.
+  **UNCONFIRMED:** any other value, such as a server-side error type.
 - Documented codes: `unknown_parameter`, `immutable_field_update` and
   `invalid_audio`. The SIP HTTP API also returns `decision_already_made`.
   "Provide a general error handler for errors whose code is `null` or whose
   client event ID is absent." **UNCONFIRMED:** the complete code list,
   including the codes for exceeding the 500-token append limit, the 16,384-token
   instruction limit, rate or concurrency limits, and an unknown `delegation_id`.
-- "A command error doesn't necessarily close an already-started session."
+- Azure: "A command error doesn't necessarily close an already-started
+  session."
 - Moderation: "Some moderation events end the session" (reason `content`).
   "Others cut off assistant audio for the remainder of its current speech and
   emit an `error` event without ending the session." **UNCONFIRMED:** the code
@@ -998,9 +1006,17 @@ One envelope is used for every error:
 | OpenAI Realtime | `go-llm-gateway/pkg/providers/openai/session*.go` | `ConnectSession` dials `wss://.../v1/realtime?model=`, writes `session.update` and starts the loops. `realtimeInboundMessages` maps server events to stream messages. `realtimeOutboundEvents` maps stream messages to wire events (`AUDIO.DELTA` to `input_audio_buffer.append`; `MESSAGE.END` to commit plus `response.create`; `RESPONSE.CANCEL` to `response.cancel`; `TOOLCALL.END` to `function_call_output`; `RESPONSE.CREATE` to `response.create`). It also runs a response-admission gate, because Realtime allows one active response. |
 | Catalog and admission | `go-agent-runtime/services/providers/models.go`, `internal/catalog/catalog.go`, `internal/admission/admission.go` | The catalog has `openai` models only. Admission restricts **only** `openai`; every other provider name is `Allowed` with no model check. |
 | Provider service | `go-agent-runtime/services/providers/internal/service/session.go` | `resolveSessionProvider` runs admission and the credential check. `buildSessionProvider` and `sessionDialer` switch on the provider name (`openai`, `openrouter` and `local` all use the openai provider; `grok` uses its own). `sessionConfig` sets default PCM16 at 24 kHz. Recording and replay wrap the dialer and inferencer. |
-| Session wrappers | `go-agent-runtime/services/session/internal/live/sessionwrap/*`, `services/replay/internal/plan/live.go`, `services/sessionduration/...`, `go-llm-gateway/pkg/testing/session_record.go` | Each embeds `messages.SessionCapabilities`, so new optional capabilities pass through automatically. |
+| Session wrappers | `go-agent-runtime/services/session/internal/live/sessionwrap/*`, `services/replay/internal/plan/live.go`, `services/sessionduration/...`, `go-llm-gateway/pkg/testing/session_record.go` | Each embeds `messages.SessionCapabilities`. That type forwards only the capability methods it defines, so a new optional capability interface also needs a new forwarding method there. New stream message **types** need none, because they travel through `Send` and `Receive`. This design therefore adds stream types, not capabilities (2.7). |
 | Loop consumer | `go-agent-loop/pkg/participants/model_runner_session*.go`, `model_runner_control.go`, `internal/sessionstate` | The session goroutine tracks the response lifecycle from `MESSAGE.START` to `MESSAGE.END`. It runs a local energy barge-in (onset, then `RESPONSE.CANCEL`) unless `ProviderTurnDetection()` is true. It forwards tool results as `TOOLCALL.END` and then asks for a continuation with `RESPONSE.CREATE`. It binds the continuation response as tagged, or as guessed for providers like Grok that do not echo the purpose. It sends the initial `SESSION.UPDATE` unless `InitialSessionConfigSent()`. |
+| Loop tool path | `go-agent-loop/pkg/participants/tool_runner.go`, `go-agent-loop/pkg/subsystems/{interrupt_handler,tool_result_forwarder}.go`, `go-agent-loop/pkg/agentloop/agent_loop.go` | `ToolRunner.Tick` reads one `ToolBatchRequest` and executes it to completion before it reads the next, so batches are serialized. `InterruptHandler` cancels the current model execution and the current tool batch (`CancelCurrentExecution`) when a user control-plane interrupt arrives. When a `ToolAcknowledgementPolicy` is configured, a long-running tool makes the tool runner enqueue a `RESPONSE.CREATE` with the acknowledgement purpose. The live session service enables that policy in `go-agent-runtime/services/session/internal/live/policies.go` (`toolAcknowledgementOption`). |
+| Response-state hazards | `go-agent-loop/pkg/participants/internal/sessionstate/lifecycle.go` | `beginResponse` retires the in-flight response when a start arrives with a different response id. `StaleCustomerOutput` then drops later audio, text and assistant transcript for the retired id. `Continuation.OnResponseStart` binds the first response after an accepted continuation request as "guessed" when the provider does not echo the purpose. |
+| Session-duration retry | `go-agent-runtime/services/sessionduration/internal/service/retry.go` | Sends `RESPONSE.CREATE` after a `MESSAGE.END` whose terminal status is eligible for a rate-limit retry. |
+| Terminal vocabulary | `go-agent-loop/pkg/messages/terminal_values.go` | `TerminalReason` values: `provider_authored_completion`, `loop_synthesized_completion`, `cancellation`, `replay_divergence`, `replay_incomplete`, `replay_complete`, `session_close`, `partial_output`, `provider_close`, `terminal_failure`. `SessionCloseValue` carries a free-form `Reason` alongside them. |
 | CLI | `agent-cli/internal/config/interface.go` (`ProviderOpenAI`, `ProviderGrok`, ...), `config/overrides.go`, `config/loading.go`, `services/session_host.go` (`resolvedProvider`), `services/wire/device_probe_session.go`, `transport/cli/*` (`--provider`, `--model` flags) | The provider name selects a config block (`model.openai`, `model.grok`) and its key, model and base URL. |
+| CLI live host | `agent-cli/internal/services/livehost/events.go` | `selectProvider` turns any configured provider that is not `openai` or `grok` into `openai`. `providerConfig` rejects every other name. The default model is `gpt-realtime-2.1-mini`, and `/realtime` is appended to the OpenAI base URL. |
+| Audio rates | `go-agent-runtime/services/audioio/internal/service/service.go` | When no rate is requested, `openai` and `grok` get 24 kHz and every other provider gets `DefaultSampleRate` (16 kHz). |
+| Replay | `go-agent-runtime/services/replay/internal/strict/runtime.go` | The production offline replay factory accepts only provider `openai` and builds the OpenAI Realtime adapter. |
+| Admission errors | `go-agent-runtime/services/providers/internal/admission/public.go` | `decisionError` hardcodes `Provider: "OpenAI"` in the unsupported-model error. |
 
 ## 2.2 Naming: provider `openai-live`, model `gpt-live-1`
 
@@ -1022,14 +1038,15 @@ Reasons:
    admitted under `openai` (where the Realtime endpoint rejects it). Admission
    today treats every provider except `openai` as unrestricted, so the change
    must also add `openai-live` to the catalog-restricted set. Without it, any
-   model string would be admitted.
+   model string would be admitted. `decisionError` in `admission/public.go`
+   must take the provider name from the decision instead of the hardcoded
+   `"OpenAI"`.
 3. **The name matches the vendor's own wording** ("GPT-Live", "Live API",
    `/v1/live`, the SDK's `client.live`), and reads naturally in
    `--provider openai-live --model gpt-live-1`.
-4. **Credentials are reused.** GPT-Live uses the same OpenAI project key.
-   `openai-live` resolves its key and base URL from the existing `model.openai`
-   block (`ActiveOpenAIConfig`), and accepts an optional override such as
-   `model.openai_live.base_url` for Azure. This is open question Q2.
+4. **The credential is not part of the provider name.** The voice socket
+   gets its auth headers from a credential provider (2.3), so the same
+   `openai-live` provider works with a ChatGPT OAuth credential or an API key.
 
 Rejected alternatives: `openai` plus model-based dispatch (reason 1);
 `gpt-live` as the provider name (it names a model family, not a vendor
@@ -1042,213 +1059,312 @@ A collision to be aware of: `models.DefaultInputAudioTranscriptionModel` and
 Realtime transcription model. It is unrelated to GPT-Live, and the
 `openai-live` provider ignores `InputAudioTranscription` entirely.
 
-## 2.3 Decision: client delegation by default; Responses delegation later and optional
+## 2.3 Auth (PENDING `chatgpt-oauth.md`)
 
-**Client delegation is the mode we build first and use by default.** In it,
-the harness's own agent loop and tools act as the backend.
+The end goal is to sign in with `yui auth chatgpt` (ChatGPT OAuth, as in
+OpenClaw and Codex) and run GPT-Live on that credential. The OAuth flow,
+token store, refresh and endpoint details belong to
+`docs/architecture/chatgpt-oauth.md`, which a separate track is writing. That
+document is **PENDING**. Until it lands, this section fixes only the
+integration shape:
 
-Reasons:
+- **Credential source.** The default is the ChatGPT auth store written by
+  `yui auth chatgpt`. The fallback is an OpenAI API key (`model.openai.api_key`
+  or `OPENAI_API_KEY`).
+- **Header injection.** The `openailive` provider never builds
+  `Authorization: Bearer <api key>` itself. It takes a credential provider
+  option, for example `WithCredentialProvider(func(ctx) (headers map[string]string, err error))`.
+  The provider calls it once per dial (and once per sideband or fork dial),
+  so a refreshed OAuth token is used on reconnect. The API-key fallback is
+  simply a credential provider that returns the bearer header. The fake
+  server checks whatever headers the credential provider supplies.
+- **PENDING research.** Whether a ChatGPT OAuth token is accepted on
+  `wss://api.openai.com/v1/live/sessions` (or needs another host or extra
+  headers), and whether it can call the Responses API, is not known yet. The
+  public GPT-Live docs document only project API keys (1.3). The credential
+  check in `providers/internal/service/credentials.go`, which today requires
+  an API key for `api.openai.com`, must accept the auth store once this is
+  confirmed.
 
-- **Provider independence is the point of this harness.** With client
-  delegation the backend can be any gateway provider (openai, openrouter,
-  anthropic, gemini or local). Responses delegation ties the backend to
-  OpenAI Responses models and allows only `function` and `web_search` tools.
-- **The harness tools are local, and the harness enforces their policy.**
-  This covers filesystem tools, WebMCP and browser tools, device tools, tool
-  ordering, approval and the tool-result image path. OpenAI says client
-  delegation is the choice when "Your application must validate, redact,
-  combine, or discard results before they reach GPT-Live" and when you need
-  "custom routing ... fallbacks, checkpoints, or budgets". Both apply here.
-- **Context ownership.** The harness already keeps transcripts, history and
-  session storage. Client delegation lets the backend see exactly the history
-  the harness chooses.
-- **It is the documented path for "keep your existing agent"**
-  ("From a text agent or chained pipeline: ... Configure `delegation` as
-  `{"type":"client"}`").
+## 2.4 Delegation mode: client or Responses (PENDING)
 
-The honest counterweight: **Responses delegation maps more directly onto the
-existing session tool contract.** A nested `response.output_item.done`
-becomes `TOOLCALL.END`, a tool result becomes `response.item.create`, and
-`RESPONSE.CREATE` becomes `response.create`. That is almost the current
-Realtime tool loop. It is therefore a cheap optional later phase (PR 7) for
-users who want a hosted backend, and the PR 1 codec models `response.event`
-and the Responses commands so that phase needs no protocol work. It is not
-the default, because it hands reasoning, context and the model choice to
-OpenAI.
+The choice between client delegation and Responses delegation is **PENDING**
+the ChatGPT OAuth research in 2.3. If the OAuth credential can call the
+Responses API, Responses delegation becomes a one-credential, low-complexity
+option. If it cannot, Responses delegation needs a separate API key, and
+client delegation, with the backend on a provider the user can authorize, is
+the practical choice. Both options are described neutrally here. The rest of
+Part 2 marks which parts depend on the choice.
 
-## 2.4 Where the backend runs: delegation as a synthetic tool call
+| | Client delegation | Responses delegation |
+| --- | --- | --- |
+| Who reasons and picks tools | The harness: a nested agent loop on any gateway provider (2.5) | An OpenAI Responses model that GPT-Live calls itself |
+| Harness tools | All harness tools, under harness policy (approval, ordering, images) | Harness tools must be declared as `function` tools in `delegation.responses.tools`; only `function` and `web_search` are allowed |
+| Context | The harness chooses exactly what the backend sees | GPT-Live supplies the conversation context |
+| Result review | The harness can validate, redact or drop results before GPT-Live hears them | Backend output reaches GPT-Live directly; only function results pass through the harness |
+| Credentials | One for the voice socket, plus whatever the backend provider needs | One credential if it can reach both Live and Responses (PENDING 2.3) |
+| Wire mapping | `delegation.created` to the executor; results as `commentary`/`thinking` appends | Nested `response.output_item.done` to a tool call; result as `response.item.create`, then `response.create` |
+| Harness work | New executor (2.5) and two stream types | Close to the existing Realtime tool loop, but the loop hazards in 2.6.3 (serialized tool batches, the `response.create` continuation, interrupt cancellation) must be designed out for a provider whose speech has no response boundaries |
+| Supported by OpenAI for | "you need to run your own workflow or review results" | "you want GPT-Live to manage requests" |
+
+The PR 1 codec models both modes, so neither choice needs protocol work.
+PRs 1 to 3 do not depend on the choice. PR 4 and PR 5 implement whichever
+mode is chosen; the client-delegation design is in 2.5. A Responses design
+would be added to this document when it is chosen.
+
+## 2.5 Client delegation design: a dedicated asynchronous delegation executor
+
+This section applies **if client delegation is chosen** (2.4, PENDING). Its
+loop-safety rules in 2.6.3 also bind a Responses design: the voice loop must
+not open responses, tool batches or continuations that GPT-Live will never
+close.
 
 GPT-Live never names a tool. The harness needs a reasoning backend that sees
-the conversation and can call the harness tools. Two shapes were considered:
+the conversation and can call the harness tools. That backend must keep
+running while GPT-Live talks, because the protocol treats speech and backend
+work as independent: "Live speech and delegated work continue independently",
+and "Interrupting the spoken conversation leaves backend work running".
 
-- **(A) Delegation as a tool call. Chosen for the first implementation.**
-  The provider turns each client `session.delegation.created` into one
-  synthetic tool call named `live_delegate`. The tool call id is the
-  delegation id, and the arguments carry a transcript window. The voice
-  session's existing tool runner executes `live_delegate`. That tool is a
-  runtime service that runs a nested turn-based `agentloop`, using a
-  configured stateless backend provider and model and the session's ordinary
-  toolset (without `live_delegate`). It returns a result of at most 500
-  tokens. The tool result flows back through the existing `TOOLCALL.END`
-  path, and the provider sends it as `session.commentary.append` with that
-  `delegation_id`.
-  - Pros: no change to the loop's participant model. It reuses tool
-    scheduling, tool-result forwarding, recording and replay. Concurrent
-    delegations become concurrent tool calls.
-  - Cons: the voice model's view of the tool loop is synthetic, and the
-    nested loop must be bounded (iterations, time and tokens).
-- **(B) A second model participant in the loop.** A backend model participant
-  receives delegations as input and routes its final text to the voice
-  session. This is closer to the loop's tick and participant architecture,
-  but it needs new multi-model routing in `go-agent-loop`. It stays the
-  evolution path if (A) proves limiting.
+**Rule: delegations never enter the voice loop's tool path.** The
+`openai-live` provider reports each client delegation as an observational
+stream message, `DELEGATION.CREATED` (2.7). The runtime's live session
+observer hands it to a new `livedelegation` executor. The executor runs the
+backend work on its own goroutines and sends results back to the session as
+`CONTEXT.APPEND` messages.
 
-Context for `live_delegate`. The delegation event carries no task text, so
-the provider keeps a bounded ring of transcript fragments: speaker, text,
-`start_ms` and `end_ms`. It emits the synthetic tool call once either of
-these happens:
-
-- an input-transcript fragment with `end_ms >= offset_ms` has arrived, or
-- a settle window `D` has passed on the injected clock. The proposed `D` is
-  400 ms (open question Q5).
-
-The arguments are:
-
-```json
-{
-  "delegation_id": "del_abc123",
-  "offset_ms": 3600,
-  "transcript": [
-    {"speaker": "user", "text": "A table for two at seven, please.", "start_ms": 1600, "end_ms": 3400}
-  ]
-}
+```text
+GPT-Live --session.delegation.created--> openailive provider
+         --DELEGATION.CREATED (no ResponseID)--> model runner --> delta stream
+         --> live session observer (services/session/internal/live/observation.go)
+         --> livedelegation executor (bounded worker pool)
+               nested turn-based agentloop: backend provider + session toolset
+         --> session.Send(CONTEXT.APPEND{commentary or thinking, delegation_id})
+         --> openailive provider --session.commentary.append--> GPT-Live
 ```
 
-The nested loop also receives the session's message history, so short
-replies such as "yes" stay resolvable. Task revisions and discarding stale
-results (the migration guide's `currentRevision()` check) live in the
-delegation service. A result for a superseded revision is sent as
-`session.thinking.append`, never as commentary.
+**Why not the synthetic `live_delegate` tool call proposed in the first
+revision.** Review found three ways it breaks the loop:
 
-## 2.5 Event mapping onto the harness session contract
+1. **Response-id conflict.** A synthetic `MESSAGE.START` with id
+   `del:<id>` reaches `sessionstate.State.beginResponse` while a speech
+   segment (`live_seg_n`) is open. `beginResponse` retires the segment, and
+   `StaleCustomerOutput` then drops the segment's later audio and transcript.
+   GPT-Live normally keeps talking while it delegates ("I'll check that"), so
+   this would happen in most conversations.
+2. **No concurrency.** Each delegation would be a separate `ToolBatchRequest`.
+   `ToolRunner.Tick` runs one batch at a time, so a slow lookup would block
+   every later delegation.
+3. **Loop paths that assume Realtime.** The tool path brings in a
+   `RESPONSE.CREATE` continuation (a no-op here, which leaves the next
+   unrelated speech segment tagged as a guessed continuation), the
+   tool-acknowledgement policy, and `InterruptHandler` cancelling the tool
+   batch. Each of these conflicts with GPT-Live semantics (2.6.3).
 
-### Inbound (server to `StreamMessage`)
+The executor avoids all three by design: delegations carry no response id,
+never become tool batches, and never ask for a response.
+
+Rejected alternative: keep the tool path but **serialize** delegations
+explicitly, closing the open segment before emitting `del:<id>`. That fixes
+problem 1 only. Delegations would still queue behind each other, and
+continuation and interrupt handling would still need special cases.
+
+**Executor behaviour.**
+
+- **Context window.** The delegation event carries no task text. The provider
+  keeps a bounded ring of transcript fragments (speaker, text, `start_ms`,
+  `end_ms`). It emits `DELEGATION.CREATED` once either of these happens:
+  - an input-transcript fragment with `end_ms >= offset_ms` has arrived, or
+  - a settle window `D` has passed on the injected clock (proposed 400 ms,
+    open question Q5).
+
+  The value carries the transcript snapshot:
+
+  ```json
+  {
+    "delegation_id": "del_abc123",
+    "offset_ms": 3600,
+    "transcript": [
+      {"speaker": "user", "text": "A table for two at seven, please.", "start_ms": 1600, "end_ms": 3400}
+    ]
+  }
+  ```
+
+  The executor also reads the session's message history, so short replies
+  such as "yes" stay resolvable.
+- **Concurrency.** A bounded worker pool. The default limit is 2 (open
+  question Q11). Work that waits beyond the limit is queued, not dropped.
+  Each worker runs a nested turn-based `agentloop` using:
+  - the configured stateless backend provider and model (Q8);
+  - the backend prompt prefix from 1.10.1;
+  - the session's ordinary tool executor;
+  - its own budget (iterations, wall time on the injected clock, tokens).
+
+  PR 4 must verify that the tool executor is safe to call from concurrent
+  workers. Tools that are not are serialized by a per-tool lock in the
+  executor, never by the voice loop.
+- **Lifetime.** Each worker's context comes from the session lifetime, not
+  from the loop's tool execution context. `InterruptHandler`'s
+  `toolCanceller.CancelCurrentExecution()` therefore cannot reach it. Workers
+  are cancelled only:
+  - by the executor's own `Cancel(delegationID)`, used for task revisions;
+  - when the session terminates, after the graceful close has drained.
+- **Results.** A worker returns its final result as
+  `CONTEXT.APPEND{Kind: commentary, DelegationID: id}` and progress as
+  `Kind: thinking`. Each append is at most 500 tokens: the backend is told to
+  summarize, and the provider splits content as a safety net (Q6). If the
+  result belongs to a superseded task revision, it is sent as `thinking`,
+  never as `commentary`. A failed or over-budget delegation sends a short
+  `commentary` stating the failure, so GPT-Live does not wait forever.
+
+## 2.6 Event mapping onto the harness session contract
+
+### 2.6.1 Inbound (server to `StreamMessage`)
 
 | GPT-Live event | Harness output |
 | --- | --- |
-| `session.started` | Consumed by `ConnectSession` during the handshake (2.7). It then emits `SESSION.OPEN` and `SESSION.CREATED(session.id, model)`. |
+| `session.started` | Consumed by `ConnectSession` during the handshake (2.8). It then emits `SESSION.OPEN` and `SESSION.CREATED(session.id, model)`. |
 | `session.updated` | `SESSION.UPDATED(session.id)` |
-| `session.output_audio.delta` | Opens an assistant segment if none is open: `MESSAGE.START`, then `AUDIO.START`, both with the synthetic segment id as `ResponseID`. Then `AUDIO.DELTA(bytes, media type from the configured format)`. |
-| `session.output_transcript.delta` | `TRANSCRIPT.DELTA(Role=assistant, ResponseID=segment)`. It opens a segment if none is open. |
-| `session.input_transcript.delta` | `TRANSCRIPT.DELTA(Role=user)` with a synthetic user utterance id (`live_utt_N`). The id is announced once with `INPUT_ITEM.ADDED`, so the existing attribution keeps working. The utterance closes with `TRANSCRIPT.END(Role=user)` after a server-timeline gap of `G` ms or more. |
-| `session.delegation.created` (`target:"client"`) | After the settle window: `MESSAGE.START`, `TOOLCALL.START`, `TOOLCALL.END(id=delegation.id, name="live_delegate", args)`, `MESSAGE.END`. This is its own synthetic response with id `del:<delegation.id>`. |
-| `session.delegation.created` (`target:"responses"`) and `response.event` | Ignored in PR 2. Mapped to the tool contract in PR 7 (2.3). |
+| `session.output_audio.delta` | Opens a speech segment if none is open: `MESSAGE.START`, then `AUDIO.START`, both with `ResponseID = live_seg_<n>`. Then `AUDIO.DELTA(bytes, media type from the configured format)` with the same id. |
+| `session.output_transcript.delta` | `TRANSCRIPT.DELTA(Role=assistant, ResponseID=live_seg_<n>)`. It opens a segment if none is open. |
+| `session.input_transcript.delta` | `TRANSCRIPT.DELTA(Role=user)` with a synthetic utterance id (`live_utt_<n>`), announced once with `INPUT_ITEM.ADDED`. The utterance closes with `TRANSCRIPT.END(Role=user)` after a server-timeline gap of `G` ms or more. User transcripts are never treated as stale output, so they are safe during a segment. |
+| `session.delegation.created` (`target:"client"`) | After the settle window: `DELEGATION.CREATED` with **no `ResponseID`**. It is not a response stream type (2.7), so it cannot open, retire or tag a response. |
+| `session.delegation.created` (`target:"responses"`) and `response.event` | Ignored and logged. They occur only in Responses mode (2.4, PENDING). A Responses design must map them without opening a response id while a speech segment is open. |
 | `*.appended`, `session.input_audio.muted` / `unmuted` | Consumed inside the provider. Each settles the pending command it acknowledges, matched by `client_event_id` or in FIFO order. No stream message. |
 | `session.usage.updated` | Kept as the latest cumulative seconds and context ratio. The `USAGE.INFO` mapping is open question Q7. |
-| `session.closed` | Closes any open segment, then `SESSION.CLOSE(reason)`. `reason` maps to `TerminalReason`: `close_requested` is a client close; `expired` is a timeout; `content` is a provider refusal; `remote_hangup` is a remote close; `connection_lost` is a provider transport failure. |
+| `session.closed` | Closes any open segment, then emits `SESSION.CLOSE` (see the table below). |
 | `error` | `ERROR` with code, message, param and client event id. A startup error fails `ConnectSession` instead. |
 | `info`, `transport.*` | Logged only. |
 
-**Synthetic assistant segments.** The loop's lifecycle needs a
-`MESSAGE.START`/`MESSAGE.END` boundary for each response. GPT-Live has none,
-so the provider synthesizes one. A segment (`ResponseID = "live_seg_<n>"`)
-opens at the first assistant audio or transcript after an idle period. It
-closes, emitting `AUDIO.END`, `TRANSCRIPT.END` and `MESSAGE.END` with the
-`completed` status, at the first of:
+`session.closed` uses only existing `TerminalReason` values. The GPT-Live
+detail goes into `SessionCloseValue.Reason`, verbatim (for example
+`"expired"`). Provenance is `provider`.
+
+| `session.closed.reason` | `TerminalReason` | Output state |
+| --- | --- | --- |
+| `close_requested` | `session_close` | `not_applicable` |
+| `expired` | `provider_close` | `not_applicable` |
+| `content` | `provider_close` | `partial` if a segment was open, otherwise `not_applicable` |
+| `remote_hangup` | `provider_close` | `not_applicable` |
+| `connection_lost` | `terminal_failure` | `partial` if a segment was open, otherwise `not_applicable` |
+| (socket closed without `session.closed`) | `terminal_failure`, with `Reason = "finalization_unconfirmed"` | as above |
+
+### 2.6.2 Speech segments
+
+The loop's lifecycle needs a `MESSAGE.START`/`MESSAGE.END` boundary for each
+response. GPT-Live has none, so the provider synthesizes **speech segments**.
+Segments are the only response ids the provider ever emits, and at most one is
+open at a time.
+
+A segment (`ResponseID = "live_seg_<n>"`) opens at the first assistant audio or
+transcript after an idle period. It closes, emitting `AUDIO.END`,
+`TRANSCRIPT.END` and `MESSAGE.END` with status `completed`, at the first of:
 
 - (a) a gap of `G` ms or more on the server timeline between output transcript
   fragments;
-- (b) an idle timer of `G` ms, on the injected clock, after the last output
-  event (primary audio has no timing);
+- (b) an idle timer of `G` ms on the injected clock after the last output event
+  (primary audio has no timing);
 - (c) `session.closed` or a transport close.
 
-The default `G` is proposed at 600 ms (open question Q5). Audio duration is
-measured from the byte count at the configured rate, not from arrival time.
+The proposed `G` is 600 ms (Q5). Audio duration is measured from the byte
+count at the configured rate, not from arrival time.
 
-### Outbound (`StreamMessage` to GPT-Live)
+Because delegations no longer carry response ids, a delegation that arrives
+mid-segment cannot retire the segment. A behaviour test pins this (2.11).
+Segments always end `completed`, so the session-duration rate-limit retry,
+which acts only on a failed `MESSAGE.END`, never fires for this provider.
+
+### 2.6.3 Loop paths that assume Realtime, and how each is handled for `openai-live`
+
+| Loop path | Risk with GPT-Live | Handling |
+| --- | --- | --- |
+| Tool calls and `ToolRunner` | GPT-Live emits no tool calls; serialized batches would block delegations. | The provider never emits `TOOLCALL.*`. Delegations run in the `livedelegation` executor (2.5). The voice loop's tool runner stays idle. |
+| Tool-result continuation (`RESPONSE.CREATE` with continuation purpose) | It is a no-op on the Live wire, so `Continuation` would stay `Requested`, and the next unrelated segment would be tagged `tool_continuation` as a guessed continuation. | It cannot be triggered: with no tool calls in the loop there are no tool results to continue. As a fail-closed backstop, `SupportsResponseRequests()` returns `false` (so `RequestSessionResponse` sends nothing), and `Send(RESPONSE.CREATE)` returns a terminal-failure outcome with a logged error, never a silent success. A test asserts that no segment ever carries a `ResponsePurpose`. |
+| `ToolAcknowledgement` policy | A progress-ack `RESPONSE.CREATE` would be a no-op, the next segment would be attributed to the acknowledgement, and continuations would stay deferred behind it. | It is disabled for `openai-live`: `go-agent-runtime/services/session/internal/live/policies.go` does not add `toolAcknowledgementOption` when the provider is `openai-live`. GPT-Live already acknowledges delegated work in speech, and the executor sends progress as `thinking`. The backstop above also covers this. |
+| `InterruptHandler` (`toolCanceller.CancelCurrentExecution()`, `modelCanceller.CancelCurrentExecution()`) | Cancelling would kill delegations, but GPT-Live keeps backend work running across interruptions. | Delegations are outside the tool runner, so the tool cancel has nothing to cancel. A user control-plane interrupt therefore does not cancel backend work. The executor cancels a delegation only on a task revision or at session end (Q12). The model-runner cancel keeps its current meaning. |
+| Local energy barge-in (`RESPONSE.CANCEL` from onset) | It would fight GPT-Live's own turn-taking and its backchannels. | `ProviderTurnDetection()` returns `true`, so the runner never runs local barge-in. An explicit `RESPONSE.CANCEL` (for example a host stop) has no wire event. It interrupts local playback unless `KeepPlayback` is set, and marks the open segment cancelled so its later output is dropped locally. |
+| Initial `SESSION.UPDATE` | Live startup fields are immutable. | `InitialSessionConfigSent()` returns `true`, so the runner never sends it. A later `SESSION.UPDATE` is accepted with no wire event and logged. |
+| Session-duration retry | It acts on a failed `MESSAGE.END`. | Segments always end `completed` (2.6.2), so the retry is never eligible. |
+
+### 2.6.4 Outbound (`StreamMessage` to GPT-Live)
 
 | Harness input | GPT-Live wire |
 | --- | --- |
 | `AUDIO.DELTA` | `session.input_audio.append`. A trailing odd byte is held back and joined to the next PCM chunk, as in the official sample. G.711 bytes pass through unchanged. |
 | `MESSAGE.END` (the Realtime "commit and respond") | **No wire event.** Success is reported locally. GPT-Live decides when to speak. |
-| `RESPONSE.CANCEL` | **No wire event.** It interrupts local playback unless `KeepPlayback` is set. |
-| `RESPONSE.CREATE` | **No wire event** in client delegation. Success is reported locally. In Responses mode (PR 7) it maps to `response.create`. |
-| `TOOLCALL.END` (tool result) whose `ToolCallId` is a known client delegation | `session.commentary.append{delegation_id, content}`. The content is the result text, cut to the 500-token budget (open question Q6). |
-| `TOOLCALL.END` for an unknown id | Terminal-failure outcome, logged. GPT-Live has no generic tool-result channel. |
-| `SESSION.UPDATE` | No wire event, success. Live startup fields are immutable, and tools live in the backend. The initial config is sent by `ConnectSession`, so `InitialSessionConfigSent()` returns `true`. |
-| `TEXT.DELTA` (typed user text) | Undecided (open question Q4). The proposal is to send it to the delegation backend and mirror it as `session.thinking.append{delegation_id:null, "The user typed: ..."}`. Until that is decided, the provider returns a terminal failure. |
-| `CONTEXT.APPEND` (new, see 2.6) | `session.{instructions,thinking,commentary}.append` |
+| `RESPONSE.CANCEL` | **No wire event.** See 2.6.3. |
+| `RESPONSE.CREATE` | **No wire event.** Terminal-failure outcome (see 2.6.3). In Responses mode (2.4, PENDING) the provider would send `response.create` itself after all function results, not on the loop's request. |
+| `CONTEXT.APPEND` (new) | `session.instructions.append`, `session.thinking.append` or `session.commentary.append`. `delegation_id` is the value's id, or `null`. |
+| `TOOLCALL.END` | Terminal-failure outcome, logged. GPT-Live has no generic tool-result channel. |
+| `SESSION.UPDATE` | No wire event, success (see 2.6.3). |
+| `TEXT.DELTA` (typed user text) | Undecided (Q4). The proposal: the live session routes it to the `livedelegation` executor as a user input, and mirrors it as `CONTEXT.APPEND{thinking, null, "The user typed: ..."}`. Until that is decided, the provider returns a terminal failure. |
 | `Close()` | Graceful close: send `session.close`, wait for `session.closed` (bounded by an injected-clock timeout, 15 s by default), then close the socket. |
 
 **Capabilities exposed by the session:**
 
 | Capability | Value |
 | --- | --- |
-| `ProviderTurnDetection()` | `true`. The local energy barge-in must never fire, because the model owns turn-taking and backchannels overlap by design. |
-| `SupportsResponseRequests()` | `true`. The local no-op lets the tool-continuation path complete; the next segment binds as a guessed continuation, as for Grok. |
+| `ProviderTurnDetection()` | `true` |
+| `SupportsResponseRequests()` | `false` |
 | `SupportsCompleteMessages()` | `false` |
 | `InitialSessionConfigSent()` | `true` |
 | `InputAudioSampleRate()` | the configured rate |
 | `LocalPlayback`, `InterruptLocalPlayback`, `RTCMedia` | inherited from the shared skeleton |
 
-## 2.6 New interface surface
+All of these are existing capabilities, so the wrappers already forward them.
 
-The plan keeps new surface small. In order of need:
+## 2.7 New interface surface
+
+The plan keeps new surface small and avoids new capability interfaces, which
+would each need a forwarding method in `messages.SessionCapabilities`.
 
 1. **New gateway package** `go-llm-gateway/pkg/providers/openailive`. No
    change to `SessionProvider`.
-2. **Generalize the shared skeleton's doc and config**
-   (`internal/realtime`). The framing is identical: flat JSON objects with a
-   `type` field. Two hooks are needed:
-   - a `Config.Close` hook (or a `GracefulClose(ctx)` helper) so `Close` can
-     run the `session.close` handshake before it releases the connection;
+2. **Two new stream types in `go-agent-loop/pkg/messages`**, both carried by
+   `Send` and `Receive`:
+   - `DELEGATION.CREATED` (inbound, observational) with
+     `DelegationCreatedValue{ID, OffsetMS, Target, Transcript []TranscriptFragment}`.
+     It is not a response stream type: it must not be added to
+     `sessionstate.IsResponseStreamType` or to the customer-output set.
+     Message reconstruction and the coordinator's history ignore it, as they
+     do `VAD.*`.
+   - `CONTEXT.APPEND` (outbound) with
+     `ContextAppendValue{Kind: instructions or thinking or commentary, DelegationID *string, Content string}`.
+     It is used for delegation results and progress, greetings, disclosures,
+     guardrail redirects and UI context. Other providers return a
+     terminal-failure outcome, and senders must check it.
+3. **Generalize the shared skeleton** (`internal/realtime`). The framing is the
+   same: flat JSON objects with a `type` field. It needs two additive hooks:
+   - a `Config.Close` hook (or a `GracefulClose(ctx)` helper) for the
+     `session.close` handshake;
    - an injected `clock.Scheduler` for the segment, settle and close timers.
+4. **`RealtimeModel` metadata.** Add `Duplex bool` and `Delegation string`
+   (`"client"` or `"responses"`). Hosts use them to skip turn-detection,
+   transcription, tool-acknowledgement and tool config, and to reject flags
+   that have no effect.
+5. **Runtime `livedelegation` service** (`go-agent-runtime/services/livedelegation`):
+   the bounded executor, its wire, and the observer hookup in
+   `services/session/internal/live/observation.go`.
+6. **Session config input.** Live-only options (`store`, initial `input`
+   history, delegation mode) travel in the existing raw
+   `models.SessionConfig.Config` as a typed `openailive.Options` JSON object.
 
-   Both are additive.
-3. **`messages.StreamTypeContextAppend` (`CONTEXT.APPEND`)** in
-   `go-agent-loop/pkg/messages`, with
-   `ContextAppendValue{Kind: instructions or thinking or commentary, DelegationID *string, Content string}`.
-   This is the one new loop-level vocabulary item. It is needed for:
-   - greetings and disclosures (GPT-Live does not speak first);
-   - delegation progress (`thinking`) separate from the final result
-     (`commentary`);
-   - guardrail redirects and UI context.
-
-   Other providers return `false`, so senders must check the outcome. It
-   belongs in PR 5, not PR 1.
-4. **`RealtimeModel` metadata.** Add `Duplex bool` and
-   `Delegation string` (`"client"` or `"responses"`). Callers then know not to
-   send turn-detection, transcription or tool config, and the CLI can reject
-   flags that have no effect (for example `--turn-detection`). The fields are
-   additive.
-5. **Runtime `livedelegation` service and the `live_delegate` tool**
-   (`go-agent-runtime/services/livedelegation`). Its config: backend
-   provider, model and key, the max iterations, timeout and token budget for
-   each delegation, and the backend instructions (the prefix from 1.10.1).
-6. **Session config input.** `models.SessionConfig` already has `Voice`,
-   `Instructions` and a raw `Config`. Live-only options (`store`, initial
-   `input` history, delegation mode) travel in `Config` as a typed
-   `openailive.Options` JSON object, so `models.SessionConfig` does not
-   change.
-
-## 2.7 Connect handshake
+## 2.8 Connect handshake
 
 Unlike `openai`, which writes `session.update` and returns at once,
 `openailive.ConnectSession` will:
 
 1. dial `wss://api.openai.com/v1/live/sessions` (overridable for the fake
-   server and for Azure) with `Authorization: Bearer <key>`;
-2. write `session.start`, built strictly from `models.SessionConfig` (2.8);
+   server and for Azure). The headers come from the credential provider (2.3), never from a hardcoded API key;
+2. write `session.start`, built strictly from `models.SessionConfig` (2.9);
 3. read frames until `session.started` or `error`, bounded by `ctx`. On
    `error`, close the socket and return a typed `StartupError{Code, Param, Message}`;
 4. then start the shared loops and queue `SESSION.OPEN` and `SESSION.CREATED`.
 
 Waiting here follows the documented rule ("Wait for session.started before
-sending audio") and turns a startup failure into a connect error, which the
-loop already handles. It costs one round trip before `ConnectSession`
-returns.
+sending audio") and turns a startup failure into a connect error. It costs
+one round trip before `ConnectSession` returns.
 
-## 2.8 `session.start` construction
+## 2.9 `session.start` construction
 
 | `models.SessionConfig` field | `session` field |
 | --- | --- |
@@ -1257,40 +1373,59 @@ returns.
 | `Voice` | `audio.output.voice`, omitted when empty (server default `marin`) |
 | `InputAudioFormat`/`InputAudioSampleRate` and the output pair | `audio.format`. Input and output must match, otherwise it is a config error. `pcm16` at 24000 becomes `{"type":"audio/pcm","rate":24000}`; `pcm16` at 16000 becomes `{"type":"audio/pcm","rate":16000}`; `g711_ulaw` becomes `{"type":"audio/pcmu","rate":8000}`; `g711_alaw` becomes `{"type":"audio/pcma","rate":8000}`. Any other rate is rejected. |
 | `Config` (`openailive.Options`) | `delegation` (default `{"type":"client"}`, sent explicitly), `store`, `input` |
-| `Tools`, `TurnDetection`, `InputAudioTranscription`, `Modalities`, `ReasoningEffort` | **never sent**. Tools go to the delegation backend. The others are ignored with a debug log. |
+| `Tools`, `TurnDetection`, `InputAudioTranscription`, `Modalities`, `ReasoningEffort` | **Never sent.** Tools go to the delegation backend; the others are ignored with a debug log. |
 
 The voice registry (`agent-cli/internal/services`, see
 `s2s-realtime-voice-configuration.md`) must hold a separate set of Live voices
 for each provider. The 31 names are listed in 1.5.
 
-## 2.9 Files to add or change
+## 2.10 Files to add or change
 
 PR 1 (protocol, codec, fake server, catalog):
 
 - `go-llm-gateway/pkg/providers/openailive/doc.go`: package doc that links to this design.
 - `go-llm-gateway/pkg/providers/openailive/protocol.go`: typed structs for every client and server event in 1.6 and 1.7, plus `SessionConfig`, `SessionResource`, `AudioFormat`, `Delegation`, `ResponsesDelegationConfig`, `InitialItem` and `Error`.
-- `go-llm-gateway/pkg/providers/openailive/codec.go`: `EncodeClientEvent` and `DecodeServerEvent`. An unknown `type` decodes to `UnknownEvent` and is not an error. The decoder accepts the forms that differ between OpenAI and Azure (optional timing on output audio; optional `client_event_id`).
-- `go-llm-gateway/pkg/providers/openailive/start.go`: `models.SessionConfig` plus `Options` to `session.start` (2.8), including audio-format validation.
-- `go-llm-gateway/pkg/providers/openailive/codec_test.go` and `start_test.go`, with `testdata/protocol/*.json`: the literal examples from Part 1, as round-trip goldens.
-- `go-llm-gateway/pkg/providers/openailive/fakelive/server.go`: a scripted fake GPT-Live server. This is a test-support package, named to the test-support rule.
+- `go-llm-gateway/pkg/providers/openailive/codec.go`: `EncodeClientEvent` and `DecodeServerEvent`. An unknown `type` decodes to `UnknownEvent` and is not an error. The decoder accepts the forms that differ between OpenAI and Azure.
+- `go-llm-gateway/pkg/providers/openailive/start.go`: `models.SessionConfig` plus `Options` to `session.start` (2.9).
+- `go-llm-gateway/pkg/providers/openailive/{codec,start}_test.go`, with `testdata/protocol/*.json`: the literal Part 1 examples.
+- `go-llm-gateway/pkg/providers/openailive/fakelive/server.go`: a scripted fake GPT-Live server (a test-support package, named to the test-support rule).
 - `go-agent-runtime/services/providers/models.go`: add `OpenAILiveProvider = "openai-live"` and `OpenAILive1Model = "gpt-live-1"`.
 - `go-agent-runtime/services/providers/internal/catalog/catalog.go`: the `openai-live` model list.
-- `go-agent-runtime/services/providers/internal/admission/admission.go` and the service `models.go`: restrict `openai-live` to the catalog.
-- Admission tests. `buildSessionProvider` still rejects `openai-live` ("realtime sessions do not support provider"), so PR 1 has no runtime behaviour change.
+- `go-agent-runtime/services/providers/internal/admission/{admission,public}.go` and `internal/service/models.go`: restrict `openai-live` to the catalog, and stop hardcoding `"OpenAI"` in `decisionError`.
 
-Later PRs:
+PR 2 (provider session without delegation):
 
 - `go-llm-gateway/pkg/providers/openailive/{provider,options,session,session_inbound,session_outbound,segments,close}.go`
 - `go-llm-gateway/pkg/providers/internal/realtime/`: the close hook and clock injection.
-- `go-agent-runtime/services/providers/internal/service/session.go`: `openai-live` branches in `buildSessionProvider` and `sessionDialer`; the credential host check is unchanged (`api.openai.com`).
-- `agent-cli/internal/config/{interface,overrides,loading}.go`, `services/session_host.go`, `services/wire/device_probe_session.go`, and the `--provider` help text: `ProviderOpenAILive = "openai-live"`, which reuses `model.openai`.
-- `go-agent-loop/pkg/messages/{stream_types,session_values}.go`: `CONTEXT.APPEND`.
-- `go-agent-runtime/services/livedelegation/...` (service, wire, `live_delegate` tool).
-- `go-llm-gateway/pkg/testing/testdata/session-fixtures/openai-live/*.session.json`: replay fixtures.
+- `go-agent-runtime/services/providers/internal/service/session.go`: `openai-live` branches in `buildSessionProvider` and `sessionDialer`, passing a credential provider (2.3).
+- `go-agent-runtime/services/providers/internal/service/credentials.go`: accept the ChatGPT auth store as a credential for `openai-live` once `chatgpt-oauth.md` confirms it.
+- `go-agent-runtime/services/audioio/internal/service/service.go` (and the `audioio` contract): treat `openai-live` as a 24 kHz provider. Today it would fall back to `DefaultSampleRate`, 16 kHz.
+- `go-agent-runtime/services/session/internal/live/policies.go`: skip `toolAcknowledgementOption` for `openai-live`.
+- `agent-cli/internal/services/livehost/events.go`:
+  - `selectProvider` must stop turning `openai-live` into `openai`;
+  - `providerConfig` must accept it and resolve credentials through the credential provider (ChatGPT auth store first, then the `model.openai` API key);
+  - the default model for `openai-live` is `gpt-live-1`;
+  - the `/realtime` suffix rule must not apply; the Live path is `/live/sessions`.
+- `agent-cli/internal/config/{interface,overrides,loading}.go`, `services/session_host.go`, `services/wire/device_probe_session.go`, and the `--provider` help text: `ProviderOpenAILive = "openai-live"`.
 
-## 2.10 Test strategy
+PR 3 (stream vocabulary):
 
-All tests must be deterministic, run each unit in 3 minutes or less, and use
+- `go-agent-loop/pkg/messages/{stream_types,session_values}.go`: `DELEGATION.CREATED` and `CONTEXT.APPEND`, plus their exclusion from response state and reconstruction.
+- The `openailive` mapping for both.
+
+PR 4 (executor, if client delegation is chosen):
+
+- `go-agent-runtime/services/livedelegation/...` (service, worker pool, nested `agentloop`, wire).
+- `go-agent-runtime/services/session/internal/live/observation.go`: route `DELEGATION.CREATED` to the executor.
+
+PR 6 (replay):
+
+- `go-agent-runtime/services/replay/internal/strict/runtime.go`: accept `openai-live` and build the `openailive` adapter (today it is OpenAI-only).
+- `go-llm-gateway/pkg/testing/testdata/session-fixtures/openai-live/*.session.json`.
+
+## 2.11 Test strategy
+
+All tests are deterministic, run each unit in 3 minutes or less, and use
 virtual time (`testing/synctest` or `go-audio/pkg/clock.Deterministic`), with
 no wall-clock sleeps.
 
@@ -1300,104 +1435,122 @@ no wall-clock sleeps.
    - an odd-length PCM payload is refused by the encoder helper;
    - an unknown server `type` decodes to `UnknownEvent`;
    - `delegation_id` is always present (as `null` or a string) on every
-     append, because the field is required.
-2. **Strictness test for `session.start` (PR 1).** The built `session` object
-   contains only documented keys. The test checks the key set against an
-   allowlist taken from 1.5, so an accidental `turn_detection` or `tools`
-   fails the build instead of failing in production with `unknown_parameter`.
-3. **Fake GPT-Live server (`fakelive`, PR 1, used from PR 2).** It runs
-   in-process, over a `transport.Conn` pair (fast unit tests) and over an
-   `httptest` gorilla WebSocket server (dialer-level tests). The fake is a
-   script of steps on virtual time. It:
-   - validates the bearer header and the empty query string;
+     append.
+2. **Strictness test for `session.start` (PR 1).** The built `session`
+   object's key set is checked against an allowlist taken from 1.5.
+3. **Admission (PR 1).** `openai-live` admits only `gpt-live-1`. `openai`
+   does not admit `gpt-live-1`. The unsupported-model error names the
+   requested provider.
+4. **Fake GPT-Live server (`fakelive`, PR 1, used from PR 2).** It runs
+   in-process, over a `transport.Conn` pair and over an `httptest` gorilla
+   WebSocket server. The fake is a script of steps on virtual time. It:
+   - validates the auth headers the credential provider supplies (an API-key bearer and a stub OAuth credential) and the empty query string;
    - validates the strict `session.start` and answers `session.started` or an
-     `error` (`unknown_parameter` or `invalid_audio`);
-   - records `input_audio.append` bytes;
-   - plays scripted output audio, transcript fragments and
-     `delegation.created`;
-   - acknowledges appends with `start_ms`/`end_ms` and `client_event_id`, and
-     can withhold an ack to simulate a stalled timeline;
-   - emits `session.closed` with a configurable reason, or drops the socket to
-     test unconfirmed finalization.
+     `error`;
+   - records audio appends;
+   - plays scripted output audio, transcripts and `delegation.created`;
+   - acknowledges appends, and can withhold an ack;
+   - emits `session.closed` with a configurable reason, or drops the socket.
 
    It also implements `transporttest` conformance.
-4. **Replay fixtures (PR 6).** Version-2 `.session.json` captures with
-   `provider.name: "openai-live"`, `fixture_provenance: "synthetic"`, sealed
-   with `SealSessionCapture`. Fixtures cover a greeting, a client delegation
-   with a commentary result, an error, and a graceful close. Add one real
-   capture later, sanitized, under the fixture authoring guide, once Q1 is
-   answered.
-5. **Behaviour tests on virtual time (PRs 2 to 5)**, run against `fakelive`
-   through the real model runner:
-   - segments open and close at `G` and at the server-timeline gaps, and
-     `MESSAGE.END` is never emitted twice;
-   - full-duplex overlap (a user fragment during an assistant segment) does
-     not trigger `RESPONSE.CANCEL` (`ProviderTurnDetection` is true);
-   - a delegation that arrives before its transcript waits for the settle
-     window, then emits exactly one `live_delegate` call;
-   - two concurrent delegations each get their own commentary, keyed by id;
-   - a stale-revision result is sent as `thinking`, not `commentary`;
-   - graceful close waits for `session.closed`, and a socket drop before it is
-     recorded as unconfirmed;
-   - a startup `error` fails `ConnectSession` with a typed error;
-   - `session.closed{reason:"expired"}` maps to the timeout terminal reason.
-6. **Opt-in live smoke test (PR 6).** It is guarded by an env var and never
-   runs in CI. It connects with a real key, sends 1 s of silence, checks for
-   `session.started`, then closes and checks for `session.closed` with
-   `close_requested`.
+5. **Behaviour tests on virtual time.** They run against `fakelive` through
+   the real model runner and live session service.
+   - **PR 2:**
+     - segments open and close at `G` and at server-timeline gaps, and
+       `MESSAGE.END` is emitted exactly once per segment;
+     - full-duplex overlap (a user fragment during a segment) causes no
+       `RESPONSE.CANCEL` and drops no segment output;
+     - every `session.closed` reason maps to the `TerminalReason`, `Reason`
+       and output state in 2.6.1; a socket drop before `session.closed` yields
+       `terminal_failure` with `finalization_unconfirmed`;
+     - a startup `error` fails `ConnectSession` with a typed error;
+     - with an `openai-live` session, the live session service configures no
+       tool-acknowledgement policy;
+     - `Send(RESPONSE.CREATE)` and `Send(TOOLCALL.END)` return a terminal
+       failure, and no stream message ever carries a `ResponsePurpose`;
+     - the `livehost` provider selection keeps `openai-live`, picks
+       `gpt-live-1` by default, and does not append `/realtime`;
+     - `audioio` resolves 24 kHz for `openai-live`.
+   - **PR 3 and PR 4** (the PR 4 cases assume client delegation; a Responses design needs the same delegation-during-segment and interrupt cases):
+     - **delegation during an open segment:** the fake streams segment
+       audio, emits `delegation.created` mid-segment, then keeps streaming.
+       All of the segment's audio and transcript reach the delta stream, the
+       segment closes normally, and `DELEGATION.CREATED` arrives with no
+       `ResponseID`;
+     - a delegation that arrives before its transcript waits for the settle
+       window, then is reported exactly once;
+     - **concurrency:** two delegations, where the first backend run is
+       blocked on a fake tool until the second completes. The second
+       `commentary.append` is sent first, both carry their own
+       `delegation_id`, and speech segments keep flowing throughout;
+     - with a pool limit of 1, the second delegation queues and is not
+       dropped;
+     - **interrupt independence:** a user control-plane interrupt during a
+       running delegation cancels nothing in the executor, and the result is
+       still delivered;
+     - session end cancels running workers after the graceful close.
+   - **PR 5:**
+     - a stale-revision result is sent as `thinking`, not `commentary`;
+     - an over-budget delegation sends its failure commentary;
+     - an over-long result is split into appends of at most 500 tokens.
+6. **Replay fixtures (PR 6).** Version-2 `.session.json` captures with
+   `provider.name: "openai-live"`, sealed with `SealSessionCapture`. They
+   cover a greeting, a delegation during speech with a commentary result, an
+   error, and a graceful close. The strict offline replay runtime must replay
+   them.
+7. **Opt-in live smoke test (PR 6).** Guarded by an env var and never run in
+   CI. It checks for `session.started`, sends 1 s of silence, then checks for
+   `session.closed` with `close_requested`.
 
-## 2.11 Phased PR plan
+## 2.12 Phased PR plan
 
 | PR | Scope | Mergeable because |
 | --- | --- | --- |
-| **1** | `openailive` protocol types, codec, `session.start` builder, literal-example goldens, the `fakelive` server, the catalog entry `openai-live`/`gpt-live-1`, and the admission restriction. | No production path reaches it yet: `BuildSession` still rejects the provider. It is pure additions plus tests. Dead-code gate: everything is reachable from tests. |
-| **2** | `openailive` provider and session: dial, the `session.start` and `session.started` handshake, inbound audio and transcripts, synthetic segments, outbound audio, the no-op mappings, graceful close. Also the `realtime` skeleton hooks, the `openai-live` branches in the provider service, and CLI `--provider openai-live`. Delegations are logged and left unanswered. | An end-to-end voice conversation works with no tools. Behaviour tests run against `fakelive`. |
-| **3** | The `livedelegation` service and `live_delegate` tool, the synthetic tool call from `delegation.created`, the transcript ring and settle window, and the result mapping (`TOOLCALL.END` to `commentary.append`). | Tools work through the harness backend. |
-| **4** | Task revisions, stale-result handling, concurrent delegations, and limits on the nested loop's budget. | Hardening on top of PR 3. |
-| **5** | `CONTEXT.APPEND` in `go-agent-loop/pkg/messages`, mapped by `openailive` (greeting, disclosure, progress `thinking`, guardrail `instructions`), plus mute and unmute. | A new optional vocabulary item. Other providers decline it. |
-| **6** | Recording and replay support for `openai-live`, synthetic replay fixtures, and the opt-in live smoke test. | Regression coverage. |
-| **7** (optional) | Responses delegation, mapping the nested `response.output_item.done`, `response.item.create` and `response.create` onto the existing tool contract. | Only if Q3 says yes. |
+| **1** | `openailive` protocol types, codec, `session.start` builder, goldens, `fakelive`, the catalog entry `openai-live`/`gpt-live-1`, the admission restriction and the error provider name. | No production path reaches it yet: `BuildSession` still rejects the provider. Pure additions plus tests. |
+| **2** | The `openailive` provider session: handshake, inbound audio and transcripts, speech segments, outbound audio, the fail-closed mappings, graceful close, and the close-reason mapping. Also the skeleton hooks, provider-service branches, the `audioio` rate, the tool-acknowledgement opt-out, the `livehost` and CLI provider plumbing, and `--provider openai-live`. Delegations are logged and dropped. | An end-to-end voice conversation works with no tools. |
+| **3** | `DELEGATION.CREATED` and `CONTEXT.APPEND` stream types, kept out of response state and reconstruction, and their `openailive` mappings. Plus the transcript ring, the settle window, and an optional greeting. | New vocabulary that other providers decline. |
+| **4** | The chosen delegation mode (2.4, PENDING). For client delegation: the `livedelegation` asynchronous executor: worker pool, nested `agentloop`, observer hookup, result and progress appends, session-scoped lifetime. | Tools work through the harness backend, concurrently and independently of speech and interrupts. |
+| **5** | Task revisions and `Cancel(delegationID)`, stale-result handling, budgets and failure commentary, result splitting, mute and unmute. | Hardening on top of PR 4. |
+| **6** | Replay and recording support (`replay/internal/strict/runtime.go`), synthetic fixtures, and the opt-in smoke test. | Regression coverage. |
+| **7** (optional) | The delegation mode not chosen in 2.4, if it is still wanted. A Responses design must avoid the hazards in 2.6.3. | Only if Q3 asks for both modes. |
 | **8** (optional) | Sideband attach, WebRTC session creation, `store` and fork. | Only if a browser or telephony host needs them. |
 
-## 2.12 Open questions for the user
+## 2.13 Open questions for the user
 
 1. **Q1 Credentials and access.** Does the project key in `credentials` have
-   GPT-Live access (Tier 1 or higher; the Free tier is unsupported)? May PR 6
-   record one real, sanitized capture?
-2. **Q2 Naming and config.** Is `openai-live` with `gpt-live-1` acceptable?
-   Should it reuse the `model.openai` key block, or get its own
-   `model.openai_live` block? Is Azure Foundry a target (it changes the base
-   URL and auth)?
-3. **Q3 Responses delegation.** Do you want it at all (PR 7)? Or is client
-   delegation the only supported mode?
-4. **Q4 Typed text input.** What should `agent session` text turns and
-   `TEXT.DELTA` do with GPT-Live? Options: (a) unsupported, failing fast;
-   (b) send them to the delegation backend and mirror them as `thinking`;
-   (c) send them as `session.commentary.append` so the model says something.
-   The proposal is (b).
-5. **Q5 Timing constants.** The segment-close gap `G` (proposed 600 ms) and
-   the delegation settle window `D` (proposed 400 ms) are heuristics, because
-   the protocol has no turn or done events. Should they be configurable per
-   session?
-6. **Q6 Long tool results.** When a backend result exceeds 500 tokens,
-   should the provider truncate it, split it into several commentary appends,
-   or require the backend prompt to summarize? The proposal is that the
-   backend summarizes and the provider splits as a safety net.
-7. **Q7 Usage accounting.** GPT-Live reports voice **seconds**, not tokens.
-   Should `USAGE.INFO` gain a duration field, or should Live usage stay
-   provider-internal (logged, plus the `session.closed` final value)?
-8. **Q8 Backend model for delegation.** Which provider and model should the
-   default `livedelegation` backend use? For example, the configured
-   `model.openai` chat model, or a dedicated `session.live.backend_model`.
-9. **Q9 Barge-in observability.** GPT-Live gives no interrupted-speech
-   signal. Is it acceptable that harness metrics for barge-in and turn
-   latency are approximate (derived from segments) for this provider?
-10. **Q10 Greeting default.** Should `agent session --provider openai-live`
-    send a default greeting instruction after `session.started` (this needs
-    PR 5), or wait for the user to speak?
+   GPT-Live access (Tier 1 or higher)? May PR 6 record one real, sanitized
+   capture?
+2. **Q2 Naming and auth.** Is `openai-live` with `gpt-live-1` acceptable?
+   Auth defaults to the `yui auth chatgpt` store with an API-key fallback
+   (2.3, PENDING `chatgpt-oauth.md`).
+   Is Azure Foundry a target?
+3. **Q3 Delegation mode (PENDING).** Client or Responses delegation (2.4)?
+   This depends on whether the ChatGPT OAuth token can reach the Responses
+   API. Should the other mode also be built later (PR 7)?
+4. **Q4 Typed text input.** Options: (a) unsupported, failing fast;
+   (b) route it to the delegation executor and mirror it as `thinking`;
+   (c) send it as `commentary`. The proposal is (b).
+5. **Q5 Timing constants.** Should the segment gap `G` (600 ms) and the
+   settle window `D` (400 ms) be configurable per session?
+6. **Q6 Long results.** Should over-500-token results be summarized by the
+   backend prompt, split by the provider, or both? The proposal is both.
+7. **Q7 Usage accounting.** Should `USAGE.INFO` gain a voice-seconds field, or
+   should Live usage stay provider-internal?
+8. **Q8 Backend model.** What should the default `livedelegation` backend
+   provider and model be?
+9. **Q9 Barge-in observability.** Is it acceptable that barge-in and
+   turn-latency metrics are approximate (segment-derived) for this provider?
+10. **Q10 Greeting default.** Should a session send a default greeting
+    instruction after `session.started` (needs PR 3)?
+11. **Q11 Delegation concurrency.** What should the worker-pool limit be
+    (proposed 2)? Are there harness tools that must never run concurrently
+    with each other?
+12. **Q12 Interrupt policy.** The design keeps backend work running when the
+    user interrupts, which matches GPT-Live. Should an explicit user
+    interrupt instead cancel all running delegations?
 
 Also **UNCONFIRMED** in the protocol, and to be checked against the live
-service in PR 6: the maximum session duration, output pacing, the full error
-code list, the beta header requirement, an ephemeral-token flow, model
-behaviour when a client delegation is never answered, and the moderation
-cut-off error code.
+service in PR 6: maximum session duration, output pacing, the full error-code
+list, the beta header requirement, an ephemeral-token flow, model behaviour
+when a client delegation is never answered, and the moderation cut-off error
+code.
