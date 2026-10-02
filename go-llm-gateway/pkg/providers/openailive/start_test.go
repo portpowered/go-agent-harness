@@ -124,14 +124,16 @@ func TestBuildSessionStartRejectsInvalidConfig(t *testing.T) {
 		return with(func(c *models.SessionConfig) { c.Config = json.RawMessage(raw) })
 	}
 	for name, cfg := range map[string]models.SessionConfig{
-		"blank model":           with(func(c *models.SessionConfig) { c.Model = "  " }),
-		"oversized prompt":      with(func(c *models.SessionConfig) { c.Instructions = strings.Repeat("x", live.MaxInstructionsBytes+1) }),
-		"formats differ":        with(func(c *models.SessionConfig) { c.OutputAudioFormat = models.AudioFormatG711Ulaw }),
-		"rates differ":          with(func(c *models.SessionConfig) { c.InputAudioSampleRate = models.SampleRate16000 }),
-		"pcm at 8k":             with(func(c *models.SessionConfig) { c.InputAudioSampleRate, c.OutputAudioSampleRate = 8000, 8000 }),
-		"pcm at 44.1k":          with(func(c *models.SessionConfig) { c.InputAudioSampleRate, c.OutputAudioSampleRate = 44100, 44100 }),
-		"bad output rate":       with(func(c *models.SessionConfig) { c.OutputAudioSampleRate = 44100 }),
-		"mu-law at 16k":         with(func(c *models.SessionConfig) { c.InputAudioFormat, c.InputAudioSampleRate = models.AudioFormatG711Ulaw, 16000 }),
+		"blank model":      with(func(c *models.SessionConfig) { c.Model = "  " }),
+		"oversized prompt": with(func(c *models.SessionConfig) { c.Instructions = strings.Repeat("x", live.MaxInstructionsBytes+1) }),
+		"formats differ":   with(func(c *models.SessionConfig) { c.OutputAudioFormat = models.AudioFormatG711Ulaw }),
+		"rates differ":     with(func(c *models.SessionConfig) { c.InputAudioSampleRate = models.SampleRate16000 }),
+		"pcm at 8k":        with(func(c *models.SessionConfig) { c.InputAudioSampleRate, c.OutputAudioSampleRate = 8000, 8000 }),
+		"pcm at 44.1k":     with(func(c *models.SessionConfig) { c.InputAudioSampleRate, c.OutputAudioSampleRate = 44100, 44100 }),
+		"bad output rate":  with(func(c *models.SessionConfig) { c.OutputAudioSampleRate = 44100 }),
+		"mu-law at 16k": with(func(c *models.SessionConfig) {
+			c.InputAudioFormat, c.InputAudioSampleRate = models.AudioFormatG711Ulaw, 16000
+		}),
 		"A-law at 24k":          with(func(c *models.SessionConfig) { c.InputAudioFormat = models.AudioFormatG711Alaw }),
 		"unknown format":        with(func(c *models.SessionConfig) { c.InputAudioFormat = "opus" }),
 		"options not json":      options(`{`),

@@ -11,7 +11,12 @@
   `DecodeClientEvent` (an unknown event type decodes to `UnknownEvent`), the
   `NewInputAudioAppend` helper (refuses odd-length PCM16), and
   `BuildSessionStart`, which turns a `models.SessionConfig` plus the GPT-Live
-  `Options` in its raw `Config` into a strict `session.start`. There is no
+  `Options` in its raw `Config` into a strict `session.start`.
+  `ParseOptions` decodes and validates those `Options` (unknown keys are
+  rejected). Invalid configs wrap `ErrInvalidSessionConfig`, and frames that
+  are not well-formed events wrap `ErrMalformedEvent`. Every server event
+  that may carry `client_event_id` keeps it, and `OptionalID` keeps an absent,
+  null or string `response.event` `delegation_id` as it arrived. There is no
   session provider yet, so nothing in production reaches the package.
 - `pkg/providers/openailive/fakelive`: a scripted fake GPT-Live server for
   tests, served in process (`Server.Dialer`) or over `httptest`

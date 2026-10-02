@@ -206,3 +206,53 @@ func TestEveryEventTypeRoundTripsThroughItsDecoder(t *testing.T) {
 		}
 	}
 }
+
+func TestResponseEventDelegationIDKeepsAbsentNullAndString(t *testing.T) {
+	for name, tc := range map[string]struct {
+		frame string
+		want  live.OptionalID
+	}{
+		"absent": {`{"type":"response.event","event":{}}`, live.OptionalID{}},
+		"null":   {`{"type":"response.event","delegation_id":null,"event":{}}`, live.OptionalID{Present: true}},
+		"string": {`{"type":"response.event","delegation_id":"del_1","event":{}}`, live.SomeID("del_1")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			event, err := live.DecodeServerEvent([]byte(tc.frame))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := event.(live.ResponseEvent)
+			if !ok || !reflect.DeepEqual(got.DelegationID, tc.want) {
+				t.Fatalf("decoded %#v, want delegation id %#v", event, tc.want)
+			}
+			encoded, err := live.EncodeEvent(got)
+			if err != nil || !sameJSON(t, encoded, []byte(tc.frame)) {
+				t.Fatalf("re-encoded %s, %v; want %s", encoded, err, tc.frame)
+			}
+		})
+	}
+	if _, err := live.DecodeServerEvent([]byte(`{"type":"response.event","delegation_id":7}`)); !errors.Is(err, live.ErrMalformedEvent) {
+		t.Fatalf("numeric delegation id error = %v, want ErrMalformedEvent", err)
+	}
+}
+
+func TestServerEventsKeepClientEventID(t *testing.T) {
+	for _, frame := range []string{
+		`{"type":"error","event_id":"e","client_event_id":"c","error":{"type":"invalid_request_error","message":"m"}}`,
+		`{"type":"info","client_event_id":"c","code":"x","message":"m"}`,
+		`{"type":"session.usage.updated","client_event_id":"c","usage":{"seconds":1}}`,
+		`{"type":"response.event","client_event_id":"c","event":{}}`,
+		`{"type":"transport.ringing","client_event_id":"c","session_id":"s"}`,
+		`{"type":"transport.failed","client_event_id":"c","session_id":"s","error":{"type":"call_error","message":"m"}}`,
+		`{"type":"transport.dtmf.send","client_event_id":"c","event":"1"}`,
+	} {
+		event, err := live.DecodeServerEvent([]byte(frame))
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := live.EncodeEvent(event)
+		if err != nil || !sameJSON(t, encoded, []byte(frame)) {
+			t.Fatalf("%s re-encoded %s, %v; want client_event_id kept", event.EventType(), encoded, err)
+		}
+	}
+}

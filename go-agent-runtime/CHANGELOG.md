@@ -17,7 +17,10 @@
 - Model admission restricts `openai-live` to its catalog, as it already does
   for `openai`, so only `gpt-live-1` is admitted there. The rejection's
   `UnsupportedRealtimeModelError.Provider` is `"OpenAI Live"`. `gpt-live-1` is
-  not admitted under `openai`. `BuildSession` still refuses `openai-live`
+  not admitted under `openai`. The catalog lookups (`RealtimeModels`,
+  `LookupRealtimeModel`, `SupportedRealtimeModelIDs` and
+  `ModelAdmissionResolver.ResolveRealtimeModel`) now answer for
+  `openai-live` too. `BuildSession` still refuses `openai-live`
   ("realtime sessions do not support provider"), so no session can be built
   for it yet.
 

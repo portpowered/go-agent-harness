@@ -203,14 +203,43 @@ type DelegationCreated struct {
 
 // ResponseEvent wraps one nested Responses streaming event.
 type ResponseEvent struct {
-	EventID      string          `json:"event_id,omitempty"`
-	DelegationID *string         `json:"delegation_id,omitempty"`
-	Event        json.RawMessage `json:"event"`
+	EventID       string          `json:"event_id,omitempty"`
+	ClientEventID string          `json:"client_event_id,omitempty"`
+	DelegationID  OptionalID      `json:"delegation_id,omitzero"`
+	Event         json.RawMessage `json:"event"`
+}
+
+// OptionalID is an optional, nullable id field. Present is false when the
+// key is absent; a present null has Present true and a nil Value. Both forms
+// re-encode as they arrived.
+type OptionalID struct {
+	Present bool
+	Value   *string
+}
+
+// SomeID returns a present, non-null OptionalID.
+func SomeID(id string) OptionalID { return OptionalID{Present: true, Value: &id} }
+
+// IsZero reports an absent field, so omitzero leaves it out.
+func (o OptionalID) IsZero() bool { return !o.Present }
+
+// MarshalJSON encodes the id, or null.
+func (o OptionalID) MarshalJSON() ([]byte, error) { return json.Marshal(o.Value) }
+
+// UnmarshalJSON records a present field, null or string.
+func (o *OptionalID) UnmarshalJSON(data []byte) error {
+	var value *string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*o = OptionalID{Present: true, Value: value}
+	return nil
 }
 
 // UsageUpdated is a cumulative usage snapshot, sent about once a minute.
 type UsageUpdated struct {
 	EventID       string         `json:"event_id,omitempty"`
+	ClientEventID string         `json:"client_event_id,omitempty"`
 	Usage         Usage          `json:"usage"`
 	ContextWindow *ContextWindow `json:"context_window,omitempty"`
 }
@@ -227,15 +256,17 @@ type SessionClosed struct {
 // ErrorEvent reports a failed command, or a startup failure before
 // session.started.
 type ErrorEvent struct {
-	EventID string `json:"event_id,omitempty"`
-	Error   Error  `json:"error"`
+	EventID       string `json:"event_id,omitempty"`
+	ClientEventID string `json:"client_event_id,omitempty"`
+	Error         Error  `json:"error"`
 }
 
 // Info is a notice, for example data_channel_permissions.
 type Info struct {
-	EventID string `json:"event_id,omitempty"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	EventID       string `json:"event_id,omitempty"`
+	ClientEventID string `json:"client_event_id,omitempty"`
+	Code          string `json:"code"`
+	Message       string `json:"message"`
 }
 
 // ReflectedInputAudio is the sideband copy of input audio (24 kHz PCM16,
@@ -246,8 +277,9 @@ type ReflectedInputAudio struct {
 
 // TransportCall is the body of the sideband SIP call-progress events.
 type TransportCall struct {
-	EventID   string `json:"event_id,omitempty"`
-	SessionID string `json:"session_id"`
+	EventID       string `json:"event_id,omitempty"`
+	ClientEventID string `json:"client_event_id,omitempty"`
+	SessionID     string `json:"session_id"`
 }
 
 // TransportRinging reports an outbound SIP call ringing.
@@ -258,15 +290,17 @@ type TransportAnswered TransportCall
 
 // TransportFailed reports a failed outbound SIP call.
 type TransportFailed struct {
-	EventID   string `json:"event_id,omitempty"`
-	SessionID string `json:"session_id"`
-	Error     Error  `json:"error"`
+	EventID       string `json:"event_id,omitempty"`
+	ClientEventID string `json:"client_event_id,omitempty"`
+	SessionID     string `json:"session_id"`
+	Error         Error  `json:"error"`
 }
 
 // DTMF is the body of the SIP DTMF events. Key is the pressed key.
 type DTMF struct {
-	EventID string `json:"event_id,omitempty"`
-	Key     string `json:"event"`
+	EventID       string `json:"event_id,omitempty"`
+	ClientEventID string `json:"client_event_id,omitempty"`
+	Key           string `json:"event"`
 }
 
 // DTMFReceived reports a key the caller pressed.

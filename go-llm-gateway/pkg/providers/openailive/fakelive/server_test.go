@@ -166,6 +166,44 @@ func TestAwaitClientHoldsTheScriptUntilEnoughEvents(t *testing.T) {
 	}
 }
 
+// TestAwaitClientBlocksUntilTheEventArrivesOrTheConnectionEnds forces the
+// waiting path: the script is durably blocked before the awaited event is
+// sent, and a second script is still waiting when the client hangs up.
+func TestAwaitClientBlocksUntilTheEventArrivesOrTheConnectionEnds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		server := fakelive.New(fakelive.WithScript(
+			fakelive.AwaitClient(live.TypeInputAudioMute, 1),
+			fakelive.Send(live.Info{Code: "muted_seen", Message: "m"}),
+		))
+		c := dial(t, server)
+		synctest.Wait() // the script now waits for a state change
+		c.start(liveConfig())
+		synctest.Wait() // a state change that does not satisfy it
+		c.send(live.InputAudioMute{EventID: "m1"})
+		expect[live.InputAudioMuted](c)
+		if info := expect[live.Info](c); info.Code != "muted_seen" {
+			t.Fatalf("info = %#v", info)
+		}
+
+		hungUp := fakelive.New(fakelive.WithScript(
+			fakelive.AwaitClient(live.TypeInputAudioMute, 1),
+			fakelive.Send(live.Info{Code: "never", Message: "m"}),
+		))
+		conn, err := hungUp.Dialer().Dial(live.DefaultEndpoint, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if err := conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if errs := hungUp.Errors(); len(errs) != 0 {
+			t.Fatalf("errors = %v, want a quiet stop", errs)
+		}
+	})
+}
+
 func TestScriptedCloseSendsTheReasonThenClosesTheSocket(t *testing.T) {
 	c := dial(t, fakelive.New(fakelive.WithScript(fakelive.AwaitStarted(), fakelive.CloseSession(live.CloseReasonExpired))))
 	c.start(liveConfig())

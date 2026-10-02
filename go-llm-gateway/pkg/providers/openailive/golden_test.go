@@ -29,7 +29,9 @@ const (
 
 func ptr[T any](value T) *T { return &value }
 
-func pcm24() *live.AudioFormat { return &live.AudioFormat{Type: live.AudioTypePCM, Rate: live.RatePCM24k} }
+func pcm24() *live.AudioFormat {
+	return &live.AudioFormat{Type: live.AudioTypePCM, Rate: live.RatePCM24k}
+}
 
 func marin() *live.AudioOutput { return &live.AudioOutput{Voice: live.Voice{Name: "marin"}} }
 
@@ -63,14 +65,14 @@ func clientGoldens() map[string]live.Event {
 				Instructions: ptr(availabilityPrompt), MaxOutputTokens: ptr(1024),
 			}},
 		}},
-		"client.input_audio_append":   live.InputAudioAppend{Audio: sampleAudio},
-		"client.input_audio_mute":     live.InputAudioMute{EventID: "evt_mute_001"},
-		"client.instructions_append":  live.InstructionsAppend{EventID: "evt_instructions_001", Content: "The caller prefers outdoor seating."},
-		"client.thinking_append":      live.ThinkingAppend{EventID: "evt_thinking_001", DelegationID: ptr(delegationABC), Content: "Checking availability for two guests at 7 PM."},
-		"client.commentary_append":    live.CommentaryAppend{EventID: "evt_commentary_001", DelegationID: ptr(delegationABC), Content: "There is an outdoor table for two at 7 PM. Ask whether to reserve it."},
-		"client.response_create":      live.ResponseCreate{EventID: "evt_response_001"},
-		"client.session_close":        live.SessionClose{EventID: "evt_close_001"},
-		"client.azure_session_close":  live.SessionClose{},
+		"client.input_audio_append":       live.InputAudioAppend{Audio: sampleAudio},
+		"client.input_audio_mute":         live.InputAudioMute{EventID: "evt_mute_001"},
+		"client.instructions_append":      live.InstructionsAppend{EventID: "evt_instructions_001", Content: "The caller prefers outdoor seating."},
+		"client.thinking_append":          live.ThinkingAppend{EventID: "evt_thinking_001", DelegationID: ptr(delegationABC), Content: "Checking availability for two guests at 7 PM."},
+		"client.commentary_append":        live.CommentaryAppend{EventID: "evt_commentary_001", DelegationID: ptr(delegationABC), Content: "There is an outdoor table for two at 7 PM. Ask whether to reserve it."},
+		"client.response_create":          live.ResponseCreate{EventID: "evt_response_001"},
+		"client.session_close":            live.SessionClose{EventID: "evt_close_001"},
+		"client.azure_session_close":      live.SessionClose{},
 		"client.azure_input_audio_append": live.InputAudioAppend{Audio: azureAudio},
 		"client.response_item_create_message": live.ResponseItemCreate{EventID: "evt_item_001", Item: json.RawMessage(
 			`{"type":"message","role":"user","content":[{"type":"input_text","text":"Please check for a table for two at 7 PM."}]}`)},
@@ -100,8 +102,8 @@ func sessionServerGoldens() map[string]live.Event {
 			Model: live.Model1, Instructions: "Be concise.",
 			Audio: &live.SessionAudio{Output: marin()}, Delegation: clientDelegation(),
 		}}},
-		"server.input_audio_muted":   live.InputAudioMuted{EventID: "evt_muted_001", ClientEventID: "evt_mute_001"},
-		"server.commentary_appended": live.CommentaryAppended{EventID: "evt_commentary_002", ClientEventID: "evt_commentary_001", StartMS: 5200, EndMS: 5400},
+		"server.input_audio_muted":           live.InputAudioMuted{EventID: "evt_muted_001", ClientEventID: "evt_mute_001"},
+		"server.commentary_appended":         live.CommentaryAppended{EventID: "evt_commentary_002", ClientEventID: "evt_commentary_001", StartMS: 5200, EndMS: 5400},
 		"server.output_audio_delta_sideband": live.OutputAudioDelta{Delta: sampleAudio, StartMS: ptr[int64](1000), EndMS: ptr[int64](1200)},
 		"server.azure_output_audio_delta":    live.OutputAudioDelta{Delta: azureAudio, StartMS: ptr[int64](0), EndMS: ptr[int64](100)},
 		"server.input_transcript_delta": live.InputTranscriptDelta{EventID: "evt_input_transcript_001",
@@ -124,9 +126,9 @@ func otherServerGoldens() map[string]live.Event {
 			Delegation: live.DelegationInfo{ID: delegationABC, Type: delegationMetadata, Target: live.DelegationClient}},
 		"server.delegation_created_responses": live.DelegationCreated{EventID: "event_delegation", OffsetMS: 1000,
 			Delegation: live.DelegationInfo{ID: responsesDelegation, Type: delegationMetadata, Target: live.DelegationResponses, ResponseID: "resp_123"}},
-		"server.response_event_text_delta": live.ResponseEvent{EventID: "evt_response_002", DelegationID: ptr("del_responses123"), Event: json.RawMessage(
+		"server.response_event_text_delta": live.ResponseEvent{EventID: "evt_response_002", DelegationID: live.SomeID("del_responses123"), Event: json.RawMessage(
 			`{"type":"response.output_text.delta","item_id":"msg_abc123","output_index":0,"content_index":0,"delta":"An outdoor table is available at 7 PM.","sequence_number":3,"logprobs":[]}`)},
-		"server.response_event_function_call": live.ResponseEvent{DelegationID: ptr(responsesDelegation), Event: json.RawMessage(
+		"server.response_event_function_call": live.ResponseEvent{DelegationID: live.SomeID(responsesDelegation), Event: json.RawMessage(
 			`{"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_123","name":"get_weather","arguments":"{\"location\":\"Seattle\"}"}}`)},
 		"server.error_unknown_parameter": live.ErrorEvent{EventID: "evt_error_001", Error: live.Error{
 			Type: invalidRequestType, Code: live.CodeUnknownParameter, Message: "Unknown parameter: 'session.voice'.",
