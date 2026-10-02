@@ -257,8 +257,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	device, startAgent := startPacedRemoteToolAudioTopology(t, testCase, provider, responses, callbackInterval)
 
 	paths := newRemoteToolAudioPaths(t, testCase, calls, toolDelay)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), remoteToolAudioScenarioDeadline)
 	defer cancel()
+	defer logRemoteToolAudioDeadlineMargin(t, ctx)
 	agent := startAgent(ctx, remoteToolAudioArgs(testCase, inputFrames > 0, prompt, paths), paths)
 	done, stdout, stderr := agent.done, agent.stdout, agent.stderr
 	if inputFrames > 0 {
@@ -316,6 +317,19 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	}
 }
 
+// remoteToolAudioScenarioDeadline bounds one process-boundary scenario, from
+// agent start through its verified exit and timing analysis.
+const remoteToolAudioScenarioDeadline = 30 * time.Second
+
+// logRemoteToolAudioDeadlineMargin records how much of the scenario deadline
+// the run used, so a shrinking margin under load is visible before it fails.
+func logRemoteToolAudioDeadlineMargin(t *testing.T, ctx context.Context) {
+	t.Helper()
+	deadline, _ := ctx.Deadline()
+	remaining := time.Until(deadline)
+	t.Logf("scenario used %v of its %v deadline (margin %v)", (remoteToolAudioScenarioDeadline - remaining).Round(time.Millisecond), remoteToolAudioScenarioDeadline, remaining.Round(time.Millisecond))
+}
+
 func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls int) {
 	t.Helper()
 	report, err := runtimeReplayWire.NewService().AnalyzeTiming(t.Context(), capturePath)
@@ -339,6 +353,10 @@ func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls 
 			t.Errorf("process-edge %s latency = %dms, want <= %dms; summary=%+v", check.name, check.got, check.max, report.Summary)
 		}
 	}
+	// EstimatedAudibleGapMS is the primary gap check for the queue-paced
+	// device: its playback drains on the device's own cadence, so the latency
+	// caps above bound each stage, but only the estimated gap says whether
+	// queued audio ran out before the next response's audio arrived.
 	if report.Summary.EstimatedAudibleGapMS.Count != 0 {
 		t.Errorf("serial tool fixture introduced an estimated audible gap: %+v", report.Summary.EstimatedAudibleGapMS)
 	}

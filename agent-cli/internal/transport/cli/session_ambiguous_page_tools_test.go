@@ -108,8 +108,10 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 
 	conversation.commitCustomerTurn(t, ctx)
 	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.selectionCallSent, "exact tab selection call")
-	assistantCalls = providerSession.assistantCallsSnapshot()
-	if len(assistantCalls) != 2 || assistantCalls[1].Name != webmcp.SelectTabToolName {
+	// The provider may already be emitting the page call by the time this
+	// goroutine runs, so read the calls recorded when the selection was sent.
+	assistantCalls = providerSession.callsAtSelectionSnapshot()
+	if len(assistantCalls) != 2 || assistantCalls[0].Name != webmcp.ListTabsToolName || assistantCalls[1].Name != webmcp.SelectTabToolName {
 		t.Fatalf("assistant calls after customer choice = %#v, want list-tabs then select-tab", assistantCalls)
 	}
 	fixture.assertExactCubeSelection(t, assistantCalls[1].Arguments)
@@ -384,6 +386,19 @@ func readAmbiguousCubeConversationUpdate(t *testing.T, ctx context.Context, runC
 				return update
 			}
 		case <-runComplete:
+			// Updates the provider recorded before the session finished
+			// are still buffered; only an empty buffer means none came.
+			for {
+				select {
+				case update := <-session.updates:
+					if update != nil && want(update) {
+						return update
+					}
+					continue
+				default:
+				}
+				break
+			}
 			t.Fatal("session loop ended before receiving expected provider SESSION.UPDATE")
 		case <-ctx.Done():
 			t.Fatalf("waiting for expected provider SESSION.UPDATE: %v", ctx.Err())
@@ -391,12 +406,20 @@ func readAmbiguousCubeConversationUpdate(t *testing.T, ctx context.Context, runC
 	}
 }
 
+// waitAmbiguousConversationSignal waits for signal. The scripted provider
+// runs ahead of the test, so by the time this goroutine runs the session may
+// already have finished after sending signal; a sent signal therefore wins
+// over a completed session.
 func waitAmbiguousConversationSignal(t *testing.T, ctx context.Context, runComplete <-chan struct{}, signal <-chan struct{}, label string) {
 	t.Helper()
 	select {
 	case <-signal:
 	case <-runComplete:
-		t.Fatalf("session loop ended before %s", label)
+		select {
+		case <-signal:
+		default:
+			t.Fatalf("session loop ended before %s", label)
+		}
 	case <-ctx.Done():
 		t.Fatalf("waiting for %s: %v", label, ctx.Err())
 	}
@@ -434,7 +457,9 @@ type ambiguousCubeConversationSession struct {
 	phase          ambiguousCubeConversationPhase
 	lastToolResult string
 	assistantCalls []messages.ToolCall
-	toolResults    []messages.ToolCallEndValue
+	// callsAtSelection is assistantCalls as of the select-tab call's emission.
+	callsAtSelection []messages.ToolCall
+	toolResults      []messages.ToolCallEndValue
 }
 
 func newAmbiguousCubeConversationSession() *ambiguousCubeConversationSession {
@@ -583,6 +608,9 @@ func (s *ambiguousCubeConversationSession) Close() error {
 func (s *ambiguousCubeConversationSession) emitAssistantToolCall(ctx context.Context, id, name, arguments string) {
 	s.mu.Lock()
 	s.assistantCalls = append(s.assistantCalls, messages.ToolCall{ID: id, Name: name, Arguments: arguments})
+	if name == webmcp.SelectTabToolName && s.callsAtSelection == nil {
+		s.callsAtSelection = append([]messages.ToolCall(nil), s.assistantCalls...)
+	}
 	s.mu.Unlock()
 	if name == webmcp.SelectTabToolName {
 		s.selectionCallOnce.Do(func() { close(s.selectionCallSent) })
@@ -653,6 +681,12 @@ func (s *ambiguousCubeConversationSession) assistantCallsSnapshot() []messages.T
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]messages.ToolCall(nil), s.assistantCalls...)
+}
+
+func (s *ambiguousCubeConversationSession) callsAtSelectionSnapshot() []messages.ToolCall {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]messages.ToolCall(nil), s.callsAtSelection...)
 }
 
 func (s *ambiguousCubeConversationSession) toolResultsSnapshot() []messages.ToolCallEndValue {

@@ -100,6 +100,14 @@ func (b *TypedBuffer[T]) TryWrite(data T) BufferWriteOutcome {
 	}
 }
 
+// Shed records data as dropped because the buffer is full, without writing
+// it. An owner that queues ahead of the buffer calls it when that queue sheds
+// an overload delta, so the drop is counted and observed exactly like one
+// [TypedBuffer.WriteContext] would have dropped.
+func (b *TypedBuffer[T]) Shed(data T) BufferWriteOutcome {
+	return b.drop(data)
+}
+
 // drop records data dropped by a full buffer. The drop is counted before the
 // observer runs so the callback reports the cumulative count including this
 // drop: the counter is the durable evidence, the callback is optional.

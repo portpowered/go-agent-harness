@@ -186,7 +186,7 @@ func (r *ModelRunner) forwardSessionEventOutcome(ctx context.Context, session me
 		// per-call obligation together.
 		return failure, true, false, false
 	}
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, failure)
+	r.writeSessionDelta(ctx, failure)
 	return messages.StreamMessage{}, false, false, false
 }
 
@@ -257,25 +257,31 @@ const (
 	unresolvedToolContinuationClassification = "unresolved_tool_continuation"
 )
 
-// publishSessionAudioFailure makes a fatal audio forwarding error observable
-// to the engine before runSession returns it. ActiveParticipant intentionally
-// owns runner lifecycle and does not consume Run's error return, so returning
+// publishSessionAudioFailure makes a fatal session error observable to the
+// engine before runSession returns it. ActiveParticipant intentionally owns
+// runner lifecycle and does not consume Run's error return, so returning
 // alone would leave GlobalOrdering waiting on an open DeltaOutbox forever.
 //
-// WriteTerminal is deliberate: the caller may already be shutting down its
-// context, and a terminal diagnostic must survive a full ordinary outbox.
-// The original error is retained in ErrorValue.Err for errors.Is/errors.As;
-// callers still return that same error from Run.
-func (r *ModelRunner) publishSessionAudioFailure(err error, hasOutput bool) {
+// The record goes through the session outbox as a terminal record: it is
+// written after every delta the session already produced, never evicting a
+// queued must-deliver delta, and once the session context has ended it is
+// still delivered by evicting the oldest queued delta. The original error is
+// retained in ErrorValue.Err for errors.Is/errors.As; callers still return
+// that same error from Run. ErrSessionDeltaOverflow is classified as
+// session_delta_overflow, every other error as session_audio_send_failed.
+func (r *ModelRunner) publishSessionAudioFailure(ctx context.Context, err error, hasOutput bool) {
 	if r == nil || err == nil || r.DeltaOutbox == nil {
 		return
 	}
 	value := messages.NewErrorValueWithError(err)
 	value.Classification = sessionAudioSendFailureClassification
+	if errors.Is(err, ErrSessionDeltaOverflow) {
+		value.Classification = sessionDeltaOverflowClassification
+	}
 	value.TerminalReason = messages.TerminalReasonTerminalFailure
 	value.TerminalProvenance = messages.TerminalProvenanceLoop
 	value.OutputState = outputState(hasOutput)
-	r.DeltaOutbox.WriteTerminal(messages.StreamMessage{
+	r.writeSessionTerminal(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeError,
 		Role:       messages.RoleAssistant,
 		ActorID:    messages.Model,
@@ -286,7 +292,7 @@ func (r *ModelRunner) publishSessionAudioFailure(err error, hasOutput bool) {
 
 func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failures []messages.StreamMessage) {
 	for _, failure := range failures {
-		messages.WriteStreamDelta(ctx, r.DeltaOutbox, failure)
+		r.writeSessionDelta(ctx, failure)
 	}
 }
 

@@ -17,7 +17,7 @@ func TestModelRunnerPublishSessionAudioFailurePreservesCauseAndMetadata(t *testi
 	runner := NewSessionModelRunner(nil, 1, nil)
 	runner.currentPassID = 17
 
-	runner.publishSessionAudioFailure(rootErr, false)
+	runner.publishSessionAudioFailure(context.Background(), rootErr, false)
 
 	delta, ok := runner.DeltaOutbox.Read()
 	if !ok {
@@ -56,24 +56,47 @@ func TestModelRunnerPublishSessionAudioFailurePreservesCauseAndMetadata(t *testi
 	}
 }
 
-func TestModelRunnerPublishSessionAudioFailureEvictsOrdinaryDelta(t *testing.T) {
-	runner := NewSessionModelRunner(nil, 1, nil)
-	if !runner.DeltaOutbox.Write(context.Background(), messages.StreamMessage{
-		Type:  messages.StreamTypeTextDelta,
-		Value: messages.NewTextDeltaValue("stale"),
-	}) {
-		t.Fatal("ordinary delta was not queued")
-	}
+// A terminal failure that meets a full outbox waits behind the queued delta
+// while the session context is live; nothing already produced is evicted.
+func TestModelRunnerPublishSessionAudioFailureQueuesBehindFullOutbox(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		runner := NewSessionModelRunner(nil, 1, nil)
+		runner.writeSessionDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
 
-	runner.publishSessionAudioFailure(errors.New("audio write failed"), true)
-	got, ok := runner.DeltaOutbox.Read()
-	if !ok || got.Type != messages.StreamTypeError {
-		t.Fatalf("queued delta = %#v, ok=%t, want terminal ERROR", got, ok)
-	}
-	value, ok := got.Value.(*messages.ErrorValue)
-	if !ok || value.OutputState != messages.TerminalOutputPartial {
-		t.Fatalf("terminal value = %#v, want partial output state", got.Value)
-	}
+		runner.publishSessionAudioFailure(ctx, errors.New("audio write failed"), true)
+		synctest.Wait()
+		for _, want := range []messages.StreamMessageType{messages.StreamTypeMessageStart, messages.StreamTypeError} {
+			got, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+			if !ok || got.Type != want {
+				t.Fatalf("delivered %#v, ok=%t, want %s", got, ok, want)
+			}
+		}
+		runner.sessionOut.flush(ctx)
+	})
+}
+
+// Once the session context has ended, a queued terminal failure is still
+// delivered, evicting the oldest queued delta as before.
+func TestModelRunnerPublishSessionAudioFailureSurvivesShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		runner := NewSessionModelRunner(nil, 1, nil)
+		runner.writeSessionDelta(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()})
+		runner.publishSessionAudioFailure(ctx, errors.New("audio write failed"), true)
+		cancel()
+		runner.sessionOut.flush(ctx)
+
+		got, ok := runner.DeltaOutbox.Read()
+		if !ok || got.Type != messages.StreamTypeError {
+			t.Fatalf("queued delta = %#v, ok=%t, want terminal ERROR", got, ok)
+		}
+		value, ok := got.Value.(*messages.ErrorValue)
+		if !ok || value.OutputState != messages.TerminalOutputPartial {
+			t.Fatalf("terminal value = %#v, want partial output state", got.Value)
+		}
+	})
 }
 
 type failingConnectInferencer struct{ err error }

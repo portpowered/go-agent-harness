@@ -3,6 +3,7 @@ package subsystems
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
@@ -619,4 +620,35 @@ func TestCoordinator_TickGroup(t *testing.T) {
 		t.Errorf("Coordinator must run before CoordinatorDelta: %d >= %d",
 			TickGroupCoordinator, TickGroupCoordinatorDelta)
 	}
+}
+
+// The coordinator's wait for tool-runner capacity is bounded by the loop
+// context: with ToolInbox full and no tool runner draining it, ending the
+// context releases the engine tick instead of leaving it parked.
+func TestCoordinator_ToolBatchWaitEndsWithLoopContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoordinator(nil)
+		ls := newCoordinatorTestState()
+		ls.Outputs.ToolInbox = messages.NewTypedBuffer[messages.ToolBatchRequest](1)
+		ls.Outputs.ToolInbox.TryWrite(messages.ToolBatchRequest{LoopPassID: -1})
+		ls.ToolExecutionAvailable = true
+		ls.Inputs.ModelOutputMessage = []messages.Message{{
+			Role:      messages.RoleAssistant,
+			ToolCalls: []messages.ToolCall{{ID: "tc1", Name: "read_file"}},
+		}}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- c.Execute(ctx, ls) }()
+		synctest.Wait()
+		select {
+		case err := <-done:
+			t.Fatalf("Execute returned %v while ToolInbox was full, want it waiting for capacity", err)
+		default:
+		}
+		cancel()
+		<-done
+		if batch, _ := ls.Outputs.ToolInbox.Read(); batch.LoopPassID != -1 || ls.Outputs.ToolInbox.Len() != 0 {
+			t.Fatalf("ToolInbox after cancel = %+v with %d queued, want only the original batch", batch, ls.Outputs.ToolInbox.Len())
+		}
+	})
 }

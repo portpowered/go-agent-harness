@@ -83,8 +83,9 @@ to `TestDepguardImportRulesRejectViolations`.
 
 `forbidden_source_patterns` rules keep a hand-rolled encoding inside the
 module that owns it. Each rule has a `name` (the issue rule), the governed
-packages (`from`, narrowed by `except_from`), optional module-relative
-`except_files`, and what it forbids: `literals` are substrings of string
+packages (`from`, narrowed by `except_from`), optional `except_files` named
+by module path plus module-relative path (so an exemption covers one file in
+one module), and what it forbids: `literals` are substrings of string
 literals, and `selectors` are package-qualified selector chains such as
 `encoding/binary.LittleEndian.PutUint16`, matched under whatever local name
 the file imports that package as. The checked-in rules keep WAV containers
@@ -99,8 +100,10 @@ manual byte shifts (`int16(b[i]) | int16(b[i+1])<<8`), `binary.Read` or
 `le := binary.LittleEndian` followed by `le.Uint16(...)` (an aliased package
 import is caught; an aliased value is not). Review catches these. The WAV rule
 likewise sees only the `"RIFF"` literal, not the bytes built another way.
-`tests/localai` is not a governed module: it is a standalone black-box
-conformance suite with no go-audio dependency, and its README says so.
+`tests/localai` is governed by both rules. Its `protocol_test.go` is the one
+explicit `hand-rolled-pcm16` exemption: the standalone black-box conformance
+suite has no go-audio dependency and keeps its own PCM16 oracle on purpose,
+as its README says. Any other hand-rolled PCM16 or WAV code there is flagged.
 
 Composition authority is explicit. A whole package may be registered for an
 external application module; a repository test gets a single exact

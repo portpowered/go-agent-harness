@@ -108,6 +108,7 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 		t.Fatalf("wait for remote playback: %v", err)
 	}
 	assertRemoteRenderedSnapshot(t, endpoint, append(append([]int16(nil), want...), tail...))
+	assertRemoteAdvanceReportsStats(t, endpoint)
 	opened, err := remote.Open(output.ID)
 	if err != nil {
 		t.Fatalf("open remote default-format device: %v", err)
@@ -117,6 +118,16 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	}
 	if _, err := remote.Default(devicegw.Direction("sideways")); err == nil {
 		t.Fatal("invalid remote default direction succeeded")
+	}
+}
+
+// assertRemoteAdvanceReportsStats checks that an advance answers with the
+// queue evidence after its callbacks.
+func assertRemoteAdvanceReportsStats(t *testing.T, endpoint string) {
+	t.Helper()
+	advanced, err := devicegw.AdvanceRemoteDeviceServerWithStats(context.Background(), endpoint, 1)
+	if err != nil || advanced.Playback.CallbackCount != 3 || advanced.Playback.QueuedSamples != 0 {
+		t.Fatalf("advance with stats = %+v, %v; want three callbacks and an empty queue", advanced.Playback, err)
 	}
 }
 
@@ -138,6 +149,13 @@ func assertRemoteRenderedSnapshot(t *testing.T, endpoint string, wantRendered []
 	}
 	if snapshot.Playback.QueuedSamples != 0 || snapshot.Playback.DroppedSamples != 0 || snapshot.Playback.CallbackCount != 2 {
 		t.Fatalf("remote playback evidence = %+v", snapshot.Playback)
+	}
+	stats, err := devicegw.ReadRemoteDeviceServerStats(context.Background(), endpoint)
+	if err != nil {
+		t.Fatalf("read remote stats: %v", err)
+	}
+	if stats.Playback != snapshot.Playback || stats.Capture != snapshot.Capture {
+		t.Fatalf("remote stats = %+v, want the snapshot's queue evidence %+v / %+v", stats, snapshot.Playback, snapshot.Capture)
 	}
 }
 

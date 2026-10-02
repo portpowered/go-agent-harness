@@ -99,6 +99,7 @@ func TestDeviceServerDefensiveRegistryAndCapabilityBranches(t *testing.T) {
 		{name: "advance capability", method: http.MethodPost, path: deviceServerAPIPrefix + "/control/advance", body: []byte(`{"callbacks":1}`), status: http.StatusBadRequest},
 		{name: "inject capability", method: http.MethodPost, path: deviceServerAPIPrefix + "/control/inject-capture", body: []byte{0, 0}, status: http.StatusBadRequest},
 		{name: "snapshot capability", method: http.MethodGet, path: deviceServerAPIPrefix + "/control/snapshot", status: http.StatusBadRequest},
+		{name: "stats capability", method: http.MethodGet, path: deviceServerAPIPrefix + "/control/stats", status: http.StatusBadRequest},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -161,6 +162,12 @@ func TestRemoteDeviceRegistryRejectsInvalidServerResponses(t *testing.T) {
 	}
 	if _, err := ReadRemoteDeviceServerSnapshot(context.Background(), "not-an-endpoint"); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
 		t.Fatalf("invalid snapshot endpoint error = %v", err)
+	}
+	if _, err := AdvanceRemoteDeviceServerWithStats(context.Background(), "not-an-endpoint", 1); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
+		t.Fatalf("invalid advance-with-stats endpoint error = %v", err)
+	}
+	if _, err := ReadRemoteDeviceServerStats(context.Background(), "not-an-endpoint"); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
+		t.Fatalf("invalid stats endpoint error = %v", err)
 	}
 	if err := InjectRemoteDeviceServerCapture(context.Background(), "not-an-endpoint", []int16{1}); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
 		t.Fatalf("invalid inject endpoint error = %v", err)

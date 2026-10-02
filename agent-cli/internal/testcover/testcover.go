@@ -42,8 +42,12 @@ func IsolateFixtureProcess() error {
 // MustIsolateFixtureProcess is IsolateFixtureProcess for a TestMain fixture
 // branch: on failure it reports the error on stderr and exits with status 2.
 func MustIsolateFixtureProcess() {
+	mustIsolateFixtureProcess(func(err error) { fmt.Fprintln(os.Stderr, err) }, os.Exit)
+}
+
+func mustIsolateFixtureProcess(report func(error), exit func(int)) {
 	if err := IsolateFixtureProcess(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+		report(err)
+		exit(2)
 	}
 }

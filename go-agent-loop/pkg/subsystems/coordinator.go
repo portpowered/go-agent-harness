@@ -162,6 +162,16 @@ func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopStat
 		c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
 		passID := c.nextToolBatchPass(curr)
 		// Wait for the tool runner: a dropped batch is never executed.
+		//
+		// This wait closes a chain back to the engine: the coordinator runs
+		// on the engine's tick goroutine and waits for ToolInbox capacity;
+		// the tool runner frees that capacity only between batches, and it
+		// waits for its own DeltaOutbox capacity to publish a batch's
+		// results; that outbox is drained only by the engine's ordering read
+		// on the same tick goroutine. The chain closes only when ToolInbox
+		// already holds a full buffer of batches and the tool runner's
+		// outbox is full too. Every link waits on ctx, the loop context, so
+		// ending the loop releases all three; no link waits without it.
 		curr.Outputs.ToolInbox.WriteWaitContext(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
 		return false
 	case !message.HasOnlyReasoning():

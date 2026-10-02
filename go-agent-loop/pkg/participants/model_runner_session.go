@@ -27,9 +27,16 @@ func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 		return fmt.Errorf("session connect: %w", err)
 	}
 	defer func() { err = joinOnFailure(err, session.Close()) }()
+	// Deltas the session produced reach DeltaOutbox before Run returns.
+	defer func() { r.sessionOut.flush(ctx) }()
 
 	state := sessionRunState{}
 	for {
+		// A consumer that stopped reading long enough to overflow the
+		// session outbox ends the session instead of growing it.
+		if overflowErr := r.sessionOut.overflowErr(); overflowErr != nil {
+			return r.endSession(ctx, &state, overflowErr)
+		}
 		// Observe already-queued provider lifecycle messages before admitting
 		// pending user input. In particular, MESSAGE.END is authoritative for
 		// the response that just completed; peer audio queued in the same
@@ -225,7 +232,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 		state.Response.HasOutput = true
 	}
 	r.forwardInitialSessionConfig(ctx, session, state, msg)
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, msg)
+	r.writeSessionDelta(ctx, msg)
 	return messageEndOwned
 }
 
@@ -254,7 +261,7 @@ func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session m
 // deferred send failures are flushed, and err is returned unchanged.
 func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, err error) error {
 	if err != nil && ctx.Err() == nil {
-		r.publishSessionAudioFailure(err, state.Response.HasOutput)
+		r.publishSessionAudioFailure(ctx, err, state.Response.HasOutput)
 	}
 	r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
 	return err
@@ -277,7 +284,7 @@ func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.
 		terminalProvenance = messages.TerminalProvenanceSession
 		terminalOutputState = messages.TerminalOutputNotApplicable
 	}
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, messages.StreamMessage{
+	r.writeSessionDelta(ctx, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
@@ -309,7 +316,7 @@ func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sess
 	if rejectsActiveResponseCreate(*msg) && ack.Outstanding() {
 		ack.Reject()
 		if start := ack.Start; start != nil && start.ResponseID == state.Response.ID {
-			messages.WriteStreamDelta(ctx, r.DeltaOutbox, *start)
+			r.writeSessionDelta(ctx, *start)
 		}
 	}
 	if !ack.Outstanding() {

@@ -142,6 +142,14 @@ func waitForRemoteToolAudio(ctx context.Context, device remoteToolAudioDevice, w
 	callbacksSinceSnapshot := callbacksPerSnapshot
 	for {
 		if callbacksSinceSnapshot >= callbacksPerSnapshot {
+			ready, err := remoteToolAudioMayBeComplete(ctx, device, len(want))
+			if err != nil {
+				return devicegw.DeviceServerSnapshot{}, err
+			}
+			if !ready {
+				callbacksSinceSnapshot = 0
+				continue
+			}
 			snapshot, err := device.Snapshot(ctx)
 			if err != nil {
 				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("read remote device evidence: %w", err)
@@ -163,6 +171,22 @@ func waitForRemoteToolAudio(ctx context.Context, device remoteToolAudioDevice, w
 			return devicegw.DeviceServerSnapshot{}, fmt.Errorf("remote playback did not reach final PCM marker before the scenario deadline: %w", ctx.Err())
 		}
 	}
+}
+
+// remoteToolAudioMayBeComplete reads only the device's queue stats and
+// reports whether the rendered stream can already hold all of want: the
+// queue is empty and the agent has handed the device at least len(want)
+// samples (rendered, dropped or discarded). A full snapshot carries every
+// sample rendered so far, so reading one before this holds only adds cost
+// that grows with the stream.
+func remoteToolAudioMayBeComplete(ctx context.Context, device remoteToolAudioDevice, want int) (bool, error) {
+	stats, err := device.Stats(ctx)
+	if err != nil {
+		return false, fmt.Errorf("read remote device queue evidence: %w", err)
+	}
+	playback := stats.Playback
+	delivered := playback.RenderedSamples - playback.ZeroFilledSamples + playback.DroppedSamples + playback.DiscardedSamples
+	return playback.QueuedSamples == 0 && delivered >= uint64(want), nil
 }
 
 func requireRemoteToolAudio(t *testing.T, ctx context.Context, device remoteToolAudioDevice, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64, provider *remoteToolAudioProvider, expectedToolCalls int, expected []int16, done <-chan error, stderr *remoteToolAudioBuffer) devicegw.DeviceServerSnapshot {

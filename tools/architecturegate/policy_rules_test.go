@@ -94,7 +94,8 @@ func repositoryImportCases() []repositoryImportCase {
 // TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio proves the
 // checked-in forbidden_source_patterns rules reject hand-rolled WAV containers
 // and PCM16 packing (under any import alias) outside go-audio, while leaving
-// 32-bit fields, the WebP sniffer and go-audio itself alone.
+// 32-bit fields, the agent-cli WebP sniffer, the tests/localai PCM16 oracle
+// and go-audio itself alone. Each exemption covers one file in one module.
 func TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -113,6 +114,10 @@ func TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio(t *testing.T) {
 		{"riff literal", repo + "/go-agent-loop", "pkg/x/wav.go", `var _ = []byte("RIFF")`, "hand-rolled-wav-container"},
 		{"32-bit field", repo + "/agent-cli", "internal/room/size.go", "var _ = func(b []byte) { binary.LittleEndian.PutUint32(b, 1) }", ""},
 		{"webp sniffer", repo + "/agent-cli", "internal/input/mimetype.go", `var _ = "RIFF"`, ""},
+		{"webp sniffer path in another module", repo + "/go-agent-loop", "internal/input/mimetype.go", `var _ = "RIFF"`, "hand-rolled-wav-container"},
+		{"localai pcm oracle", repo + "/tests/localai", "protocol_test.go", "var _ = func(b []byte) uint16 { return binary.LittleEndian.Uint16(b) }", ""},
+		{"localai other pcm", repo + "/tests/localai", "helpers_test.go", "var _ = func(b []byte) uint16 { return binary.LittleEndian.Uint16(b) }", "hand-rolled-pcm16"},
+		{"localai riff", repo + "/tests/localai", "protocol_test.go", `var _ = []byte("RIFF")`, "hand-rolled-wav-container"},
 		{"go-audio owner", repo + "/go-audio", "pkg/wavio/wavio.go", `var _ = func(b []byte) { _ = "RIFF"; binary.LittleEndian.PutUint16(b, 1) }`, ""},
 	}
 	for _, test := range cases {

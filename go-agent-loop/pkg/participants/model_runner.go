@@ -25,6 +25,9 @@ type ModelRunner struct {
 
 	// ingress is the ordered user-input queue; nil outside session mode.
 	ingress *sessionIngress
+	// sessionOut orders the session goroutine's writes to DeltaOutbox; see
+	// sessionOutbox.
+	sessionOut *sessionOutbox
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
@@ -203,7 +206,7 @@ func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Ses
 // audio failure.
 func (r *ModelRunner) flushHeldAudio(ctx context.Context, session messages.Session, state *sessionRunState) {
 	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
-		r.publishSessionAudioFailure(err, state.Response.HasOutput)
+		r.publishSessionAudioFailure(ctx, err, state.Response.HasOutput)
 	}
 }
 

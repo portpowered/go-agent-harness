@@ -60,6 +60,15 @@ type DeviceServerSnapshot struct {
 	Trace           []DeviceTraceEvent       `json:"trace"`
 }
 
+// DeviceServerStats is the queue evidence of a DeviceServerSnapshot without
+// its sample and trace history. Its size does not grow with the session, so a
+// harness can poll it once per callback where a snapshot, which carries every
+// sample rendered and captured so far, would cost more with each poll.
+type DeviceServerStats struct {
+	Playback audio.PlaybackQueueStats `json:"playback"`
+	Capture  audio.CaptureQueueStats  `json:"capture"`
+}
+
 // DeviceServer exposes a transport-only loopback HTTP DeviceRegistry.
 type DeviceServer struct {
 	registry DeviceRegistry
@@ -97,6 +106,7 @@ func (s *DeviceServer) Handler() http.Handler {
 	mux.HandleFunc(deviceServerAPIPrefix+"/control/advance", s.handleAdvance)
 	mux.HandleFunc(deviceServerAPIPrefix+"/control/inject-capture", s.handleInjectCapture)
 	mux.HandleFunc(deviceServerAPIPrefix+"/control/snapshot", s.handleSnapshot)
+	mux.HandleFunc(deviceServerAPIPrefix+"/control/stats", s.handleStats)
 	return mux
 }
 
@@ -362,7 +372,21 @@ func (s *DeviceServer) handleAdvance(w http.ResponseWriter, r *http.Request) {
 		writeDeviceServerError(w, http.StatusBadRequest, errors.New("advance callbacks must be positive"))
 		return
 	}
-	writeDeviceServerJSON(w, struct{}{}, controller.Advance(request.Callbacks))
+	if err := controller.Advance(request.Callbacks); err != nil {
+		writeDeviceServerJSON(w, nil, err)
+		return
+	}
+	// Report the queue evidence after the callbacks, so a harness pacing the
+	// clock by queued audio needs no separate stats request per callback.
+	stats, ok := s.registry.(interface {
+		PlaybackStats() audio.PlaybackQueueStats
+		CaptureStats() audio.CaptureQueueStats
+	})
+	if !ok {
+		writeDeviceServerJSON(w, struct{}{}, nil)
+		return
+	}
+	writeDeviceServerJSON(w, DeviceServerStats{Playback: stats.PlaybackStats(), Capture: stats.CaptureStats()}, nil)
 }
 
 func (s *DeviceServer) handleInjectCapture(w http.ResponseWriter, r *http.Request) {
@@ -407,6 +431,21 @@ func (s *DeviceServer) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		Playback: registry.PlaybackStats(), Capture: registry.CaptureStats(),
 		RenderedSamples: registry.RenderedSamples(), CapturedSamples: registry.CapturedSamples(), Trace: registry.Trace(),
 	}, nil)
+}
+
+func (s *DeviceServer) handleStats(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	registry, ok := s.registry.(interface {
+		PlaybackStats() audio.PlaybackQueueStats
+		CaptureStats() audio.CaptureQueueStats
+	})
+	if !ok {
+		writeDeviceServerError(w, http.StatusBadRequest, errors.New("device registry does not expose deterministic evidence"))
+		return
+	}
+	writeDeviceServerJSON(w, DeviceServerStats{Playback: registry.PlaybackStats(), Capture: registry.CaptureStats()}, nil)
 }
 
 func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
@@ -766,6 +805,27 @@ func AdvanceRemoteDeviceServer(ctx context.Context, endpoint string, callbacks i
 	return registry.do(req, nil)
 }
 
+// AdvanceRemoteDeviceServerWithStats advances an explicitly-clocked harness
+// server and returns its queue evidence after those callbacks.
+func AdvanceRemoteDeviceServerWithStats(ctx context.Context, endpoint string, callbacks int) (DeviceServerStats, error) {
+	registry, err := NewRemoteDeviceRegistry(endpoint)
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	data, err := json.Marshal(remoteAdvanceRequest{Callbacks: callbacks})
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	req, err := newRemoteRequest(ctx, http.MethodPost, registry.baseURL+"/control/advance", bytes.NewReader(data))
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var stats DeviceServerStats
+	err = registry.do(req, &stats)
+	return stats, err
+}
+
 func ReadRemoteDeviceServerSnapshot(ctx context.Context, endpoint string) (DeviceServerSnapshot, error) {
 	registry, err := NewRemoteDeviceRegistry(endpoint)
 	if err != nil {
@@ -778,6 +838,22 @@ func ReadRemoteDeviceServerSnapshot(ctx context.Context, endpoint string) (Devic
 	var snapshot DeviceServerSnapshot
 	err = registry.do(req, &snapshot)
 	return snapshot, err
+}
+
+// ReadRemoteDeviceServerStats reads the queue evidence of a deterministic
+// server without its sample and trace history.
+func ReadRemoteDeviceServerStats(ctx context.Context, endpoint string) (DeviceServerStats, error) {
+	registry, err := NewRemoteDeviceRegistry(endpoint)
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	req, err := newRemoteRequest(ctx, http.MethodGet, registry.baseURL+"/control/stats", nil)
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	var stats DeviceServerStats
+	err = registry.do(req, &stats)
+	return stats, err
 }
 
 // InjectRemoteDeviceServerCapture appends microphone PCM to a deterministic

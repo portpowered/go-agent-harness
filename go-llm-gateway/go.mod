@@ -24,7 +24,6 @@ require (
 	github.com/pion/datachannel v1.6.2 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
 	github.com/pion/ice/v4 v4.4.0 // indirect
-	github.com/pion/interceptor v0.1.47 // indirect
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/mdns/v2 v2.1.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
@@ -52,7 +51,10 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 )
 
-require github.com/portpowered/go-agent-harness/go-audio v0.0.0
+require (
+	github.com/pion/interceptor v0.1.47
+	github.com/portpowered/go-agent-harness/go-audio v0.0.0
+)
 
 replace github.com/portpowered/go-agent-harness/go-audio => ../go-audio
 
