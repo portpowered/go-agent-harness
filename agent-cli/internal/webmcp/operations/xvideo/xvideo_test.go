@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 const (
@@ -103,7 +104,7 @@ func TestRestoreFocusAfterCancellation(t *testing.T) {
 // xBroker is a selected X page whose adapter tools acknowledge every chunk
 // and finish processing on the first prepare call.
 type xBroker struct {
-	url       string
+	*webmcptest.Broker
 	received  int
 	calls     []string
 	released  int
@@ -111,28 +112,21 @@ type xBroker struct {
 	refuseAll bool
 }
 
-func (b *xBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	return []webmcp.BrowserCandidate{{ID: testBrowser}}, nil
-}
-
-func (b *xBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	return []webmcp.Target{{ID: testTarget, Type: "page", URL: b.url, Origin: "https://x.com", Eligible: true}}, nil
-}
-
-func (b *xBroker) Select(_ context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
-	return webmcp.PageContext{Key: webmcp.PageKey(selector), URL: b.url, Connected: true}, nil
-}
-
-func (b *xBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	return webmcp.PageContext{}, nil
-}
-
-func (b *xBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
+// xTab scripts one browser whose only tab shows url and whose catalog holds
+// the X adapter tools.
+func xTab(url string) *webmcptest.Broker {
 	tools := make([]webmcp.ToolDescriptor, 0)
 	for _, name := range []string{toolBeginUpload, toolAppendChunk, toolPreparePost} {
 		tools = append(tools, webmcp.ToolDescriptor{Ref: webmcp.ToolRef(toolRefStart + name), Name: name})
 	}
-	return webmcp.ToolCatalogSnapshot{Tools: tools}, nil
+	return &webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{{ID: testBrowser}},
+		Targets:    []webmcp.Target{{ID: testTarget, Type: "page", URL: url, Origin: "https://x.com", Eligible: true}},
+		SelectPage: func(selector webmcp.TargetSelector) webmcp.PageContext {
+			return webmcp.PageContext{Key: webmcp.PageKey(selector), URL: url, Connected: true}
+		},
+		Catalog: webmcp.ToolCatalogSnapshot{Tools: tools},
+	}
 }
 
 func (b *xBroker) Invoke(_ context.Context, request webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
@@ -163,12 +157,6 @@ func (b *xBroker) Invoke(_ context.Context, request webmcp.InvokeRequest) (webmc
 	return webmcp.InvokeResult{State: webmcp.InvocationCompleted, Output: output}, err
 }
 
-func (b *xBroker) Cancel(context.Context, webmcp.CancelRequest) error { return nil }
-
-func (b *xBroker) Watch(context.Context) <-chan webmcp.BrokerEvent { return nil }
-
-func (b *xBroker) Close() error { return nil }
-
 func (b *xBroker) AcquirePageFocus(context.Context) (func(context.Context) error, error) {
 	return func(context.Context) error { b.released++; return nil }, nil
 }
@@ -186,7 +174,7 @@ func prepareRequest(t *testing.T, size int, recovery *bytes.Buffer) Request {
 }
 
 func TestPrepareTransfersAcknowledgedChunksAndRestoresFocus(t *testing.T) {
-	broker := &xBroker{url: testPageURL}
+	broker := &xBroker{Broker: xTab(testPageURL)}
 	var recovery bytes.Buffer
 	size := ChunkBytes + ChunkBytes/2
 	result, err := Prepare(context.Background(), broker, prepareRequest(t, size, &recovery))
@@ -212,13 +200,13 @@ func TestPrepareRefusesUnsafeRequests(t *testing.T) {
 		broker *xBroker
 		mutate func(*Request)
 	}{
-		{name: "account", broker: &xBroker{url: testPageURL}, mutate: func(r *Request) { r.Account = "handle" }},
-		{name: "caption", broker: &xBroker{url: testPageURL}, mutate: func(r *Request) { r.Caption = " " }},
-		{name: "file", broker: &xBroker{url: testPageURL}, mutate: func(r *Request) { r.File += ".mov" }},
-		{name: "page", broker: &xBroker{url: "https://example.com/"}},
-		{name: "refused", broker: &xBroker{url: testPageURL, refuseAll: true}},
-		{name: "token", broker: &xBroker{url: testPageURL, noToken: true}},
-		{name: "recovery", broker: &xBroker{url: testPageURL}, mutate: func(r *Request) { r.Recovery = nil }},
+		{name: "account", broker: &xBroker{Broker: xTab(testPageURL)}, mutate: func(r *Request) { r.Account = "handle" }},
+		{name: "caption", broker: &xBroker{Broker: xTab(testPageURL)}, mutate: func(r *Request) { r.Caption = " " }},
+		{name: "file", broker: &xBroker{Broker: xTab(testPageURL)}, mutate: func(r *Request) { r.File += ".mov" }},
+		{name: "page", broker: &xBroker{Broker: xTab("https://example.com/")}},
+		{name: "refused", broker: &xBroker{Broker: xTab(testPageURL), refuseAll: true}},
+		{name: "token", broker: &xBroker{Broker: xTab(testPageURL), noToken: true}},
+		{name: "recovery", broker: &xBroker{Broker: xTab(testPageURL)}, mutate: func(r *Request) { r.Recovery = nil }},
 	}
 	for _, testCase := range cases {
 		request := prepareRequest(t, ChunkBytes/2, &bytes.Buffer{})

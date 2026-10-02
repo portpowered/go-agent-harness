@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/logger"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -51,14 +52,16 @@ func updateDocumentAnyOfSchema() json.RawMessage {
 // losing the tool's meaning - every property named across every branch is
 // still visible to the model.
 func TestPageToolAnyOfSchemaIsFlattenedToAnAcceptedShape(t *testing.T) {
-	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
-		Generation: 1,
-		Tools: []webmcp.ToolDescriptor{{
-			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:update-document"),
-			Name:        "update_document",
-			Description: "Update the document.",
-			InputSchema: updateDocumentAnyOfSchema(),
-		}},
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog: webmcp.ToolCatalogSnapshot{
+			Generation: 1,
+			Tools: []webmcp.ToolDescriptor{{
+				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:update-document"),
+				Name:        "update_document",
+				Description: "Update the document.",
+				InputSchema: updateDocumentAnyOfSchema(),
+			}},
+		},
 	}}
 	definitions := NewBrokerToolSet(broker).PageToolDefinitions(context.Background())
 	if len(definitions) != 1 {
@@ -113,30 +116,32 @@ func TestPageToolAnyOfSchemaIsFlattenedToAnAcceptedShape(t *testing.T) {
 // every other tool intact. Before this fix, one bad tool made the whole
 // session.update fail and killed the session - zero tools, zero turns.
 func TestPageToolUnnormalizableSchemaIsSkippedSessionSurvives(t *testing.T) {
-	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
-		Generation: 1,
-		Tools: []webmcp.ToolDescriptor{
-			{
-				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:get-cube-state"),
-				Name:        "get_cube_state",
-				Description: "Read the current cube state.",
-				InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-			},
-			{
-				// A bare non-object top-level schema. OpenAI function-calling
-				// parameters must always describe a JSON object; this can
-				// never be normalized into one without fabricating a
-				// property name the page never declared.
-				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:broken-tool"),
-				Name:        "broken_tool",
-				Description: "A page tool whose schema cannot be made provider-acceptable.",
-				InputSchema: json.RawMessage(`{"type":"string"}`),
-			},
-			{
-				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:queue-cube-moves"),
-				Name:        "queue_cube_moves",
-				Description: "Queue cube rotations.",
-				InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog: webmcp.ToolCatalogSnapshot{
+			Generation: 1,
+			Tools: []webmcp.ToolDescriptor{
+				{
+					Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:get-cube-state"),
+					Name:        "get_cube_state",
+					Description: "Read the current cube state.",
+					InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+				},
+				{
+					// A bare non-object top-level schema. OpenAI function-calling
+					// parameters must always describe a JSON object; this can
+					// never be normalized into one without fabricating a
+					// property name the page never declared.
+					Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:broken-tool"),
+					Name:        "broken_tool",
+					Description: "A page tool whose schema cannot be made provider-acceptable.",
+					InputSchema: json.RawMessage(`{"type":"string"}`),
+				},
+				{
+					Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:queue-cube-moves"),
+					Name:        "queue_cube_moves",
+					Description: "Queue cube rotations.",
+					InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
+				},
 			},
 		},
 	}}
@@ -172,14 +177,16 @@ func TestPageToolSkippedSchemaWarningNamesToolAndReason(t *testing.T) {
 	core, observed := observer.New(zapcore.WarnLevel)
 	ctx := logger.WithLogger(context.Background(), zap.New(core))
 
-	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
-		Generation: 1,
-		Tools: []webmcp.ToolDescriptor{{
-			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:broken-tool"),
-			Name:        "broken_tool",
-			Description: "A page tool whose schema cannot be made provider-acceptable.",
-			InputSchema: json.RawMessage(`{"type":"string"}`),
-		}},
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog: webmcp.ToolCatalogSnapshot{
+			Generation: 1,
+			Tools: []webmcp.ToolDescriptor{{
+				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:broken-tool"),
+				Name:        "broken_tool",
+				Description: "A page tool whose schema cannot be made provider-acceptable.",
+				InputSchema: json.RawMessage(`{"type":"string"}`),
+			}},
+		},
 	}}
 	set := NewBrokerToolSet(broker)
 

@@ -440,14 +440,14 @@ func TestSessionToolCapabilitiesFactoryUsesDefaultFilesystemPolicyWithoutMetadat
 }
 
 func TestSessionToolCapabilitiesFactoryComposesFilteredStaticToolsWithRealBrokerToolSet(t *testing.T) {
-	broker := &capabilityBroker{
-		selected: webmcp.PageContext{
+	broker := &capabilityBroker{Broker: webmcptest.Broker{
+		Page: webmcp.PageContext{
 			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"},
 			Generation: 1,
 			Connected:  true,
 			Ready:      true,
 		},
-	}
+	}}
 	var gotBrowser config.BrowserConfig
 	factory := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		gotBrowser = browser
@@ -540,8 +540,8 @@ func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *
 		t.Fatalf("execute session cast list: %v", err)
 	}
 	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil || !envelope.OK || broker.castListCalls != 1 {
-		t.Fatalf("session cast list = %s err=%v calls=%d", response.Content, err, broker.castListCalls)
+	if err != nil || !envelope.OK || broker.CallCount("list_cast_devices") != 1 {
+		t.Fatalf("session cast list = %s err=%v calls=%d", response.Content, err, broker.CallCount("list_cast_devices"))
 	}
 }
 
@@ -551,14 +551,14 @@ func TestSessionToolCapabilitiesRefreshKeepsBrowserControlsForOrdinaryPage(t *te
 		"reason":      "deadline_exceeded",
 	})
 	catalogPending.Retryable = true
-	broker := &capabilityBroker{
-		selected: webmcp.PageContext{
+	broker := &capabilityBroker{Broker: webmcptest.Broker{
+		Page: webmcp.PageContext{
 			Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-youtube"},
 			URL:       "https://www.youtube.com/",
 			Connected: true,
 		},
-		catalogErr: catalogPending,
-	}
+		ListToolsErr: catalogPending,
+	}}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) { return broker, nil })
 	capabilities, err := factory(t.Context(), browserCapabilityConfig(t, true))
 	if err != nil {
@@ -575,7 +575,7 @@ func TestSessionToolCapabilitiesRefreshKeepsBrowserControlsForOrdinaryPage(t *te
 
 func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testing.T) {
 	closeErr := errors.New("broker close failed")
-	broker := &capabilityBroker{closeErr: closeErr}
+	broker := &capabilityBroker{Broker: webmcptest.Broker{CloseErr: closeErr}}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, errors.New("broker construction failed")
 	})
@@ -584,8 +584,8 @@ func TestSessionToolCapabilitiesFactoryClosesBrokerWhenCompositionFails(t *testi
 	if err == nil || !strings.Contains(err.Error(), "broker construction failed") || !strings.Contains(err.Error(), "broker close failed") {
 		t.Fatalf("factory error = %v, want construction and cleanup failures", err)
 	}
-	if broker.closeCalls != 1 {
-		t.Fatalf("broker close calls = %d, want one", broker.closeCalls)
+	if broker.CallCount("close") != 1 {
+		t.Fatalf("broker close calls = %d, want one", broker.CallCount("close"))
 	}
 }
 
@@ -608,8 +608,8 @@ func TestSessionToolCapabilitiesFactoryTransfersIdempotentCloseHook(t *testing.T
 	if err := capabilities.Close(); err != nil {
 		t.Fatalf("second capability close: %v", err)
 	}
-	if broker.closeCalls != 1 {
-		t.Fatalf("broker close calls = %d, want one after repeated capability closes", broker.closeCalls)
+	if broker.CallCount("close") != 1 {
+		t.Fatalf("broker close calls = %d, want one after repeated capability closes", broker.CallCount("close"))
 	}
 }
 
@@ -625,104 +625,46 @@ func isBrokerToolName(name string) bool {
 	return false
 }
 
+// capabilityBroker adds the selection, tab and cast extensions the session
+// tool surface advertises to the shared scripted broker.
 type capabilityBroker struct {
-	selected       webmcp.PageContext
-	discoverErr    error
-	selectErr      error
-	selectCalls    int
-	selectOpts     webmcp.SelectOptions
-	openRequest    webmcp.OpenTabRequest
-	openErr        error
-	openCalls      int
-	navigateURL    string
-	navigateCalls  int
-	catalog        []webmcp.ToolDescriptor
-	catalogErr     error
-	closeErr       error
-	closeCalls     int
-	castDevices    []webmcp.CastDevice
-	castListCalls  int
-	castCalls      int
-	castMediaCalls int
-	stopCastCalls  int
-	castDeviceName string
+	webmcptest.Broker
+	castDevices []webmcp.CastDevice
 }
 
-func (b *capabilityBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	return nil, b.discoverErr
+func (b *capabilityBroker) SelectWithOptions(ctx context.Context, selector webmcp.TargetSelector, _ webmcp.SelectOptions) (webmcp.PageContext, error) {
+	return b.Select(ctx, selector)
 }
 
-func (b *capabilityBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	return nil, nil
-}
-
-func (b *capabilityBroker) Select(context.Context, webmcp.TargetSelector) (webmcp.PageContext, error) {
-	b.selectCalls++
-	return b.selected, b.selectErr
-}
-
-func (b *capabilityBroker) SelectWithOptions(_ context.Context, _ webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
-	b.selectCalls++
-	b.selectOpts = options
-	return b.selected, b.selectErr
-}
-
-func (b *capabilityBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	return b.selected, nil
-}
-
-func (b *capabilityBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	return webmcp.ToolCatalogSnapshot{Context: b.selected, Generation: b.selected.Generation, Tools: append([]webmcp.ToolDescriptor(nil), b.catalog...)}, b.catalogErr
-}
-
-func (b *capabilityBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	return webmcp.InvokeResult{}, nil
-}
-
-func (b *capabilityBroker) Cancel(context.Context, webmcp.CancelRequest) error { return nil }
-
-func (b *capabilityBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
-	b.openCalls++
-	b.openRequest = request
-	return b.selected, b.openErr
+func (b *capabilityBroker) OpenTab(context.Context, webmcp.OpenTabRequest) (webmcp.PageContext, error) {
+	b.Record("open_tab")
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) NavigateSelectedTab(_ context.Context, targetURL string) (webmcp.PageContext, error) {
-	b.navigateCalls++
-	b.navigateURL = targetURL
-	b.selected.URL = targetURL
-	return b.selected, nil
+	b.Record("navigate_tab")
+	b.Page.URL = targetURL
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
-	b.castListCalls++
+	b.Record("list_cast_devices")
 	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
 }
 
-func (b *capabilityBroker) CastSelectedTab(_ context.Context, deviceName string) error {
-	b.castCalls++
-	b.castDeviceName = deviceName
+func (b *capabilityBroker) CastSelectedTab(context.Context, string) error {
+	b.Record("cast_tab")
 	return nil
 }
 
-func (b *capabilityBroker) CastSelectedMedia(_ context.Context, deviceName string) error {
-	b.castMediaCalls++
-	b.castDeviceName = deviceName
+func (b *capabilityBroker) CastSelectedMedia(context.Context, string) error {
+	b.Record("cast_media")
 	return nil
 }
 
 func (b *capabilityBroker) StopCasting(context.Context, string) error {
-	b.stopCastCalls++
+	b.Record("stop_casting")
 	return nil
-}
-
-func (b *capabilityBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	return make(chan webmcp.BrokerEvent)
-}
-
-func (b *capabilityBroker) Close() error {
-	b.closeCalls++
-	return b.closeErr
 }
 
 var _ webmcp.Broker = (*capabilityBroker)(nil)
@@ -734,20 +676,21 @@ var _ webmcp.Broker = (*capabilityBroker)(nil)
 // definitions - and a bare catalog-name call executes through the composed
 // surface instead of dead-ending.
 func TestSessionToolCapabilitiesRefreshAdvertisesFirstClassPageTools(t *testing.T) {
-	broker := &capabilityBroker{
-		selected: webmcp.PageContext{
-			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"},
-			Generation: 1,
-			Connected:  true,
-			Ready:      true,
-		},
-		catalog: []webmcp.ToolDescriptor{{
+	page := webmcp.PageContext{
+		Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"},
+		Generation: 1,
+		Connected:  true,
+		Ready:      true,
+	}
+	broker := &capabilityBroker{Broker: webmcptest.Broker{
+		Page: page,
+		Catalog: webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{{
 			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:cube-state"),
 			Name:        "get_cube_state",
 			Description: "Read the cube.",
 			InputSchema: []byte(`{"type":"object","properties":{},"additionalProperties":false}`),
-		}},
-	}
+		}}},
+	}}
 	factory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return broker, nil
 	})

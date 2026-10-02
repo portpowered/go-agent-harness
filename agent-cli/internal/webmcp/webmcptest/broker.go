@@ -67,6 +67,26 @@ func (b *Broker) CallCount(name string) int {
 	return count
 }
 
+// LastInvoke reports the most recent Invoke request, or the zero request.
+func (b *Broker) LastInvoke() webmcp.InvokeRequest {
+	b.Lock()
+	defer b.Unlock()
+	if len(b.Invokes) == 0 {
+		return webmcp.InvokeRequest{}
+	}
+	return b.Invokes[len(b.Invokes)-1]
+}
+
+// LastCancel reports the most recent Cancel request, or the zero request.
+func (b *Broker) LastCancel() webmcp.CancelRequest {
+	b.Lock()
+	defer b.Unlock()
+	if len(b.Cancels) == 0 {
+		return webmcp.CancelRequest{}
+	}
+	return b.Cancels[len(b.Cancels)-1]
+}
+
 // Discover returns Candidates and DiscoverErr.
 func (b *Broker) Discover(_ context.Context, options webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
 	b.Record("discover")

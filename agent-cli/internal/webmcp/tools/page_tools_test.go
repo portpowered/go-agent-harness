@@ -41,7 +41,7 @@ func pageCatalog() webmcp.ToolCatalogSnapshot {
 }
 
 func TestPageToolDefinitionsRegisterCatalogFirstClass(t *testing.T) {
-	broker := &recordingBroker{catalog: pageCatalog()}
+	broker := &recordingBroker{Broker: webmcptest.Broker{Catalog: pageCatalog()}}
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec", "bash"})
 
@@ -82,14 +82,16 @@ func TestPageToolDefinitionsRegisterCatalogFirstClass(t *testing.T) {
 
 func TestPageToolDefinitionsRetainCompleteSchema(t *testing.T) {
 	schema := richPageToolSchema()
-	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
-		Generation: 9,
-		Tools: []webmcp.ToolDescriptor{{
-			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:rich-schema"),
-			Name:        "queue_cube_moves",
-			Description: "Queue cube rotations.",
-			InputSchema: schema,
-		}},
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog: webmcp.ToolCatalogSnapshot{
+			Generation: 9,
+			Tools: []webmcp.ToolDescriptor{{
+				Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:rich-schema"),
+				Name:        "queue_cube_moves",
+				Description: "Queue cube rotations.",
+				InputSchema: schema,
+			}},
+		},
 	}}
 	definitions := NewBrokerToolSet(broker).PageToolDefinitions(context.Background())
 	if len(definitions) != 1 {
@@ -172,10 +174,10 @@ func TestPageToolExecutionValidatesRichSchemaBeforeDispatch(t *testing.T) {
 }
 
 func TestPageToolExecutionComposesInvokeWithLiveRefResolution(t *testing.T) {
-	broker := &recordingBroker{
-		catalog:      pageCatalog(),
-		invokeResult: webmcp.InvokeResult{InvocationID: "inv-1", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"queued":2}`)},
-	}
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog:      pageCatalog(),
+		InvokeResult: webmcp.InvokeResult{InvocationID: "inv-1", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"queued":2}`)},
+	}}
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 	if defs := set.PageToolDefinitions(context.Background()); len(defs) == 0 {
@@ -191,11 +193,11 @@ func TestPageToolExecutionComposesInvokeWithLiveRefResolution(t *testing.T) {
 		t.Fatalf("execute page tool: %v", err)
 	}
 	assertTextualResponse(t, response, "call-1", "queue_cube_moves")
-	if broker.lastInvoke.ToolRef != "webmcp.tool-ref.v1:cube-moves" {
-		t.Fatalf("invoke ref = %q, want the catalog ref for queue_cube_moves", broker.lastInvoke.ToolRef)
+	if broker.LastInvoke().ToolRef != "webmcp.tool-ref.v1:cube-moves" {
+		t.Fatalf("invoke ref = %q, want the catalog ref for queue_cube_moves", broker.LastInvoke().ToolRef)
 	}
-	if string(broker.lastInvoke.Input) != `{"moves":["R","U'"]}` {
-		t.Fatalf("invoke input = %s, want the call arguments verbatim", broker.lastInvoke.Input)
+	if string(broker.LastInvoke().Input) != `{"moves":["R","U'"]}` {
+		t.Fatalf("invoke input = %s, want the call arguments verbatim", broker.LastInvoke().Input)
 	}
 	var envelope webmcp.ToolResultEnvelope
 	if err := json.Unmarshal([]byte(response.Content), &envelope); err != nil || !envelope.OK {
@@ -207,7 +209,7 @@ func TestPageToolExecutionComposesInvokeWithLiveRefResolution(t *testing.T) {
 	rotated := pageCatalog()
 	rotated.Generation = 4
 	rotated.Tools[1].Ref = webmcp.ToolRef("webmcp.tool-ref.v1:cube-moves-gen4")
-	broker.catalog = rotated
+	broker.Catalog = rotated
 	if _, err := set.Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "call-2",
 		Name:      "queue_cube_moves",
@@ -215,16 +217,16 @@ func TestPageToolExecutionComposesInvokeWithLiveRefResolution(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("execute after rotation: %v", err)
 	}
-	if broker.lastInvoke.ToolRef != "webmcp.tool-ref.v1:cube-moves-gen4" {
-		t.Fatalf("post-rotation invoke ref = %q, want the generation-4 ref", broker.lastInvoke.ToolRef)
+	if broker.LastInvoke().ToolRef != "webmcp.tool-ref.v1:cube-moves-gen4" {
+		t.Fatalf("post-rotation invoke ref = %q, want the generation-4 ref", broker.LastInvoke().ToolRef)
 	}
 }
 
 func TestPrefixedPageToolRoutesToCatalogName(t *testing.T) {
-	broker := &recordingBroker{
-		catalog:      pageCatalog(),
-		invokeResult: webmcp.InvokeResult{InvocationID: "inv-2", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{}`)},
-	}
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog:      pageCatalog(),
+		InvokeResult: webmcp.InvokeResult{InvocationID: "inv-2", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{}`)},
+	}}
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 	set.PageToolDefinitions(context.Background())
@@ -234,16 +236,16 @@ func TestPrefixedPageToolRoutesToCatalogName(t *testing.T) {
 		t.Fatalf("execute prefixed page tool: %v", err)
 	}
 	assertTextualResponse(t, response, "call-3", "page_exec")
-	if broker.lastInvoke.ToolRef != "webmcp.tool-ref.v1:page-exec" {
-		t.Fatalf("prefixed invoke ref = %q, want the exec descriptor ref", broker.lastInvoke.ToolRef)
+	if broker.LastInvoke().ToolRef != "webmcp.tool-ref.v1:page-exec" {
+		t.Fatalf("prefixed invoke ref = %q, want the exec descriptor ref", broker.LastInvoke().ToolRef)
 	}
 }
 
 func TestComposedSurfaceNeverDeadEndsOnCatalogNames(t *testing.T) {
-	broker := &recordingBroker{
-		catalog:      pageCatalog(),
-		invokeResult: webmcp.InvokeResult{InvocationID: "inv-3", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"solved":true}`)},
-	}
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Catalog:      pageCatalog(),
+		InvokeResult: webmcp.InvokeResult{InvocationID: "inv-3", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"solved":true}`)},
+	}}
 	set := NewBrokerToolSet(broker)
 	staticDefinitions := []messages.ToolDefinition{{Name: "exec", Description: "shell"}}
 	set.SetReservedToolNames([]string{"exec"})
