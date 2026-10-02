@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
@@ -125,7 +125,7 @@ func (e *executor) capturePageState(ctx context.Context) error {
 	if err != nil {
 		return browserOperationError(e.mode, phasePageState, err)
 	}
-	normalized, err := testkit.JSONValue(state)
+	normalized, err := hermetic.JSONValue(state)
 	if err != nil {
 		return newBrowserExecutorError(e.mode, phasePageState, webmcp.ErrorBrowserProtocol, err)
 	}

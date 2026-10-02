@@ -13,7 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 )
 
@@ -34,19 +34,19 @@ func probeV2EvidencePathKeys() []string {
 	return []string{"provider_capture_path", probeV2BrowserEventsKey, "page_state_path", "workspace_snapshot_path", "objective_evidence_path"}
 }
 
-func probeV2FixtureScript(pageURL, browserWSURL, pageWSURL string, tools []testkit.ToolDescriptor, extra ...testkit.BrowserScriptOperation) testkit.BrowserScript {
-	operations := []testkit.BrowserScriptOperation{
-		{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
-		{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableWebMCP}, Result: json.RawMessage(`{}`), Emit: []testkit.EmittedEvent{{
-			Type:  testkit.EmittedToolsAdded,
+func probeV2FixtureScript(pageURL, browserWSURL, pageWSURL string, tools []hermetic.ToolDescriptor, extra ...hermetic.BrowserScriptOperation) hermetic.BrowserScript {
+	operations := []hermetic.BrowserScriptOperation{
+		{Expect: hermetic.OperationExpectation{Type: hermetic.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
+		{Expect: hermetic.OperationExpectation{Type: hermetic.OperationEnableWebMCP}, Result: json.RawMessage(`{}`), Emit: []hermetic.EmittedEvent{{
+			Type:  hermetic.EmittedToolsAdded,
 			Tools: tools,
 		}}},
 	}
-	return testkit.BrowserScript{
-		Version: testkit.BrowserScriptVersion,
-		Endpoint: testkit.BrowserEndpoint{
-			Version: testkit.EndpointVersionInfo{Browser: "Chrome/Fixture", ProtocolVersion: "1.3", WebSocketDebuggerURL: browserWSURL},
-			Targets: []testkit.BrowserTarget{{ID: probeV2FixtureTabID, Type: "page", Title: "Fixture", URL: pageURL, WebSocketDebuggerURL: pageWSURL}},
+	return hermetic.BrowserScript{
+		Version: hermetic.BrowserScriptVersion,
+		Endpoint: hermetic.BrowserEndpoint{
+			Version: hermetic.EndpointVersionInfo{Browser: "Chrome/Fixture", ProtocolVersion: "1.3", WebSocketDebuggerURL: browserWSURL},
+			Targets: []hermetic.BrowserTarget{{ID: probeV2FixtureTabID, Type: "page", Title: "Fixture", URL: pageURL, WebSocketDebuggerURL: pageWSURL}},
 		},
 		Operations: append(operations, extra...),
 	}
@@ -110,14 +110,14 @@ func probeV2HappyScenario(t *testing.T) probe.ScenarioV2 {
 func TestProbeRunScenarioV2ExecutesBrowserFixtureWithoutReplayFlag(t *testing.T) {
 	dir := t.TempDir()
 	toolSchema := json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer"}},"additionalProperties":false}`)
-	invoke := testkit.BrowserScriptOperation{
-		Expect: testkit.OperationExpectation{Type: testkit.OperationInvokeTool, FrameID: probeV2FixtureFrameID, ToolName: probeV2ReadStateTool, Input: json.RawMessage(`{"count":9007199254740993}`)},
+	invoke := hermetic.BrowserScriptOperation{
+		Expect: hermetic.OperationExpectation{Type: hermetic.OperationInvokeTool, FrameID: probeV2FixtureFrameID, ToolName: probeV2ReadStateTool, Input: json.RawMessage(`{"count":9007199254740993}`)},
 		Result: json.RawMessage(`{"invocation_id":"browser-inv-1"}`),
-		Emit: []testkit.EmittedEvent{{
-			Type: testkit.EmittedToolResponded, InvocationID: "browser-inv-1", Status: "Completed", Output: json.RawMessage(`{"value":9007199254740993}`),
+		Emit: []hermetic.EmittedEvent{{
+			Type: hermetic.EmittedToolResponded, InvocationID: "browser-inv-1", Status: "Completed", Output: json.RawMessage(`{"value":9007199254740993}`),
 		}},
 	}
-	tools := []testkit.ToolDescriptor{{
+	tools := []hermetic.ToolDescriptor{{
 		Name: probeV2ReadStateTool, Description: "Read fixture state", FrameID: probeV2FixtureFrameID,
 		InputSchema: toolSchema, Annotations: json.RawMessage(`{"read_only":true}`),
 	}}
@@ -323,7 +323,7 @@ const probeV2DivergenceDocument = `{
 
 func TestProbeRunScenarioV2ReportsSafeFirstObjectiveDivergenceAndCleansUp(t *testing.T) {
 	dir := t.TempDir()
-	tools := []testkit.ToolDescriptor{{Name: "diagnostic_state", Description: "Diagnostic state tool", FrameID: probeV2FixtureFrameID, InputSchema: json.RawMessage(`{}`)}}
+	tools := []hermetic.ToolDescriptor{{Name: "diagnostic_state", Description: "Diagnostic state tool", FrameID: probeV2FixtureFrameID, InputSchema: json.RawMessage(`{}`)}}
 	script := probeV2FixtureScript("https://fixture.test/?token=actual-secret#actual-fragment", "ws://fixture/browser?credential=endpoint-secret", "ws://fixture/page/tab-1?credential=page-secret", tools)
 	writeProbeV2JSON(t, filepath.Join(dir, "browser.json"), script)
 	scenarioPath := filepath.Join(dir, "divergence.scenario.json")

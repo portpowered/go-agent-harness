@@ -263,9 +263,9 @@ linters:
           files:
             - "${config-path}/agent-cli/internal/**"
             - "!$test"
-            - "!${config-path}/agent-cli/internal/webmcp/testkit/**"
+            - "!${config-path}/agent-cli/internal/webmcp/hermetic/**"
           deny:
-            - {pkg: "encoding/binary$", desc: application code does not parse audio payload bytes; browser testkit binary identifiers are the reviewed exception}
+            - {pkg: "encoding/binary$", desc: application code does not parse audio payload bytes; hermetic browser binary identifiers are the reviewed exception}
     forbidigo:
       # Patterns match the resolved package path and receiver type, so an
       # aliased import or a method value cannot hide a call.

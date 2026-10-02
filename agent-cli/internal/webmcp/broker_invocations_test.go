@@ -6,22 +6,23 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
 	readOnly := true
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", URL: "https://fixture.test/"},
-					testkit.WithInitialCatalog(
+					webmcptest.WithInitialCatalog(
 						webmcp.ToolDescriptor{Name: "write_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`)},
 						webmcp.ToolDescriptor{Name: "read_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`), Annotations: webmcp.ToolAnnotations{ReadOnly: &readOnly}},
 					),
@@ -95,7 +96,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 
 // dispatchFirstSerializedInvocation admits the FIFO head and verifies its
 // public ID, dispatch event, target correlation, and registry metadata.
-func dispatchFirstSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef) invocationCall {
+func dispatchFirstSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *webmcptest.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef) invocationCall {
 	t.Helper()
 	firstDone := make(chan invocationCall, 1)
 	go func() {
@@ -139,7 +140,7 @@ func dispatchFirstSerializedInvocation(t *testing.T, broker *webmcp.StatefulBrok
 
 // admitQueuedSerializedInvocation admits a second call behind the blocked
 // FIFO head and verifies it stays queued without reaching the target.
-func admitQueuedSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef, firstID webmcp.InvocationID) <-chan invocationCall {
+func admitQueuedSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker, session *webmcptest.ScriptedTargetSession, watch <-chan webmcp.BrokerEvent, ref webmcp.ToolRef, firstID webmcp.InvocationID) <-chan invocationCall {
 	t.Helper()
 	secondDone := make(chan invocationCall, 1)
 	go func() {
@@ -164,7 +165,7 @@ func admitQueuedSerializedInvocation(t *testing.T, broker *webmcp.StatefulBroker
 	return secondDone
 }
 
-func assertSerializedTerminalResults(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, firstID, secondID webmcp.InvocationID) {
+func assertSerializedTerminalResults(t *testing.T, broker *webmcp.StatefulBroker, session *webmcptest.ScriptedTargetSession, firstID, secondID webmcp.InvocationID) {
 	t.Helper()
 	firstResult, err := broker.WaitInvocation(context.Background(), firstID)
 	if err != nil {
@@ -188,11 +189,11 @@ func assertSerializedTerminalResults(t *testing.T, broker *webmcp.StatefulBroker
 	}
 }
 
-func assertInvokeOperationOrder(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, firstID, secondID webmcp.InvocationID) {
+func assertInvokeOperationOrder(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, firstID, secondID webmcp.InvocationID) {
 	t.Helper()
-	var invokeOperations []testkit.Operation
+	var invokeOperations []webmcptest.Operation
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationInvoke {
+		if operation.Kind == webmcptest.OperationInvoke {
 			invokeOperations = append(invokeOperations, operation)
 		}
 	}
@@ -202,16 +203,16 @@ func assertInvokeOperationOrder(t *testing.T, runtime *testkit.ScriptedBrowserRu
 }
 
 func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
 	)

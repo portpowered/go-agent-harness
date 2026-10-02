@@ -184,6 +184,7 @@ func mustReadFile(t *testing.T, path string) string {
 func writeV6BCorruptedScenario(t *testing.T, kind, value string) string {
 	t.Helper()
 	document := fmt.Sprintf(`{
+		"schema_version": "probe.scenario.v2",
 		"id": "s2s-v6b-corrupt-%s",
 		"steps": [
 			{"type": "send_text", "text": %q},

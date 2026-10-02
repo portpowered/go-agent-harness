@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T) {
@@ -24,12 +25,12 @@ func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T
 		Origin:    "https://fixture.test",
 	}
 	activationErr := errors.New("foreground activation rejected by headless Chrome")
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate:     candidate,
 		ActivateError: activationErr,
-		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+		Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 			target,
-			testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
+			webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
 		)},
 	})
 	defer closeAtTestEnd(t, runtime)
@@ -62,22 +63,22 @@ func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T
 		t.Fatalf("catalog after activation failure = %#v", tools.Tools)
 	}
 
-	var operations []testkit.OperationKind
+	var operations []webmcptest.OperationKind
 	for _, operation := range runtime.Operations() {
 		operations = append(operations, operation.Kind)
 	}
-	positions := make(map[testkit.OperationKind]int, len(operations))
+	positions := make(map[webmcptest.OperationKind]int, len(operations))
 	for index, operation := range operations {
 		if _, exists := positions[operation]; !exists {
 			positions[operation] = index
 		}
 	}
-	for _, kind := range []testkit.OperationKind{testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationEnableAcknowledged, testkit.OperationActivate} {
+	for _, kind := range []webmcptest.OperationKind{webmcptest.OperationAttach, hermetic.OperationEnableWebMCP, webmcptest.OperationEnableAcknowledged, webmcptest.OperationActivate} {
 		if _, ok := positions[kind]; !ok {
 			t.Fatalf("operations = %#v, missing %s", operations, kind)
 		}
 	}
-	if positions[testkit.OperationAttach] > positions[testkit.OperationActivate] || positions[testkit.OperationEnableAcknowledged] > positions[testkit.OperationActivate] {
+	if positions[webmcptest.OperationAttach] > positions[webmcptest.OperationActivate] || positions[webmcptest.OperationEnableAcknowledged] > positions[webmcptest.OperationActivate] {
 		t.Fatalf("operations = %#v, activation must follow attach and catalog readiness", operations)
 	}
 }
@@ -85,10 +86,10 @@ func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T
 func TestStatefulBrokerActivateReportsLiveOperationFailureWithoutReconnect(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-activate-only", Product: "Chrome/Test", Loopback: true}
 	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-activate-only", Type: "page"}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate:     candidate,
 		ActivateError: errors.New("activation operation rejected"),
-		Targets:       []testkit.TargetConfig{testkit.NewTargetConfig(target)},
+		Targets:       []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target)},
 	})
 	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
@@ -112,24 +113,24 @@ func TestStatefulBrokerActivateReportsLiveOperationFailureWithoutReconnect(t *te
 		t.Fatalf("live activation failure incorrectly requested reconnect: %#v", classified.Details)
 	}
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationAttach || operation.Kind == testkit.OperationEnableWebMCP || operation.Kind == testkit.OperationEnableAcknowledged {
+		if operation.Kind == webmcptest.OperationAttach || operation.Kind == hermetic.OperationEnableWebMCP || operation.Kind == webmcptest.OperationEnableAcknowledged {
 			t.Fatalf("activation-only command initialized WebMCP: %#v", runtime.Operations())
 		}
 	}
 }
 
 func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Title: "A", URL: "https://fixture.test/"},
-					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
+					webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
 				),
 			},
 		},
@@ -234,7 +235,7 @@ func listToolsForTest(t *testing.T, broker *webmcp.StatefulBroker, options webmc
 
 // assertStaleInvokeWithoutOperation requires an invoke with ref to fail with
 // want before any page invocation reaches the runtime.
-func assertStaleInvokeWithoutOperation(t *testing.T, broker *webmcp.StatefulBroker, runtime *testkit.ScriptedBrowserRuntime, ref webmcp.ToolRef, want webmcp.ErrorCode, label string) {
+func assertStaleInvokeWithoutOperation(t *testing.T, broker *webmcp.StatefulBroker, runtime *webmcptest.ScriptedBrowserRuntime, ref webmcp.ToolRef, want webmcp.ErrorCode, label string) {
 	t.Helper()
 	assertBrokerError(t, func() error {
 		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: json.RawMessage(`{}`)})
@@ -244,16 +245,16 @@ func assertStaleInvokeWithoutOperation(t *testing.T, broker *webmcp.StatefulBrok
 }
 
 func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-navigation", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-navigation", Type: "page", URL: "https://fixture.test/one"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -274,7 +275,7 @@ func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open fixture browser: %v", err)
 	}
-	session := mustAs[*testkit.ScriptedBrowserHandle](t, value).TargetSession("tab-navigation")
+	session := mustAs[*webmcptest.ScriptedBrowserHandle](t, value).TargetSession("tab-navigation")
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -332,16 +333,16 @@ func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
 }
 
 func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-storm", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-storm", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("tool-0", "frame-0", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("tool-0", "frame-0", `{}`)),
 			)},
 		},
 	)
@@ -369,7 +370,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 	if err != nil {
 		t.Fatalf("open fixture browser: %v", err)
 	}
-	session := mustAs[*testkit.ScriptedBrowserHandle](t, value).TargetSession("tab-storm")
+	session := mustAs[*webmcptest.ScriptedBrowserHandle](t, value).TargetSession("tab-storm")
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -399,7 +400,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 
 // runNavigationStormStep invokes currentRef, navigates the page underneath
 // it, and returns the ref of the fresh catalog published for the new document.
-func runNavigationStormStep(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, step int, currentRef webmcp.ToolRef) webmcp.ToolRef {
+func runNavigationStormStep(t *testing.T, broker *webmcp.StatefulBroker, session *webmcptest.ScriptedTargetSession, step int, currentRef webmcp.ToolRef) webmcp.ToolRef {
 	t.Helper()
 	dispatched, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: []byte(`{}`)})
 	if err != nil {
@@ -455,12 +456,12 @@ func runNavigationStormStep(t *testing.T, broker *webmcp.StatefulBroker, session
 
 func TestStatefulBrokerRetiresRefsWhenSelectionSwitches(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(webmcp.Target{ID: primaryTargetID, Type: "page"}, testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
-				testkit.NewTargetConfig(webmcp.Target{ID: "tab-b", Type: "page"}, testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`))),
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(webmcp.Target{ID: primaryTargetID, Type: "page"}, webmcptest.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
+				webmcptest.NewTargetConfig(webmcp.Target{ID: "tab-b", Type: "page"}, webmcptest.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`))),
 			},
 		},
 	)
@@ -511,11 +512,11 @@ func assertBrokerError(t *testing.T, operation func() error, want webmcp.ErrorCo
 	}
 }
 
-func assertNoInvokeOperation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime) {
+func assertNoInvokeOperation(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime) {
 	t.Helper()
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationInvoke {
-			t.Fatalf("found unexpected %s operation: %#v", testkit.OperationInvoke, operation)
+		if operation.Kind == webmcptest.OperationInvoke {
+			t.Fatalf("found unexpected %s operation: %#v", webmcptest.OperationInvoke, operation)
 		}
 	}
 }

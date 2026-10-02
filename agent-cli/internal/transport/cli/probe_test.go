@@ -36,13 +36,14 @@ func probeFixtureObservation(t *testing.T) gatewaytesting.SessionReplayProbeRepo
 func writeProbeScenario(t *testing.T, dir, id string, count int) string {
 	t.Helper()
 	document := fmt.Sprintf(`{
+		"schema_version": "probe.scenario.v2",
 		"id": %q,
 		"steps": [
 			{"type": "send_text", "text": "hello"},
 			{"type": "close"}
 		],
 		"expectations": [
-			{"type": "frame_count", "count": %d}
+			{"type": "frame_count", "equals": %d}
 		]
 	}`, id, count)
 	path := filepath.Join(dir, id+".scenario.json")
@@ -475,6 +476,7 @@ func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
 func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
 	dir := t.TempDir()
 	document := `{
+		"schema_version": "probe.scenario.v2",
 		"id": "misclassified-auth",
 		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],
 		"expectations": [{"type": "terminal_reason", "value": "disconnect"}]
@@ -544,6 +546,7 @@ func TestProbeRunAbsentAuthErrorExitsNonZero(t *testing.T) {
 
 	dir := t.TempDir()
 	document := `{
+		"schema_version": "probe.scenario.v2",
 		"id": "absent-error",
 		"name": "s2s-v6a-error-auth-invalid-credentials",
 		"steps": [{"type": "send_text", "text": "hello"}, {"type": "close"}],

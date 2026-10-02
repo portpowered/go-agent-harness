@@ -4,70 +4,12 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
-// baseBroker implements only the frozen webmcp.Broker interface and counts
-// every forwarded call.
-type baseBroker struct {
-	selected    webmcp.PageContext
-	selectedErr error
-	calls       map[string]int
-	closeErr    error
-	closeCalls  int
-	watch       chan webmcp.BrokerEvent
-}
-
-func (b *baseBroker) record(name string) {
-	if b.calls == nil {
-		b.calls = map[string]int{}
-	}
-	b.calls[name]++
-}
-
-func (b *baseBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	b.record("discover")
-	return nil, nil
-}
-
-func (b *baseBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	b.record("list_targets")
-	return nil, nil
-}
-
-func (b *baseBroker) Select(context.Context, webmcp.TargetSelector) (webmcp.PageContext, error) {
-	b.record("select")
-	return b.selected, nil
-}
-
-func (b *baseBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	b.record("selected")
-	return b.selected, b.selectedErr
-}
-
-func (b *baseBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	b.record("list_tools")
-	return webmcp.ToolCatalogSnapshot{}, nil
-}
-
-func (b *baseBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	b.record("invoke")
-	return webmcp.InvokeResult{}, nil
-}
-
-func (b *baseBroker) Cancel(context.Context, webmcp.CancelRequest) error {
-	b.record("cancel")
-	return nil
-}
-
-func (b *baseBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	b.record("watch")
-	return b.watch
-}
-
-func (b *baseBroker) Close() error {
-	b.closeCalls++
-	return b.closeErr
-}
+// baseBroker is the shared scripted broker, which records every forwarded
+// call by name.
+type baseBroker = webmcptest.Broker
 
 // capabilityBroker adds every optional extension the session forwards.
 type capabilityBroker struct {
@@ -80,66 +22,66 @@ type capabilityBroker struct {
 }
 
 func (b *capabilityBroker) SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error) {
-	b.record("select_with_options")
-	return b.selected, nil
+	b.Record("select_with_options")
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error) {
-	b.record("selected_with_refresh")
-	return b.selected, nil
+	b.Record("selected_with_refresh")
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
-	b.record("open_tab")
+	b.Record("open_tab")
 	b.openRequest = request
-	return b.selected, nil
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) CreateTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.Target, error) {
-	b.record("create_tab")
+	b.Record("create_tab")
 	return webmcp.Target{URL: request.URL}, nil
 }
 
 func (b *capabilityBroker) NavigateSelectedTab(_ context.Context, targetURL string) (webmcp.PageContext, error) {
-	b.record("navigate_tab")
+	b.Record("navigate_tab")
 	b.navigateURL = targetURL
-	return b.selected, nil
+	return b.Page, nil
 }
 
 func (b *capabilityBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
-	b.record("list_cast_devices")
+	b.Record("list_cast_devices")
 	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
 }
 
 func (b *capabilityBroker) CastSelectedTab(_ context.Context, deviceName string) error {
-	b.record("cast_tab")
+	b.Record("cast_tab")
 	b.castDeviceName = deviceName
 	return nil
 }
 
 func (b *capabilityBroker) CastSelectedMedia(_ context.Context, deviceName string) error {
-	b.record("cast_media")
+	b.Record("cast_media")
 	b.castDeviceName = deviceName
 	return nil
 }
 
 func (b *capabilityBroker) StopCasting(context.Context, string) error {
-	b.record("stop_casting")
+	b.Record("stop_casting")
 	return nil
 }
 
 func (b *capabilityBroker) WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error) {
-	b.record("wait_invocation")
+	b.Record("wait_invocation")
 	return webmcp.InvokeResult{State: webmcp.InvocationCompleted}, nil
 }
 
 func (b *capabilityBroker) CapturePageScreenshot(context.Context) (webmcp.PageScreenshot, error) {
-	b.record("screenshot")
+	b.Record("screenshot")
 	return webmcp.PageScreenshot{}, nil
 }
 
 func (b *capabilityBroker) CancelDirect(context.Context, webmcp.DirectCancelRequest) error {
-	b.record("cancel_direct")
+	b.Record("cancel_direct")
 	return nil
 }
 

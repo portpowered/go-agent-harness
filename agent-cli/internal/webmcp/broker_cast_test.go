@@ -5,17 +5,18 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-cast", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-first", Type: "page"},
-			testkit.WithInitialCatalog(pageTool("read_first", "frame-1", `{"type":"object","additionalProperties":false}`))),
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: secondaryTargetID, Type: "page"},
-			testkit.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
-			testkit.WithCastDevices(webmcp.CastDevice{Name: livingRoomCastDevice, ID: "sink-2"})),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-first", Type: "page"},
+			webmcptest.WithInitialCatalog(pageTool("read_first", "frame-1", `{"type":"object","additionalProperties":false}`))),
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: secondaryTargetID, Type: "page"},
+			webmcptest.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
+			webmcptest.WithCastDevices(webmcp.CastDevice{Name: livingRoomCastDevice, ID: "sink-2"})),
 	))
 	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
@@ -48,10 +49,10 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 		t.Fatalf("stop casting: %v", err)
 	}
 
-	var castOperations []testkit.Operation
+	var castOperations []webmcptest.Operation
 	for _, operation := range runtime.Operations() {
 		switch operation.Kind {
-		case testkit.OperationListCastDevices, testkit.OperationCastTab, testkit.OperationCastMedia, testkit.OperationNavigate, testkit.OperationStopCasting:
+		case webmcptest.OperationListCastDevices, webmcptest.OperationCastTab, webmcptest.OperationCastMedia, hermetic.OperationNavigate, webmcptest.OperationStopCasting:
 			castOperations = append(castOperations, operation)
 		}
 	}
@@ -63,7 +64,7 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 			t.Fatalf("cast operation targeted %q, want tab-second", operation.TargetID)
 		}
 	}
-	if castOperations[1].DeviceName != livingRoomCastDevice || castOperations[2].Kind != testkit.OperationCastMedia || castOperations[2].DeviceName != livingRoomCastDevice || castOperations[3].URL != "https://www.google.com/" || castOperations[4].DeviceName != livingRoomCastDevice {
+	if castOperations[1].DeviceName != livingRoomCastDevice || castOperations[2].Kind != webmcptest.OperationCastMedia || castOperations[2].DeviceName != livingRoomCastDevice || castOperations[3].URL != "https://www.google.com/" || castOperations[4].DeviceName != livingRoomCastDevice {
 		t.Fatalf("device routing = %+v", castOperations)
 	}
 }

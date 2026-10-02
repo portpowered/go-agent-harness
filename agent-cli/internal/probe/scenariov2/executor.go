@@ -10,7 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
@@ -41,10 +41,10 @@ type executor struct {
 	replayService runtimeReplay.Service
 	analyze       ProviderAnalyzer
 
-	clock   *testkit.FakeClock
-	ids     *testkit.DeterministicIDSource
-	runtime *testkit.BrowserScriptRuntime
-	adapter *testkit.BrowserScriptAdapter
+	clock   *hermetic.FakeClock
+	ids     *hermetic.DeterministicIDSource
+	runtime *hermetic.BrowserScriptRuntime
+	adapter *hermetic.BrowserScriptAdapter
 	broker  statefulBroker
 
 	browserClose     func() error
@@ -55,7 +55,7 @@ type executor struct {
 	pageState        json.RawMessage
 	pageStateSet     bool
 
-	recorder    *testkit.Recorder
+	recorder    *hermetic.Recorder
 	eventOutput bytes.Buffer
 
 	discovered []webmcp.BrowserCandidate
@@ -79,8 +79,8 @@ func newExecutor(ctx context.Context, scenario probe.ScenarioV2, runner Runner, 
 		return &executor{scenario: scenario, mode: BrowserExecutorHermetic, replayService: runner.Replay, analyze: runner.Analyze}, err
 	}
 	e := &executor{scenario: scenario, mode: resolved.Mode, replayService: runner.Replay, analyze: runner.Analyze}
-	e.clock = testkit.NewFakeClock(0)
-	e.ids = testkit.NewDeterministicIDSource("probe")
+	e.clock = hermetic.NewFakeClock(0)
+	e.ids = hermetic.NewDeterministicIDSource("probe")
 	if err := e.admitProviderFixture(ctx); err != nil {
 		return e, err
 	}
@@ -92,10 +92,10 @@ func newExecutor(ctx context.Context, scenario probe.ScenarioV2, runner Runner, 
 	if err != nil {
 		return e, err
 	}
-	e.recorder, err = testkit.NewRecorder(&e.eventOutput,
-		testkit.WithClock(e.clock),
-		testkit.WithIDSource(e.ids),
-		testkit.WithRedaction(testkit.RedactionPolicy{URLQuery: true, URLFragment: true}),
+	e.recorder, err = hermetic.NewRecorder(&e.eventOutput,
+		hermetic.WithClock(e.clock),
+		hermetic.WithIDSource(e.ids),
+		hermetic.WithRedaction(hermetic.RedactionPolicy{URLQuery: true, URLFragment: true}),
 	)
 	if err != nil {
 		return e, fmt.Errorf("create browser evidence recorder: %w", err)
@@ -150,23 +150,23 @@ func closeRealRuntime(runtime RealRuntime) error {
 }
 
 func (e *executor) composeHermetic() error {
-	script, err := testkit.LoadBrowserScriptFile(e.scenario.BrowserFixturePath)
+	script, err := hermetic.LoadBrowserScriptFile(e.scenario.BrowserFixturePath)
 	if err != nil {
 		return fmt.Errorf("load browser fixture %q: %w", e.scenario.BrowserFixture, err)
 	}
-	state, err := testkit.NewFixtureStateOracle(map[string]any{})
+	state, err := hermetic.NewFixtureStateOracle(map[string]any{})
 	if err != nil {
 		return fmt.Errorf("create fixture page-state oracle: %w", err)
 	}
-	runtime, err := testkit.NewBrowserScriptRuntime(script,
-		testkit.WithFixtureClock(e.clock),
-		testkit.WithFixtureIDSource(e.ids),
-		testkit.WithStateOracle(state),
+	runtime, err := hermetic.NewBrowserScriptRuntime(script,
+		hermetic.WithFixtureClock(e.clock),
+		hermetic.WithFixtureIDSource(e.ids),
+		hermetic.WithStateOracle(state),
 	)
 	if err != nil {
 		return fmt.Errorf("create browser fixture runtime: %w", err)
 	}
-	adapter, err := testkit.NewBrowserScriptAdapter(script, runtime)
+	adapter, err := hermetic.NewBrowserScriptAdapter(script, runtime)
 	if err != nil {
 		return fmt.Errorf("create browser fixture adapter: %w", err)
 	}

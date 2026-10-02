@@ -52,7 +52,7 @@ func TestResolveInvocationSelectsToolAndInput(t *testing.T) {
 
 func TestResolveInvocationRejectsAmbiguousOrConflictingInput(t *testing.T) {
 	broker := newFakeBroker()
-	broker.tools = append(broker.tools, webmcp.ToolDescriptor{Ref: "webmcp.tool-ref.v1:other", Name: "dup"}, webmcp.ToolDescriptor{Ref: "webmcp.tool-ref.v1:dup2", Name: "dup"})
+	broker.Catalog.Tools = append(broker.Catalog.Tools, webmcp.ToolDescriptor{Ref: "webmcp.tool-ref.v1:other", Name: "dup"}, webmcp.ToolDescriptor{Ref: "webmcp.tool-ref.v1:dup2", Name: "dup"})
 	cases := []struct {
 		name  string
 		input InvocationInput
@@ -112,7 +112,7 @@ func invokeRequest(receipts *bytes.Buffer) InvokeRequest {
 
 func TestInvokeWritesReceiptAndWaitsForTerminalResult(t *testing.T) {
 	broker := &canceller{fakeBroker: newFakeBroker()}
-	broker.invokeResult = webmcp.InvokeResult{InvocationID: testInvocationID, BrowserInvocationID: testBrowserInvID, State: webmcp.InvocationDispatched}
+	broker.InvokeResult = webmcp.InvokeResult{InvocationID: testInvocationID, BrowserInvocationID: testBrowserInvID, State: webmcp.InvocationDispatched}
 	broker.waitResult = webmcp.InvokeResult{InvocationID: testInvocationID, State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"ok":true}`)}
 	var receipts bytes.Buffer
 	result, err := Invoke(context.Background(), broker, invokeRequest(&receipts))
@@ -134,7 +134,7 @@ func TestInvokeWritesReceiptAndWaitsForTerminalResult(t *testing.T) {
 
 func TestInvokeDefaultsEmptyOutputAndStatus(t *testing.T) {
 	broker := newFakeBroker()
-	broker.invokeResult = webmcp.InvokeResult{BrowserInvocationID: testBrowserInvID}
+	broker.InvokeResult = webmcp.InvokeResult{BrowserInvocationID: testBrowserInvID}
 	result, err := Invoke(context.Background(), broker, invokeRequest(&bytes.Buffer{}))
 	if err != nil || string(result.Output) != jsonNull || result.Status != string(webmcp.InvocationDispatched) {
 		t.Fatalf("Invoke = %+v, %v", result, err)
@@ -143,14 +143,14 @@ func TestInvokeDefaultsEmptyOutputAndStatus(t *testing.T) {
 
 func TestInvokeReportsUnwritableReceiptAsUnknownSideEffect(t *testing.T) {
 	broker := newFakeBroker()
-	broker.invokeResult = webmcp.InvokeResult{InvocationID: testInvocationID}
+	broker.InvokeResult = webmcp.InvokeResult{InvocationID: testInvocationID}
 	request := invokeRequest(nil)
 	request.Receipts = nil
 	_, err := Invoke(context.Background(), broker, request)
 	if code, details := classifiedCode(err); code != webmcp.ErrorInvocationFailed || details[detailSideEffectUnknown] != true {
 		t.Fatalf("receipt error = %v, want side_effect_unknown failure", err)
 	}
-	broker.invokeResult = webmcp.InvokeResult{}
+	broker.InvokeResult = webmcp.InvokeResult{}
 	if _, err := Invoke(context.Background(), broker, invokeRequest(&bytes.Buffer{})); err == nil {
 		t.Fatal("a dispatch without an invocation ID wrote a receipt")
 	}
@@ -158,7 +158,7 @@ func TestInvokeReportsUnwritableReceiptAsUnknownSideEffect(t *testing.T) {
 
 func TestInvokeInterruptBeforeDispatchDoesNotFabricateInvocationID(t *testing.T) {
 	broker := newFakeBroker()
-	broker.invokeErr = errTestBroker
+	broker.InvokeErr = errTestBroker
 	request := invokeRequest(&bytes.Buffer{})
 	request.Interrupted = func() bool { return true }
 	_, err := Invoke(context.Background(), broker, request)
@@ -169,7 +169,7 @@ func TestInvokeInterruptBeforeDispatchDoesNotFabricateInvocationID(t *testing.T)
 	if _, ok := result.Details[detailInvocationID]; ok {
 		t.Fatalf("pre-dispatch cancellation fabricated an invocation ID: %#v", result.Details)
 	}
-	broker.discoverErr = errTestBroker
+	broker.DiscoverErr = errTestBroker
 	if _, err := Invoke(context.Background(), broker, request); err == nil || !strings.Contains(err.Error(), "cancel") {
 		t.Fatalf("interrupted selection failure = %v, want cancellation", err)
 	}
@@ -177,7 +177,7 @@ func TestInvokeInterruptBeforeDispatchDoesNotFabricateInvocationID(t *testing.T)
 
 func TestInvokeInterruptAfterDispatchReconcilesWithBoundedCancel(t *testing.T) {
 	broker := &canceller{fakeBroker: newFakeBroker()}
-	broker.invokeResult = webmcp.InvokeResult{InvocationID: testInvocationID, BrowserInvocationID: testBrowserInvID, State: webmcp.InvocationDispatched}
+	broker.InvokeResult = webmcp.InvokeResult{InvocationID: testInvocationID, BrowserInvocationID: testBrowserInvID, State: webmcp.InvocationDispatched}
 	broker.waitErr = context.Canceled
 	interrupted := false
 	request := invokeRequest(&bytes.Buffer{})
@@ -190,8 +190,8 @@ func TestInvokeInterruptAfterDispatchReconcilesWithBoundedCancel(t *testing.T) {
 	if code != webmcp.ErrorInvocationCanceled || details["cancel_status"] != cancelStatusRequested || details[detailInvocationID] != testBrowserInvID {
 		t.Fatalf("interrupt error = %v (%v)", err, details)
 	}
-	if len(broker.cancels) != 1 || broker.cancels[0].InvocationID != testInvocationID || broker.cancels[0].Reason != cancelSourceInterrupt {
-		t.Fatalf("cancel requests = %+v, want one broker-ID interrupt cancel", broker.cancels)
+	if len(broker.Cancels) != 1 || broker.Cancels[0].InvocationID != testInvocationID || broker.Cancels[0].Reason != cancelSourceInterrupt {
+		t.Fatalf("cancel requests = %+v, want one broker-ID interrupt cancel", broker.Cancels)
 	}
 }
 

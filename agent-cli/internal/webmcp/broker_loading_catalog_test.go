@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 type loadingCatalogCase struct {
@@ -41,13 +42,13 @@ func TestStatefulBrokerUsesLoadingAwareFirstCatalogAllowance(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			clock := testkit.NewFakeClock(0)
+			clock := hermetic.NewFakeClock(0)
 			timers := &loadingCatalogTimerFactory{clock: clock, created: make(chan time.Duration, 4)}
 			candidate := webmcp.BrowserCandidate{ID: webmcp.BrowserID("browser-loading-" + test.name), Product: "fixture", Loopback: true}
-			runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-				testkit.NewTargetConfig(
+			runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: "tab-loading", Type: "page", URL: "https://fixture.test/loading"},
-					testkit.WithContext(webmcp.PageContext{
+					webmcptest.WithContext(webmcp.PageContext{
 						DocumentReadyState:   test.documentState,
 						DocumentLoading:      test.documentLoading,
 						DocumentLoadingKnown: true,
@@ -81,9 +82,9 @@ func TestStatefulBrokerUsesLoadingAwareFirstCatalogAllowance(t *testing.T) {
 	}
 }
 
-func awaitLoadingCatalogDeadline(t *testing.T, selectContext context.Context, runtime *testkit.ScriptedBrowserRuntime, clock *testkit.FakeClock, timers *loadingCatalogTimerFactory, result <-chan error, test loadingCatalogCase) error {
+func awaitLoadingCatalogDeadline(t *testing.T, selectContext context.Context, runtime *webmcptest.ScriptedBrowserRuntime, clock *hermetic.FakeClock, timers *loadingCatalogTimerFactory, result <-chan error, test loadingCatalogCase) error {
 	t.Helper()
-	if _, err := runtime.WaitForOperationAdmitted(selectContext, testkit.OperationEnableAcknowledged); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(selectContext, webmcptest.OperationEnableAcknowledged); err != nil {
 		t.Fatalf("wait for enable acknowledgement: %v", err)
 	}
 	select {
@@ -148,7 +149,7 @@ func assertSelectedAfterLoadingCatalogDeadline(t *testing.T, broker *webmcp.Stat
 	}
 }
 
-func assertLateLoadingCatalogRecovers(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, broker *webmcp.StatefulBroker, candidate webmcp.BrowserCandidate) {
+func assertLateLoadingCatalogRecovers(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, broker *webmcp.StatefulBroker, candidate webmcp.BrowserCandidate) {
 	t.Helper()
 	session := runtime.Browser(candidate.ID).TargetSession("tab-loading")
 	if session == nil {
@@ -186,7 +187,7 @@ func assertLateLoadingCatalogRecovers(t *testing.T, runtime *testkit.ScriptedBro
 	}
 	attachCount := 0
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationAttach {
+		if operation.Kind == webmcptest.OperationAttach {
 			attachCount++
 		}
 	}
@@ -196,7 +197,7 @@ func assertLateLoadingCatalogRecovers(t *testing.T, runtime *testkit.ScriptedBro
 }
 
 type loadingCatalogTimerFactory struct {
-	clock   *testkit.FakeClock
+	clock   *hermetic.FakeClock
 	created chan time.Duration
 }
 

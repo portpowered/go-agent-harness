@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
@@ -25,12 +25,12 @@ func TestVerifierUsesPersistedPageState(t *testing.T) {
 			Value: json.RawMessage(`"expected"`),
 		}},
 	}
-	events := []testkit.Event{{
-		Version:   testkit.BrowserEventsVersion,
+	events := []hermetic.Event{{
+		Version:   hermetic.BrowserEventsVersion,
 		Sequence:  1,
-		Type:      testkit.EventBrowserDiscoveryCompleted,
-		Payload:   testkit.MustJSONValue(map[string]any{"candidate_count": 1}),
-		Redaction: testkit.RedactionMetadata{Mode: testkit.RedactionNone},
+		Type:      hermetic.EventBrowserDiscoveryCompleted,
+		Payload:   hermetic.MustJSONValue(map[string]any{"candidate_count": 1}),
+		Redaction: hermetic.RedactionMetadata{Mode: hermetic.RedactionNone},
 	}}
 	wrong := VerifyEvidenceData(scenario, events, json.RawMessage(`{"value":"wrong"}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if wrong.Verified || !strings.Contains(wrong.Error, "page_state_equals") || strings.Contains(wrong.Error, "wrong") {
@@ -79,15 +79,15 @@ func TestVerifierMatchesStaleToolReference(t *testing.T) {
 			ToolRef: toolRef,
 		}},
 	}
-	events := []testkit.Event{{
-		Version:    testkit.BrowserEventsVersion,
+	events := []hermetic.Event{{
+		Version:    hermetic.BrowserEventsVersion,
 		Sequence:   1,
 		BrowserID:  "fixture-browser",
 		TargetID:   "tab-1",
 		Generation: 2,
-		Type:       testkit.EventBrowserInvocationError,
-		Payload:    testkit.MustJSONValue(map[string]any{"code": string(webmcp.ErrorStaleToolRef), "tool_ref": toolRef}),
-		Redaction:  testkit.RedactionMetadata{Mode: testkit.RedactionNone},
+		Type:       hermetic.EventBrowserInvocationError,
+		Payload:    hermetic.MustJSONValue(map[string]any{"code": string(webmcp.ErrorStaleToolRef), "tool_ref": toolRef}),
+		Redaction:  hermetic.RedactionMetadata{Mode: hermetic.RedactionNone},
 	}}
 	verification := VerifyEvidenceData(scenario, events, json.RawMessage(`{}`), runtimeReplay.CaptureProbeObservation{}, true)
 	if !verification.Verified {

@@ -16,8 +16,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/spf13/cobra"
 )
 
@@ -415,9 +416,9 @@ func TestWebMCPDirectBrowserAndTabListingsRemainBoundedOnChurn(t *testing.T) {
 	t.Run("tabs browser disconnect", func(t *testing.T) {
 		configDir := writeDirectConfig(t, "")
 		_, target, candidate, _ := directFixture()
-		runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+		runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target)},
+			Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target)},
 		})
 		defer closeForTest(t, runtime.Close)
 		handle := runtime.Browser(candidate.ID)
@@ -436,7 +437,7 @@ func TestWebMCPDirectBrowserAndTabListingsRemainBoundedOnChurn(t *testing.T) {
 				"tabs", "--browser", string(candidate.ID), "--command-timeout", "250ms", "--json")
 		}()
 		waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
-		_, waitErr := runtime.WaitForOperationAdmitted(waitCtx, testkit.OperationOpen)
+		_, waitErr := runtime.WaitForOperationAdmitted(waitCtx, webmcptest.OperationOpen)
 		cancelWait()
 		if waitErr != nil {
 			t.Fatalf("wait for tabs open admission: %v", waitErr)
@@ -489,8 +490,8 @@ func TestWebMCPDirectMalformedInputReturnsSelectedSchema(t *testing.T) {
 			store := NewFileWebMCPSelectionStore(configDir)
 			_, target, candidate, tool := directFixture()
 			tool.InputSchema = json.RawMessage(schema)
-			runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-				testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
+			runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+				webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(tool)),
 			))
 			broker := webmcp.NewBroker(webmcp.BrokerOptions{
 				Runtime:    runtime,
@@ -523,7 +524,7 @@ func TestWebMCPDirectMalformedInputReturnsSelectedSchema(t *testing.T) {
 				t.Fatalf("malformed-input envelope = %+v", envelope)
 			}
 			operations := runtime.Operations()
-			if hasTestkitOperation(operations, testkit.OperationInvoke) {
+			if hasTestkitOperation(operations, webmcptest.OperationInvoke) {
 				t.Fatalf("malformed input was dispatched: %+v", operations)
 			}
 		})
@@ -549,9 +550,9 @@ func TestWebMCPDirectFailedSelectionPreservesPriorSelection(t *testing.T) {
 	}
 
 	page, _, _, _ := directFixture()
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target, testkit.WithContext(page), testkit.WithBlockedEnable())},
+		Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target, webmcptest.WithContext(page), webmcptest.WithBlockedEnable())},
 	})
 	defer closeForTest(t, runtime.Close)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
@@ -567,7 +568,7 @@ func TestWebMCPDirectFailedSelectionPreservesPriorSelection(t *testing.T) {
 	}()
 	waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
 	defer cancelWait()
-	if _, err := runtime.WaitForOperationAdmitted(waitCtx, testkit.OperationEnableWebMCP); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(waitCtx, hermetic.OperationEnableWebMCP); err != nil {
 		t.Fatalf("wait for enable admission: %v", err)
 	}
 	requireFixtureStep(t, "disconnect scripted browser", runtime.Disconnect(candidate.ID, "transport_lost"))
@@ -693,22 +694,22 @@ func (b *directCancelCommandBroker) CancelDirect(_ context.Context, request webm
 // browserDeathCase blocks one select stage and then kills the browser.
 type browserDeathCase struct {
 	name        string
-	operation   testkit.OperationKind
+	operation   webmcptest.OperationKind
 	phase       string
 	targetKnown bool
 	activate    bool
-	block       func(*testkit.ScriptedBrowserHandle)
+	block       func(*webmcptest.ScriptedBrowserHandle)
 	blockEnable bool
 }
 
 func TestWebMCPDirectSelectBrowserDeathAtEveryStage(t *testing.T) {
 	tests := []browserDeathCase{
-		{name: "discovery_dial", operation: testkit.OperationOpen, phase: "open", block: func(handle *testkit.ScriptedBrowserHandle) { handle.BlockOpen() }},
-		{name: "target_resolution", operation: testkit.OperationListTargets, phase: "list_targets", block: func(handle *testkit.ScriptedBrowserHandle) { handle.BlockListTargets() }},
-		{name: "attach", operation: testkit.OperationAttach, phase: "attach", targetKnown: true, block: func(handle *testkit.ScriptedBrowserHandle) { handle.BlockAttach() }},
-		{name: "activation", operation: testkit.OperationActivate, phase: "activate", targetKnown: true, activate: true, block: func(handle *testkit.ScriptedBrowserHandle) { handle.BlockActivate() }},
-		{name: "enable_acknowledgement", operation: testkit.OperationEnableWebMCP, phase: "enable_webmcp", targetKnown: true, blockEnable: true},
-		{name: "catalog_ready", operation: testkit.OperationEnableAcknowledged, phase: "catalog", targetKnown: true},
+		{name: "discovery_dial", operation: webmcptest.OperationOpen, phase: "open", block: func(handle *webmcptest.ScriptedBrowserHandle) { handle.BlockOpen() }},
+		{name: "target_resolution", operation: webmcptest.OperationListTargets, phase: "list_targets", block: func(handle *webmcptest.ScriptedBrowserHandle) { handle.BlockListTargets() }},
+		{name: "attach", operation: webmcptest.OperationAttach, phase: "attach", targetKnown: true, block: func(handle *webmcptest.ScriptedBrowserHandle) { handle.BlockAttach() }},
+		{name: "activation", operation: webmcptest.OperationActivate, phase: "activate", targetKnown: true, activate: true, block: func(handle *webmcptest.ScriptedBrowserHandle) { handle.BlockActivate() }},
+		{name: "enable_acknowledgement", operation: hermetic.OperationEnableWebMCP, phase: "enable_webmcp", targetKnown: true, blockEnable: true},
+		{name: "catalog_ready", operation: webmcptest.OperationEnableAcknowledged, phase: "catalog", targetKnown: true},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -720,19 +721,19 @@ func TestWebMCPDirectSelectBrowserDeathAtEveryStage(t *testing.T) {
 	}
 }
 
-func newBrowserDeathRuntime(t *testing.T, testCase browserDeathCase) *testkit.ScriptedBrowserRuntime {
+func newBrowserDeathRuntime(t *testing.T, testCase browserDeathCase) *webmcptest.ScriptedBrowserRuntime {
 	t.Helper()
 	page, target, candidate, tool := directFixture()
-	sessionOptions := []testkit.ScriptedTargetSessionOption{testkit.WithContext(page)}
+	sessionOptions := []webmcptest.ScriptedTargetSessionOption{webmcptest.WithContext(page)}
 	if testCase.blockEnable {
-		sessionOptions = append(sessionOptions, testkit.WithBlockedEnable())
+		sessionOptions = append(sessionOptions, webmcptest.WithBlockedEnable())
 	}
 	if testCase.activate {
-		sessionOptions = append(sessionOptions, testkit.WithInitialCatalog(tool))
+		sessionOptions = append(sessionOptions, webmcptest.WithInitialCatalog(tool))
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target, sessionOptions...)},
+		Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target, sessionOptions...)},
 	})
 	t.Cleanup(func() {
 		if err := runtime.Close(); err != nil {
@@ -790,10 +791,10 @@ func runSelectBrowserDeathCase(t *testing.T, testCase browserDeathCase, jsonMode
 		requireOutputContains(t, result.stdout, "Error: browser_disconnected")
 	}
 	runtimeOperations := runtime.Operations()
-	if hasTestkitOperation(runtimeOperations, testkit.OperationCloseTarget) {
+	if hasTestkitOperation(runtimeOperations, hermetic.OperationCloseTarget) {
 		t.Fatalf("browser death caused an external target close: %+v", runtimeOperations)
 	}
-	if countTestkitOperations(runtimeOperations, testkit.OperationDetach) > 1 {
+	if countTestkitOperations(runtimeOperations, webmcptest.OperationDetach) > 1 {
 		t.Fatalf("browser death caused duplicate detach: %+v", runtimeOperations)
 	}
 }

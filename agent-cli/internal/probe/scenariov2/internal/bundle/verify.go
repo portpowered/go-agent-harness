@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
@@ -119,7 +119,7 @@ func readPageState(destination string) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	pageState, err := testkit.JSONValue(json.RawMessage(pageStateData))
+	pageState, err := hermetic.JSONValue(json.RawMessage(pageStateData))
 	if err != nil {
 		return nil, fmt.Errorf("validate page-state oracle snapshot: %w", err)
 	}
@@ -141,7 +141,7 @@ func readWorkspace(destination string, expected probe.ScenarioV2) (workspaceSnap
 	return workspace, nil
 }
 
-func readBrowserEvents(destination string, manifest transcript.RecordingManifest, expected probe.ScenarioV2) ([]testkit.Event, error) {
+func readBrowserEvents(destination string, manifest transcript.RecordingManifest, expected probe.ScenarioV2) ([]hermetic.Event, error) {
 	hasBrowserArtifact := manifest.Browser != nil
 	if expected.BrowserFixture == "" {
 		if hasBrowserArtifact {
@@ -159,7 +159,7 @@ func readBrowserEvents(destination string, manifest transcript.RecordingManifest
 	if err != nil {
 		return nil, err
 	}
-	events, err := testkit.ValidateEventStream(browserData)
+	events, err := hermetic.ValidateEventStream(browserData)
 	if err != nil {
 		return nil, fmt.Errorf("validate persisted browser events: %w", err)
 	}

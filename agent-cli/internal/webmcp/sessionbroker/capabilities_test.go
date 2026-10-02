@@ -31,8 +31,8 @@ func TestServiceCapabilityExposesSessionLifecycle(t *testing.T) {
 	if event := <-capability.BrowserEventWatch(ctx); event.ToolName != "read_state" {
 		t.Fatalf("projected event = %+v", event)
 	}
-	if err := capability.Close(); err != nil || delegate.closeCalls != 1 {
-		t.Fatalf("close = %v calls=%d", err, delegate.closeCalls)
+	if err := capability.Close(); err != nil || delegate.CallCount("close") != 1 {
+		t.Fatalf("close = %v calls=%d", err, delegate.CallCount("close"))
 	}
 
 	plain := ServiceCapability(&baseBroker{})

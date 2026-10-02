@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 // redialProbeHandle wraps a healthy scripted handle with a controllable
@@ -29,7 +29,7 @@ func (h *redialProbeHandle) Close() error {
 // redialProbeRuntime hands out the health-probed wrapper for the first open
 // and plain scripted handles afterwards, counting every dial.
 type redialProbeRuntime struct {
-	inner     *testkit.ScriptedBrowserRuntime
+	inner     *webmcptest.ScriptedBrowserRuntime
 	firstLost *atomic.Bool
 
 	mu    sync.Mutex
@@ -67,11 +67,11 @@ func (r *redialProbeRuntime) openCount() int {
 // again.
 func TestStatefulBrokerRedialsDisconnectedCachedHandle(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-redial", Product: "fixture", Loopback: true}
-	scripted := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	scripted := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+		Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 			webmcp.Target{BrowserID: candidate.ID, ID: "tab-redial", Type: "page", Title: "Redial", URL: "https://fixture.test/"},
-			testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
+			webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
 		)},
 	})
 	defer closeAtTestEnd(t, scripted)

@@ -21,7 +21,7 @@ func TestInitialBrowserState(t *testing.T) {
 		t.Fatalf("unselected state = %q", got)
 	}
 	disconnected := &discovery.DiscoveryError{Code: discovery.CodeBrowserDisconnected, Message: "gone"}
-	if got := initialBrowserState(t.Context(), &baseBroker{selectedErr: disconnected}); got != webmcp.BrowserCapabilityDisconnected {
+	if got := initialBrowserState(t.Context(), &baseBroker{SelectedErr: disconnected}); got != webmcp.BrowserCapabilityDisconnected {
 		t.Fatalf("disconnected discovery state = %q", got)
 	}
 	if got := browserStateForError(errors.New("other")); got != webmcp.BrowserCapabilityUnavailable {

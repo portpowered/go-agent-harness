@@ -15,7 +15,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -34,7 +34,7 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube", "Cubecade", "cube")
 	getCubeState, queueCubeMoves := wireCubeTools()
 	runtime := newWireScriptedRuntime(t, candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
+		webmcptest.NewTargetConfig(cubeTarget, webmcptest.WithInitialCatalog(getCubeState, queueCubeMoves), webmcptest.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
 	)
 	discoveryService := &singlePageWireDiscovery{candidate: wireLaneCandidate(candidate), target: ambiguousSessionLaneTarget(cubeTarget, 2)}
 	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService)
@@ -68,16 +68,16 @@ func wireCubeTools() (getCubeState, queueCubeMoves webmcp.ToolDescriptor) {
 	return getCubeState, queueCubeMoves
 }
 
-func newWireScriptedRuntime(t *testing.T, candidate webmcp.BrowserCandidate, targets ...testkit.TargetConfig) *testkit.ScriptedBrowserRuntime {
+func newWireScriptedRuntime(t *testing.T, candidate webmcp.BrowserCandidate, targets ...webmcptest.TargetConfig) *webmcptest.ScriptedBrowserRuntime {
 	t.Helper()
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate, targets...))
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate, targets...))
 	t.Cleanup(func() { closeForTest(t, runtime.Close) })
 	return runtime
 }
 
 // newWirePageToolsCapabilities composes production session capabilities for
 // an OpenAI realtime session over the scripted browser and discovery lane.
-func newWirePageToolsCapabilities(t *testing.T, cdpURL string, runtime *testkit.ScriptedBrowserRuntime, discoveryService WebMCPDiscoveryService, configure ...func(*config.BrowserConfig)) (*config.Config, SessionToolCapabilities) {
+func newWirePageToolsCapabilities(t *testing.T, cdpURL string, runtime *webmcptest.ScriptedBrowserRuntime, discoveryService WebMCPDiscoveryService, configure ...func(*config.BrowserConfig)) (*config.Config, SessionToolCapabilities) {
 	t.Helper()
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = true
@@ -325,7 +325,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube-late", "Cubecade", "cube")
 	getCubeState, queueCubeMoves := wireCubeTools()
 	runtime := newWireScriptedRuntime(t, candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState), testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
+		webmcptest.NewTargetConfig(cubeTarget, webmcptest.WithInitialCatalog(getCubeState), webmcptest.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
 	)
 	discoveryService := &singlePageWireDiscovery{candidate: wireLaneCandidate(candidate), target: ambiguousSessionLaneTarget(cubeTarget, 1)}
 	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService)
@@ -370,8 +370,8 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 	getCubeState, queueCubeMoves := wireCubeTools()
 	marginTool := ambiguousFixtureTool("get_document", "Read the Margin document.", "margin-frame")
 	runtime := newWireScriptedRuntime(t, candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
-		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
+		webmcptest.NewTargetConfig(cubeTarget, webmcptest.WithInitialCatalog(getCubeState, queueCubeMoves), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		webmcptest.NewTargetConfig(marginTarget, webmcptest.WithInitialCatalog(marginTool), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
 	)
 	discoveryService := &ambiguousSessionDiscovery{
 		candidate: wireLaneCandidate(candidate),

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
@@ -116,8 +116,8 @@ func TestPageToolExecutionValidatesRichSchemaBeforeDispatch(t *testing.T) {
 		FrameID:     "frame-cube",
 		Origin:      target.Origin,
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool), testkit.WithAutoResponse(json.RawMessage(`{"accepted":true}`))),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(tool), webmcptest.WithAutoResponse(json.RawMessage(`{"accepted":true}`))),
 	))
 	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
@@ -302,10 +302,10 @@ func assertJSONValueEqual(t *testing.T, got, want json.RawMessage) {
 	}
 }
 
-func countPageToolInvocations(operations []testkit.Operation) int {
+func countPageToolInvocations(operations []webmcptest.Operation) int {
 	count := 0
 	for _, operation := range operations {
-		if operation.Kind == testkit.OperationInvoke {
+		if operation.Kind == webmcptest.OperationInvoke {
 			count++
 		}
 	}

@@ -41,8 +41,8 @@ func TestBootstrapKeepsConnectedSelectionForLateCatalog(t *testing.T) {
 	})
 	lateCatalog.Retryable = true
 	base := &capabilityBroker{baseBroker: baseBroker{
-		selected:  webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-late", TargetID: "tab-late"}, Connected: true, Generation: 7},
-		selectErr: lateCatalog,
+		Page:      webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-late", TargetID: "tab-late"}, Connected: true, Generation: 7},
+		SelectErr: lateCatalog,
 	}}
 	selected := discovery.Selection{BrowserID: "browser-late", TargetID: "tab-late", Generation: 7}
 	browser := config.DefaultBrowserConfig()
@@ -52,15 +52,15 @@ func TestBootstrapKeepsConnectedSelectionForLateCatalog(t *testing.T) {
 	if err := New(browser, &reconnectDiscovery{selected: selected}, base, nil)(context.Background()); err != nil {
 		t.Fatalf("late catalog must not fail session bootstrap: %v", err)
 	}
-	if base.selectCalls != 1 {
-		t.Fatalf("selection calls = %d, want one exact adoption", base.selectCalls)
+	if base.CallCount("select") != 1 {
+		t.Fatalf("selection calls = %d, want one exact adoption", base.CallCount("select"))
 	}
 }
 
 func TestBootstrapStillFailsClosedForNonCatalogSelectionErrors(t *testing.T) {
 	selectionErr := webmcp.NewClassifiedError(webmcp.ErrorTargetAttachFailed, "target attachment failed", map[string]any{"reason": "transport_failure"})
 	selectionErr.Retryable = true
-	base := &capabilityBroker{baseBroker: baseBroker{selectErr: selectionErr}}
+	base := &capabilityBroker{baseBroker: baseBroker{SelectErr: selectionErr}}
 	selected := discovery.Selection{BrowserID: "browser", TargetID: "tab"}
 	browser := config.DefaultBrowserConfig()
 	browser.Selection.Browser = selected.BrowserID
@@ -83,8 +83,8 @@ func TestBootstrapKeepsReachableAmbiguityConnectedAndUnselected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reachable ambiguous bootstrap: %v", err)
 	}
-	if state != webmcp.BrowserCapabilityConnectedUnselected || base.selectCalls != 0 {
-		t.Fatalf("state/select calls = %q/%d, want connected_unselected without selection", state, base.selectCalls)
+	if state != webmcp.BrowserCapabilityConnectedUnselected || base.CallCount("select") != 0 {
+		t.Fatalf("state/select calls = %q/%d, want connected_unselected without selection", state, base.CallCount("select"))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestBootstrapUsesSingleSelectionForManagedDefault(t *testing.T) {
 	browser.Tools.Enabled = true
 	selected := discovery.Selection{BrowserID: "managed-browser", TargetID: "managed-tab", Origin: "https://example.test"}
 	service := &loadingDiscovery{reconnectDiscovery: reconnectDiscovery{selected: selected}}
-	broker := &capabilityBroker{baseBroker: baseBroker{selected: webmcp.PageContext{
+	broker := &capabilityBroker{baseBroker: baseBroker{Page: webmcp.PageContext{
 		Key:       webmcp.PageKey{BrowserID: webmcp.BrowserID(selected.BrowserID), TargetID: webmcp.TargetID(selected.TargetID)},
 		Connected: true,
 		Ready:     true,
@@ -106,8 +106,8 @@ func TestBootstrapUsesSingleSelectionForManagedDefault(t *testing.T) {
 	if len(service.options) != 1 || service.options[0].AutoSelect != discovery.AutoSelectSingle || service.options[0].Reason != bootstrapPhase {
 		t.Fatalf("reconnect options = %+v, want one single auto-select", service.options)
 	}
-	if broker.selectCalls != 1 || !broker.selectOpts.Activate || state != webmcp.BrowserCapabilitySelected {
-		t.Fatalf("select calls/activate/state = %d/%v/%q", broker.selectCalls, broker.selectOpts.Activate, state)
+	if broker.CallCount("select") != 1 || !broker.selectOpts.Activate || state != webmcp.BrowserCapabilitySelected {
+		t.Fatalf("select calls/activate/state = %d/%v/%q", broker.CallCount("select"), broker.selectOpts.Activate, state)
 	}
 }
 
@@ -173,11 +173,11 @@ func TestBootstrapReturnsCallerCancellation(t *testing.T) {
 func TestBootstrapWithoutReconnectVerifiesEndpoint(t *testing.T) {
 	broker := &baseBroker{}
 	state, err := runWithState(externalBrowser(), plainDiscovery{}, broker)
-	if err != nil || state != webmcp.BrowserCapabilityConnectedUnselected || !broker.discoverOpt.ExplicitOnly {
-		t.Fatalf("err/state/explicit = %v/%q/%v, want verified connected-unselected", err, state, broker.discoverOpt.ExplicitOnly)
+	if err != nil || state != webmcp.BrowserCapabilityConnectedUnselected || !broker.DiscoverOption.ExplicitOnly {
+		t.Fatalf("err/state/explicit = %v/%q/%v, want verified connected-unselected", err, state, broker.DiscoverOption.ExplicitOnly)
 	}
 
-	broker.discoverErr = errors.New("dial refused")
+	broker.DiscoverErr = errors.New("dial refused")
 	_, err = runWithState(externalBrowser(), plainDiscovery{}, broker)
 	var classified *webmcp.ClassifiedError
 	if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserProtocol || classified.Details[detailPhase] != bootstrapPhase {

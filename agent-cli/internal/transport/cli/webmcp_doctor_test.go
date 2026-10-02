@@ -17,7 +17,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/spf13/cobra"
 )
 
@@ -40,8 +41,8 @@ func TestWebMCPDoctorReadyJSONUsesRealBrokerStateAndRedactsEndpoints(t *testing.
 		Origin:    "https://fixture.test",
 		Eligible:  true,
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(webmcp.ToolDescriptor{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(webmcp.ToolDescriptor{
 			Name:        "read_state",
 			FrameID:     "frame-1",
 			InputSchema: []byte(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -114,19 +115,19 @@ browser:
 	}
 
 	operations := runtime.Operations()
-	if !hasTestkitOperation(operations, testkit.OperationOpen) || !hasTestkitOperation(operations, testkit.OperationEnableWebMCP) {
+	if !hasTestkitOperation(operations, webmcptest.OperationOpen) || !hasTestkitOperation(operations, hermetic.OperationEnableWebMCP) {
 		t.Fatalf("real broker did not perform endpoint/enable checks: %+v", operations)
 	}
-	if hasTestkitOperation(operations, testkit.OperationActivate) {
+	if hasTestkitOperation(operations, webmcptest.OperationActivate) {
 		t.Fatalf("doctor unexpectedly activated the target: %+v", operations)
 	}
 }
 
 func TestWebMCPDoctorHumanOutputIsDeterministic(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: testCDPURL, Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true},
-			testkit.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady})),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true},
+			webmcptest.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady})),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: doctorDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}}})
 	configDir := writeDoctorConfig(t, `
@@ -204,8 +205,8 @@ browser:
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			broker := &doctorStubBroker{
-				candidates: []webmcp.BrowserCandidate{candidate},
-				targets:    []webmcp.Target{target},
+				Candidates: []webmcp.BrowserCandidate{candidate},
+				Targets:    []webmcp.Target{target},
 			}
 			factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
 				return WebMCPDoctorRuntime{Broker: broker}, nil
@@ -221,8 +222,8 @@ browser:
 			if stderr.String() != "" {
 				t.Fatalf("doctor stderr = %q", stderr.String())
 			}
-			if broker.closeCalls != 1 {
-				t.Fatalf("cleanup calls = %d, want one", broker.closeCalls)
+			if broker.CallCount("close") != 1 {
+				t.Fatalf("cleanup calls = %d, want one", broker.CallCount("close"))
 			}
 
 			if testCase.json {
@@ -292,8 +293,8 @@ func assertUnselectedDoctorReport(t *testing.T, report doctor.Report, browserID,
 
 func TestWebMCPDoctorReportsSupportedDomainButUnverifiedPageTools(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: testCDPURL, Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: doctorDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}}})
 	configDir := writeDoctorConfig(t, `
@@ -397,15 +398,15 @@ func TestWebMCPDoctorClassifiesNoEndpointAndNoEligibleTarget(t *testing.T) {
 		{
 			name: "no endpoint",
 			broker: &doctorStubBroker{
-				discoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "endpoint unavailable", map[string]any{"source": "fake"}),
+				DiscoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointNotFound, "endpoint unavailable", map[string]any{"source": "fake"}),
 			},
 			wantCode: string(webmcp.ErrorEndpointNotFound),
 		},
 		{
 			name: "no eligible target",
 			broker: &doctorStubBroker{
-				candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
-				targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Eligible: false, EligibilityReason: "webmcp disabled"}},
+				Candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
+				Targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Eligible: false, EligibilityReason: "webmcp disabled"}},
 			},
 			wantCode: string(webmcp.ErrorNoEligibleTab),
 		},
@@ -466,8 +467,8 @@ browser:
 		t.Run(tc.name, func(t *testing.T) {
 			configDir := writeDoctorConfig(t, tc.configYAML)
 			broker := &doctorStubBroker{
-				candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
-				targets:    tc.targets,
+				Candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
+				Targets:    tc.targets,
 			}
 			factory := func(config.BrowserConfig) (WebMCPDoctorRuntime, error) {
 				return WebMCPDoctorRuntime{Broker: broker}, nil
@@ -493,27 +494,27 @@ func TestWebMCPDoctorReportsUnsupportedWebMCPDisconnectAndCleanup(t *testing.T) 
 		{
 			name: "unsupported",
 			broker: &doctorStubBroker{
-				candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
-				targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}},
-				selectErr:  webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "unsupported", map[string]any{"required_capability": "webmcp"}),
+				Candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
+				Targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}},
+				SelectErr:  webmcp.NewClassifiedError(webmcp.ErrorUnsupportedWebMCP, "unsupported", map[string]any{"required_capability": "webmcp"}),
 			},
 			wantCode: string(webmcp.ErrorUnsupportedWebMCP),
 		},
 		{
 			name: "disconnect",
 			broker: &doctorStubBroker{
-				discoverErr: webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, "disconnected", map[string]any{"phase": "discovery"}),
+				DiscoverErr: webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, "disconnected", map[string]any{"phase": "discovery"}),
 			},
 			wantCode: string(webmcp.ErrorBrowserDisconnected),
 		},
 		{
 			name: "cleanup",
 			broker: &doctorStubBroker{
-				candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
-				targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}},
-				selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1, Connected: true, Ready: true},
-				catalog:    webmcp.ToolCatalogSnapshot{Context: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1, Connected: true, Ready: true}, Generation: 1},
-				closeErr:   errors.New("cleanup failed"),
+				Candidates: []webmcp.BrowserCandidate{{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Loopback: true}},
+				Targets:    []webmcp.Target{{BrowserID: "browser-a", ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}},
+				Page:       webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1, Connected: true, Ready: true},
+				Catalog:    webmcp.ToolCatalogSnapshot{Context: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-a"}, Generation: 1, Connected: true, Ready: true}, Generation: 1},
+				CloseErr:   errors.New("cleanup failed"),
 			},
 			wantCode: doctor.ErrorCleanupFailed,
 		},
@@ -534,8 +535,8 @@ func TestWebMCPDoctorReportsUnsupportedWebMCPDisconnectAndCleanup(t *testing.T) 
 			if report.Error == nil || report.Error.Code != tc.wantCode {
 				t.Fatalf("report error = %+v, want %s", report.Error, tc.wantCode)
 			}
-			if tc.name == "cleanup" && tc.broker.closeCalls != 1 {
-				t.Fatalf("cleanup calls = %d, want one", tc.broker.closeCalls)
+			if tc.name == "cleanup" && tc.broker.CallCount("close") != 1 {
+				t.Fatalf("cleanup calls = %d, want one", tc.broker.CallCount("close"))
 			}
 		})
 	}
@@ -680,24 +681,26 @@ func TestWebMCPDoctorDisconnectAtProbeAndCatalogStagesIsBounded(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name      string
-		operation testkit.OperationKind
-		configure func(*testkit.ScriptedBrowserHandle, *testkit.ScriptedTargetSession)
+		operation webmcptest.OperationKind
+		configure func(*webmcptest.ScriptedBrowserHandle, *webmcptest.ScriptedTargetSession)
 	}{
 		{
 			name:      "discovery_dial",
-			operation: testkit.OperationOpen,
-			configure: func(handle *testkit.ScriptedBrowserHandle, _ *testkit.ScriptedTargetSession) { handle.BlockOpen() },
+			operation: webmcptest.OperationOpen,
+			configure: func(handle *webmcptest.ScriptedBrowserHandle, _ *webmcptest.ScriptedTargetSession) {
+				handle.BlockOpen()
+			},
 		},
 		{
 			name:      "catalog_ready",
-			operation: testkit.OperationEnableAcknowledged,
-			configure: func(_ *testkit.ScriptedBrowserHandle, _ *testkit.ScriptedTargetSession) {},
+			operation: webmcptest.OperationEnableAcknowledged,
+			configure: func(_ *webmcptest.ScriptedBrowserHandle, _ *webmcptest.ScriptedTargetSession) {},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+			runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 				Candidate: candidate,
-				Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target)},
+				Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target)},
 			})
 			defer closeForTest(t, runtime.Close)
 			handle := runtime.Browser(candidate.ID)
@@ -801,7 +804,7 @@ func writeDoctorConfig(t *testing.T, browserYAML string) string {
 	return dir
 }
 
-func hasTestkitOperation(operations []testkit.Operation, want testkit.OperationKind) bool {
+func hasTestkitOperation(operations []webmcptest.Operation, want webmcptest.OperationKind) bool {
 	for _, operation := range operations {
 		if operation.Kind == want {
 			return true
@@ -818,56 +821,5 @@ func (d doctorDiscoverer) Discover(context.Context, webmcp.DiscoverOptions) ([]w
 	return append([]webmcp.BrowserCandidate(nil), d.candidates...), nil
 }
 
-type doctorStubBroker struct {
-	candidates  []webmcp.BrowserCandidate
-	discoverErr error
-	targets     []webmcp.Target
-	selectErr   error
-	selected    webmcp.PageContext
-	catalog     webmcp.ToolCatalogSnapshot
-	closeErr    error
-	closeCalls  int
-}
-
-func (b *doctorStubBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	if b.discoverErr != nil {
-		return nil, b.discoverErr
-	}
-	return append([]webmcp.BrowserCandidate(nil), b.candidates...), nil
-}
-
-func (b *doctorStubBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	return append([]webmcp.Target(nil), b.targets...), nil
-}
-
-func (b *doctorStubBroker) Select(context.Context, webmcp.TargetSelector) (webmcp.PageContext, error) {
-	if b.selectErr != nil {
-		return webmcp.PageContext{}, b.selectErr
-	}
-	return b.selected, nil
-}
-
-func (b *doctorStubBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	return b.selected, nil
-}
-
-func (b *doctorStubBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	return b.catalog, nil
-}
-
-func (b *doctorStubBroker) Invoke(context.Context, webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	return webmcp.InvokeResult{}, nil
-}
-
-func (b *doctorStubBroker) Cancel(context.Context, webmcp.CancelRequest) error { return nil }
-
-func (b *doctorStubBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	channel := make(chan webmcp.BrokerEvent)
-	close(channel)
-	return channel
-}
-
-func (b *doctorStubBroker) Close() error {
-	b.closeCalls++
-	return b.closeErr
-}
+// doctorStubBroker is the shared scripted broker.
+type doctorStubBroker = webmcptest.Broker

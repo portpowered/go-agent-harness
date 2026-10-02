@@ -282,17 +282,14 @@ func TestScenarioV2FixtureResolutionIsContainedAndCanonical(t *testing.T) {
 	}
 }
 
-func TestScenarioV2LegacyScenarioLoaderRemainsByteCompatible(t *testing.T) {
-	data := []byte(textScenario)
+func TestScenarioV2LoaderRejectsUnversionedDocument(t *testing.T) {
+	data := []byte(`{"id":"text","steps":[{"type":"send_text","text":"hello"},{"type":"close"}],"expectations":[{"type":"transcript_contains","text":"reply"}]}`)
 	before := append([]byte(nil), data...)
-	if _, err := Load(data); err != nil {
-		t.Fatalf("legacy Load: %v", err)
+	if _, err := LoadScenarioV2(data, ""); !errors.Is(err, ErrInvalidScenarioV2) {
+		t.Fatalf("v2 loader accepted an unversioned scenario: %v", err)
 	}
 	if !reflect.DeepEqual(data, before) {
-		t.Fatal("legacy scenario bytes changed while loading")
-	}
-	if _, err := LoadScenarioV2(data, ""); err == nil {
-		t.Fatal("v2 loader accepted an unversioned legacy scenario")
+		t.Fatal("scenario bytes changed while loading")
 	}
 }
 

@@ -8,15 +8,16 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	webmcptools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 type freshnessFixture struct {
 	broker  *webmcp.StatefulBroker
-	session *testkit.ScriptedTargetSession
-	runtime *testkit.ScriptedBrowserRuntime
+	session *webmcptest.ScriptedTargetSession
+	runtime *webmcptest.ScriptedBrowserRuntime
 	ref     webmcp.ToolRef
 }
 
@@ -30,17 +31,17 @@ func newFreshnessFixture(t *testing.T) freshnessFixture {
 
 func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) freshnessFixture {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-freshness", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", URL: "https://freshness.fixture/"},
-					testkit.WithInitialCatalog(tool),
+					webmcptest.WithInitialCatalog(tool),
 				),
 			},
 		},
@@ -363,21 +364,21 @@ func TestStatefulBrokerDoesNotCrossCorrelateUnrelatedOrConsecutiveResults(t *tes
 	}
 }
 
-func waitForFreshnessInvocation(t *testing.T, fixture freshnessFixture, id webmcp.InvocationID) (testkit.InvocationRecord, error) {
+func waitForFreshnessInvocation(t *testing.T, fixture freshnessFixture, id webmcp.InvocationID) (webmcptest.InvocationRecord, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	invocation, err := fixture.session.WaitForInvocation(ctx)
 	if err != nil {
-		return testkit.InvocationRecord{}, err
+		return webmcptest.InvocationRecord{}, err
 	}
 	if _, err := fixture.runtime.WaitForPublishedEvent(ctx, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventToolInvoked && event.InvocationID == id
 	}); err != nil {
-		return testkit.InvocationRecord{}, err
+		return webmcptest.InvocationRecord{}, err
 	}
 	if _, err := fixture.broker.Selected(ctx); err != nil {
-		return testkit.InvocationRecord{}, err
+		return webmcptest.InvocationRecord{}, err
 	}
 	return invocation, nil
 }

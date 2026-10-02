@@ -31,8 +31,8 @@ func TestBrokerCloseCancelsInitializationAndClosesOnce(t *testing.T) {
 	if err := <-closeDone; err != nil {
 		t.Fatalf("close after initialization cancellation: %v", err)
 	}
-	if err := broker.Close(); err != nil || base.closeCalls != 1 {
-		t.Fatalf("repeated close = %v, delegate close calls = %d, want one", err, base.closeCalls)
+	if err := broker.Close(); err != nil || base.CallCount("close") != 1 {
+		t.Fatalf("repeated close = %v, delegate close calls = %d, want one", err, base.CallCount("close"))
 	}
 	status := broker.SessionCapabilityStatus()
 	if status.State != StateFailed || status.Err == nil || status.BrowserCapabilityState != webmcp.BrowserCapabilityDisconnected {
@@ -77,8 +77,8 @@ func TestBrokerCloseBeforeFirstUseFailsEveryOperation(t *testing.T) {
 	broker := newBroker(delegate, func() error { runtimeClosed++; return errors.New("runtime close failed") })
 	broker.bootstrap = func(context.Context) error { t.Fatal("bootstrap ran after close"); return nil }
 
-	if err := broker.Close(); err == nil || runtimeClosed != 1 || delegate.closeCalls != 1 {
-		t.Fatalf("close = %v runtime/delegate closes = %d/%d", err, runtimeClosed, delegate.closeCalls)
+	if err := broker.Close(); err == nil || runtimeClosed != 1 || delegate.CallCount("close") != 1 {
+		t.Fatalf("close = %v runtime/delegate closes = %d/%d", err, runtimeClosed, delegate.CallCount("close"))
 	}
 	if err := broker.InitializeSession(context.Background()); !errors.Is(err, webmcp.ErrClosed) {
 		t.Fatalf("initialize after close = %v, want ErrClosed", err)
@@ -91,7 +91,7 @@ func TestBrokerCloseBeforeFirstUseFailsEveryOperation(t *testing.T) {
 
 func TestBrokerStatusDerivesBrowserStateAfterBootstrap(t *testing.T) {
 	selected := webmcp.PageContext{Key: webmcp.PageKey{BrowserID: "b", TargetID: "t"}, Connected: true}
-	broker := readyBroker(&baseBroker{selected: selected}, func(context.Context) error { return nil })
+	broker := readyBroker(&baseBroker{Page: selected}, func(context.Context) error { return nil })
 	if status := broker.SessionCapabilityStatus(); status.State != StateInitializing || status.BrowserCapabilityState != webmcp.BrowserCapabilityInitializing {
 		t.Fatalf("initial status = %+v", status)
 	}
@@ -172,7 +172,7 @@ func TestNewFromFactoryValidatesRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct session broker: %v", err)
 	}
-	if err := broker.Close(); err != nil || delegate.closeCalls != 1 {
-		t.Fatalf("close = %v calls=%d", err, delegate.closeCalls)
+	if err := broker.Close(); err != nil || delegate.CallCount("close") != 1 {
+		t.Fatalf("close = %v calls=%d", err, delegate.CallCount("close"))
 	}
 }

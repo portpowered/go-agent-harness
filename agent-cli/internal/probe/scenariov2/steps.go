@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 )
 
@@ -155,7 +155,7 @@ func (e *executor) navigate(ctx context.Context, step probe.ScenarioV2Step) erro
 	}
 	targetURL := step.URL
 	if step.FixturePath != "" {
-		script, err := testkit.LoadBrowserScriptFile(step.FixturePath)
+		script, err := hermetic.LoadBrowserScriptFile(step.FixturePath)
 		if err != nil {
 			return fmt.Errorf("load navigation fixture: %w", err)
 		}
@@ -203,11 +203,11 @@ func (e *executor) deferClose(context.Context, probe.ScenarioV2Step) error {
 }
 
 func (e *executor) appendProviderStep(_ context.Context, step probe.ScenarioV2Step) error {
-	if step.Type == probe.ScenarioV2StepSendAudio {
-		e.providerSteps = append(e.providerSteps, sendAudioStep(step))
-		return nil
+	providerStep, ok := step.ProviderStep()
+	if !ok {
+		return fmt.Errorf("probe.scenario.v2 step %q is not a provider session step", step.Type)
 	}
-	e.providerSteps = append(e.providerSteps, sendTextStep(step))
+	e.providerSteps = append(e.providerSteps, providerStep)
 	return nil
 }
 

@@ -9,7 +9,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -22,8 +23,8 @@ const (
 
 type queryParityFixture struct {
 	broker    *webmcp.StatefulBroker
-	runtime   *testkit.ScriptedBrowserRuntime
-	session   *testkit.ScriptedTargetSession
+	runtime   *webmcptest.ScriptedBrowserRuntime
+	session   *webmcptest.ScriptedTargetSession
 	candidate webmcp.BrowserCandidate
 	target    webmcp.Target
 	tool      webmcp.ToolDescriptor
@@ -142,8 +143,8 @@ func newQueryParityFixture(t *testing.T) queryParityFixture {
 
 func newQueryParityFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) queryParityFixture {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: queryParityBrowser, Product: "fixture", Loopback: true}
 	target := webmcp.Target{
 		BrowserID: candidate.ID,
@@ -170,18 +171,18 @@ func newQueryParityFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) que
 		readOnly := true
 		tool.Annotations.ReadOnly = &readOnly
 	}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				target,
-				testkit.WithContext(webmcp.PageContext{
+				webmcptest.WithContext(webmcp.PageContext{
 					Generation:      1,
 					CatalogReady:    true,
 					CatalogEvidence: "scripted_fixture",
 				}),
-				testkit.WithInitialCatalog(tool),
+				webmcptest.WithInitialCatalog(tool),
 			)},
 		},
 	)
@@ -371,7 +372,7 @@ func (f queryParityFixture) waitForBrokerInvocationEvent(t *testing.T, ctx conte
 	}
 }
 
-func (f queryParityFixture) assertInvocationInput(t *testing.T, invocation testkit.InvocationRecord, input []byte) {
+func (f queryParityFixture) assertInvocationInput(t *testing.T, invocation webmcptest.InvocationRecord, input []byte) {
 	t.Helper()
 	if invocation.BrowserID != f.candidate.ID || invocation.TargetID != f.target.ID || invocation.Generation != 1 || invocation.FrameID != f.tool.FrameID || invocation.ToolName != f.tool.Name || !jsonEqual(invocation.Input, input) {
 		t.Fatalf("target invocation = %+v, want exact browser/target/generation/frame/tool/input provenance", invocation)

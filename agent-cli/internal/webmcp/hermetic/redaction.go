@@ -1,0 +1,817 @@
+package hermetic
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+)
+
+type Redactor struct {
+	policy      RedactionPolicy
+	credentials [][]byte
+}
+
+// NewRedactor constructs a canonical browser-event redactor. Credentials may
+// be supplied in one slice; a policy's in-memory Credentials convenience field
+// is included as well but is never serialized.
+func NewRedactor(policy RedactionPolicy, credentials ...[]string) (*Redactor, error) {
+	if err := policy.ValidateCanonical(); err != nil {
+		return nil, err
+	}
+	configured := append([]string(nil), policy.Credentials...)
+	for _, values := range credentials {
+		configured = append(configured, values...)
+	}
+	secretBytes, err := newRedactionCredentials(configured)
+	if err != nil {
+		return nil, err
+	}
+	normalized := policy.normalized()
+	if containsCredentialInPolicy(normalized, secretBytes) {
+		return nil, newRedactionError(ErrRedactionCredentialSurvived, "validate policy", "policy", nil, secretBytes)
+	}
+	return &Redactor{policy: normalized, credentials: secretBytes}, nil
+}
+
+// Policy returns a copy of the effective policy. Credentials are not returned
+// as part of it.
+func (r *Redactor) Policy() RedactionPolicy {
+	if r == nil {
+		return RedactionPolicy{}
+	}
+	return r.policy.normalized()
+}
+
+// CredentialsConfigured reports whether this boundary has a configured
+// credential. It does not expose the credential values.
+func (r *Redactor) CredentialsConfigured() bool {
+	return r != nil && len(r.credentials) > 0
+}
+
+// RedactEvent applies policy redaction to one semantic event before it can be
+// serialized. For completed events, RedactEvents should be preferred because
+// it can associate the result with a tool learned from an earlier event.
+func (r *Redactor) RedactEvent(event Event) (Event, error) {
+	return r.redactEvent(event, "")
+}
+
+// RedactEvents applies one redaction boundary to a complete semantic stream.
+// Invocation-created/dispatched events establish tool identity for later
+// completed events, including when the completion itself has no tool name.
+func (r *Redactor) RedactEvents(events []Event) ([]Event, error) {
+	if r == nil {
+		return nil, newRedactionError(ErrInvalidRedactionPolicy, "redact events", "redactor", errors.New("redactor is nil"), nil)
+	}
+	if len(events) == 0 {
+		return nil, newRedactionError(ErrInvalidBrowserEvent, "redact events", "stream", errors.New("event stream is empty"), r.credentials)
+	}
+	result := make([]Event, len(events))
+	invocationTools := make(map[string]string)
+	var previousMS uint64
+	for index, event := range events {
+		position := index + 1
+		if event.Sequence != uint64(position) {
+			return nil, newRedactionError(ErrInvalidBrowserEvent, "redact events", fmt.Sprintf("line %d sequence", position), fmt.Errorf("want contiguous sequence %d, got %d", position, event.Sequence), r.credentials)
+		}
+		if index > 0 && event.MonotonicMS < previousMS {
+			return nil, newRedactionError(ErrInvalidBrowserEvent, "redact events", fmt.Sprintf("line %d monotonic_ms", position), fmt.Errorf("decreased from %d to %d", previousMS, event.MonotonicMS), r.credentials)
+		}
+		previousMS = event.MonotonicMS
+		invocationID, tool := eventInvocationAndTool(event.Payload)
+		if invocationID != "" {
+			// A dispatched/completed event normally carries only tool_ref;
+			// prefer the earlier tool name when the invocation was created.
+			// The ref remains useful as a fallback for streams that begin
+			// mid-invocation.
+			if knownTool := invocationTools[invocationID]; knownTool != "" {
+				tool = knownTool
+			}
+		}
+		redacted, err := r.redactEvent(event, tool)
+		if err != nil {
+			return nil, withRedactionPosition(err, position, r.credentials)
+		}
+		result[index] = redacted
+		if invocationID != "" && tool != "" {
+			switch event.Type {
+			case EventBrowserInvocationCreated, EventBrowserInvocationDispatched:
+				invocationTools[invocationID] = tool
+			case EventBrowserDiscoveryStarted, EventBrowserDiscoveryCompleted, EventBrowserEndpointVersion,
+				EventBrowserTargetsSnapshot, EventBrowserTargetSelected, EventBrowserChromeTargetAttached,
+				EventBrowserWebMCPEnabled, EventBrowserCatalogToolAdded, EventBrowserCatalogToolRemoved,
+				EventBrowserCatalogReady, EventBrowserInvocationApproval, EventBrowserInvocationCompleted,
+				EventBrowserInvocationError, EventBrowserInvocationCancel, EventBrowserInvocationCanceled,
+				EventBrowserPageGenerationChanged, EventBrowserTargetDetached, EventBrowserChromeTargetClosed:
+				// Only creation and dispatch events bind an invocation to its tool.
+			}
+		}
+	}
+	return result, nil
+}
+
+func withRedactionPosition(err error, position int, secrets [][]byte) error {
+	if err == nil {
+		return nil
+	}
+	var redactionErr *RedactionError
+	if errors.As(err, &redactionErr) {
+		copyOf := *redactionErr
+		if copyOf.Path == "" {
+			copyOf.Path = fmt.Sprintf("events[%d]", position-1)
+		} else {
+			copyOf.Path = fmt.Sprintf("events[%d].%s", position-1, copyOf.Path)
+		}
+		if copyOf.secrets == nil {
+			copyOf.secrets = secrets
+		}
+		return &copyOf
+	}
+	return newRedactionError(ErrInvalidBrowserEvent, "redact events", fmt.Sprintf("events[%d]", position-1), err, secrets)
+}
+
+// MarshalEvents serializes the redacted stream as canonical UTF-8 JSONL.
+func (r *Redactor) MarshalEvents(events []Event) ([]byte, error) {
+	if r == nil {
+		return nil, newRedactionError(ErrInvalidRedactionPolicy, "marshal events", "redactor", errors.New("redactor is nil"), nil)
+	}
+	redacted, err := r.RedactEvents(events)
+	if err != nil {
+		return nil, err
+	}
+	data, err := MarshalEvents(redacted)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.ValidateArtifactBytes(data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// HashEvents returns canonical redacted JSONL bytes and the lowercase SHA-256
+// digest of exactly those bytes. Hashing happens only after redaction.
+func (r *Redactor) HashEvents(events []Event) ([]byte, string, error) {
+	data, err := r.MarshalEvents(events)
+	if err != nil {
+		return nil, "", err
+	}
+	digest := sha256.Sum256(data)
+	return data, hex.EncodeToString(digest[:]), nil
+}
+
+// ValidateArtifactBytes checks the final persisted bytes for configured
+// credentials. It is also useful to protect manifest-bound metadata before a
+// caller writes it.
+func (r *Redactor) ValidateArtifactBytes(data []byte) error {
+	if r == nil {
+		return newRedactionError(ErrInvalidRedactionPolicy, "validate artifact", "artifact", errors.New("redactor is nil"), nil)
+	}
+	if containsCredential(data, r.credentials) {
+		return newRedactionError(ErrRedactionCredentialSurvived, "validate artifact", "artifact", nil, r.credentials)
+	}
+	return nil
+}
+
+// RedactEvents applies a canonical policy to a complete event stream.
+func RedactEvents(events []Event, policy RedactionPolicy, credentials ...[]string) ([]Event, error) {
+	redactor, err := NewRedactor(policy, credentials...)
+	if err != nil {
+		return nil, err
+	}
+	return redactor.RedactEvents(events)
+}
+
+// MarshalRedactedEvents redacts before canonical JSONL serialization.
+func MarshalRedactedEvents(events []Event, policy RedactionPolicy, credentials ...[]string) ([]byte, error) {
+	redactor, err := NewRedactor(policy, credentials...)
+	if err != nil {
+		return nil, err
+	}
+	return redactor.MarshalEvents(events)
+}
+
+// RedactedBrowserArtifact is the durable semantic artifact produced by the
+// testkit. Its digest is always calculated over Data after redaction.
+type RedactedBrowserArtifact struct {
+	Format    string
+	Data      []byte
+	SHA256    string
+	Redaction RedactionPolicy
+}
+
+// RecordingArtifact adapts a redacted browser artifact to the existing
+// transcript bundle writer. The conversion keeps the transcript package as
+// the sole owner of manifest.json while retaining the testkit's redaction
+// boundary as the source of the artifact bytes and effective policy.
+func (a RedactedBrowserArtifact) RecordingArtifact(path string) transcript.BrowserArtifact {
+	if path == "" {
+		path = transcript.BrowserArtifactDefaultPath
+	}
+	return transcript.BrowserArtifact{
+		Format: a.Format,
+		Path:   path,
+		Data:   append([]byte(nil), a.Data...),
+		SHA256: a.SHA256,
+		Redaction: transcript.BrowserRedactionPolicy{
+			URLQuery:           a.Redaction.URLQuery,
+			URLFragment:        a.Redaction.URLFragment,
+			ToolArguments:      append([]string(nil), a.Redaction.ToolArguments...),
+			ResultJSONPointers: append([]string(nil), a.Redaction.ResultJSONPointers...),
+			DigestTools:        append([]string(nil), a.Redaction.DigestTools...),
+			RawCDP:             a.Redaction.RawCDP,
+		},
+	}
+}
+
+// WithRedaction configures Recorder to apply the canonical boundary before
+// each event is written. Invalid policy/credential configuration is returned
+// by NewRecorder after options are applied.
+func WithRedaction(policy RedactionPolicy, credentials ...[]string) RecorderOption {
+	return recorderOptionFunc(func(recorder *Recorder) {
+		redactor, err := NewRedactor(policy, credentials...)
+		recorder.redactor = redactor
+		recorder.redactionErr = err
+	})
+}
+
+func (r *Redactor) redactEvent(event Event, tool string) (Event, error) {
+	if r == nil {
+		return Event{}, newRedactionError(ErrInvalidRedactionPolicy, "redact event", "redactor", errors.New("redactor is nil"), nil)
+	}
+	if r.policy.RawCDP {
+		return Event{}, newRedactionError(ErrRawCDPNotAllowed, "redact event", "raw_cdp", nil, r.credentials)
+	}
+	if tool == "" {
+		_, tool = eventInvocationAndTool(event.Payload)
+	}
+	if event.Redaction.Mode == "" {
+		event.Redaction.Mode = RedactionNone
+	}
+	trace := redactionTrace{
+		digest: event.PayloadSHA256 != "",
+		rules:  map[string]bool{RedactionRuleRawCDPDisabled: true},
+	}
+	if event.BrowserID != "" {
+		redacted, changed := redactPlainString(event.BrowserID, r.credentials)
+		if changed {
+			event.BrowserID = redacted
+			trace.changed = true
+		}
+	}
+	if event.TargetID != "" {
+		redacted, changed := redactPlainString(event.TargetID, r.credentials)
+		if changed {
+			event.TargetID = redacted
+			trace.changed = true
+		}
+	}
+	if event.Payload != nil {
+		payload, payloadTrace, err := r.redactJSON(event.Payload)
+		if err != nil {
+			return Event{}, err
+		}
+		event.Payload = payload
+		trace.merge(payloadTrace)
+	}
+	if event.Payload != nil {
+		payload, payloadTrace, err := r.redactToolPayload(event.Payload, event.Type, tool)
+		if err != nil {
+			return Event{}, err
+		}
+		event.Payload = payload
+		trace.merge(payloadTrace)
+	}
+	trace.applyTo(&event)
+	encoded, err := json.Marshal(event)
+	if err != nil {
+		return Event{}, newRedactionError(ErrInvalidBrowserEvent, "validate redacted event", "event", err, r.credentials)
+	}
+	if containsCredential(encoded, r.credentials) {
+		return Event{}, newRedactionError(ErrRedactionCredentialSurvived, "validate redacted event", "event", nil, r.credentials)
+	}
+	return event, nil
+}
+
+type redactionTrace struct {
+	changed bool
+	digest  bool
+	rules   map[string]bool
+}
+
+func (t *redactionTrace) merge(other redactionTrace) {
+	if other.changed {
+		t.changed = true
+	}
+	if other.digest {
+		t.digest = true
+	}
+	if t.rules == nil {
+		t.rules = make(map[string]bool)
+	}
+	for rule := range other.rules {
+		t.rules[rule] = true
+	}
+}
+
+func (t *redactionTrace) applyTo(event *Event) {
+	mode := RedactionNone
+	if t.digest {
+		mode = RedactionDigest
+	} else if t.changed {
+		mode = RedactionRedacted
+	}
+	rules := make([]string, 0, len(t.rules))
+	for _, rule := range redactionRuleOrder() {
+		if t.rules[rule] {
+			rules = append(rules, rule)
+		}
+	}
+	event.Redaction = RedactionMetadata{Mode: mode, Rules: rules}
+}
+
+func (r *Redactor) redactJSON(raw json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	normalized, err := normalizeJSON(raw)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	trimmed := bytes.TrimSpace(normalized)
+	if len(trimmed) == 0 {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", errors.New("value is empty"), r.credentials)
+	}
+	switch trimmed[0] {
+	case '{':
+		return r.redactJSONObject(trimmed, normalized)
+	case '[':
+		return r.redactJSONArray(trimmed)
+	case '"':
+		return r.redactJSONString(trimmed, normalized)
+	default:
+		// Numbers, booleans, and null are already normalized without passing
+		// through float64, preserving large page-owned integer tokens exactly.
+		return normalized, redactionTrace{rules: map[string]bool{}}, nil
+	}
+}
+
+func (r *Redactor) redactJSONObject(trimmed, normalized json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	fields, err := decodeJSONObject(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	result := make(map[string]json.RawMessage, len(fields))
+	trace := redactionTrace{rules: map[string]bool{}}
+	for key, value := range fields {
+		if isRawCDPField(key) {
+			return nil, trace, newRedactionError(ErrRawCDPDetected, "redact JSON", "payload."+key, nil, r.credentials)
+		}
+		redactedKey, keyChanged := redactPlainString(key, r.credentials)
+		if _, exists := result[redactedKey]; exists {
+			return nil, trace, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", errors.New("credential replacement produced duplicate object fields"), r.credentials)
+		}
+		child, childTrace, err := r.redactJSON(value)
+		if err != nil {
+			return nil, trace, err
+		}
+		result[redactedKey] = child
+		if keyChanged {
+			trace.changed = true
+		}
+		trace.merge(childTrace)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return nil, trace, err
+	}
+	if !bytes.Equal(encoded, normalized) {
+		// A map marshal sorts keys, but key order is not a page-owned
+		// semantic difference. The changed bit is only for actual policy
+		// changes, not canonical object ordering.
+		if !sameJSONStructure(encoded, normalized) {
+			trace.changed = true
+		}
+	}
+	return encoded, trace, nil
+}
+
+func (r *Redactor) redactJSONArray(trimmed json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	values, err := scriptArray(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	result := make([]json.RawMessage, len(values))
+	trace := redactionTrace{rules: map[string]bool{}}
+	for index, value := range values {
+		child, childTrace, err := r.redactJSON(value)
+		if err != nil {
+			return nil, trace, err
+		}
+		result[index] = child
+		trace.merge(childTrace)
+	}
+	encoded, err := json.Marshal(result)
+	return encoded, trace, err
+}
+
+func (r *Redactor) redactJSONString(trimmed, normalized json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	value, err := parseString(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	redacted, changed, queryChanged, fragmentChanged := r.redactString(value)
+	if !changed {
+		return normalized, redactionTrace{rules: map[string]bool{}}, nil
+	}
+	encoded, err := json.Marshal(redacted)
+	trace := redactionTrace{changed: true, rules: map[string]bool{}}
+	if queryChanged {
+		trace.rules[RedactionRuleURLQuery] = true
+	}
+	if fragmentChanged {
+		trace.rules[RedactionRuleURLFragment] = true
+	}
+	return encoded, trace, err
+}
+
+func (r *Redactor) redactToolPayload(raw json.RawMessage, eventType EventType, tool string) (json.RawMessage, redactionTrace, error) {
+	if tool == "" {
+		return raw, redactionTrace{rules: map[string]bool{}}, nil
+	}
+	if !toolNameIn(tool, r.policy.ToolArguments) && !toolNameIn(tool, r.policy.DigestTools) && eventType != EventBrowserInvocationCompleted {
+		// Result pointers apply only to invocation completions, and argument
+		// policy applies only to dispatched calls. Avoid touching unrelated
+		// page-owned JSON merely because a name happens to match.
+		return raw, redactionTrace{rules: map[string]bool{}}, nil
+	}
+	fields, isObject := jsonObjectFields(raw)
+	if !isObject {
+		return raw, redactionTrace{rules: map[string]bool{}}, nil
+	}
+	trace := redactionTrace{rules: map[string]bool{}}
+	digestTool := toolNameIn(tool, r.policy.DigestTools)
+	argumentTool := toolNameIn(tool, r.policy.ToolArguments)
+	if eventType == EventBrowserInvocationDispatched {
+		if err := r.redactToolInput(fields, digestTool, argumentTool, &trace); err != nil {
+			return raw, trace, err
+		}
+	}
+	if eventType == EventBrowserInvocationCompleted {
+		if err := r.redactToolOutput(fields, digestTool, &trace); err != nil {
+			return raw, trace, err
+		}
+	}
+	encoded, err := json.Marshal(fields)
+	return encoded, trace, err
+}
+
+func (r *Redactor) redactToolInput(fields map[string]json.RawMessage, digestTool, argumentTool bool, trace *redactionTrace) error {
+	input, ok := fields["input"]
+	if !ok {
+		return nil
+	}
+	if digestTool {
+		digest, err := digestJSON(input)
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact tool input", "payload.input", err, r.credentials)
+		}
+		delete(fields, "input")
+		fields["input_sha256"] = json.RawMessage(strconv.Quote(digest))
+		trace.digest = true
+	} else if argumentTool {
+		fields["input"] = json.RawMessage(strconv.Quote(RedactionMarker))
+		trace.changed = true
+		trace.rules[RedactionRuleToolArguments] = true
+	}
+	return nil
+}
+
+func (r *Redactor) redactToolOutput(fields map[string]json.RawMessage, digestTool bool, trace *redactionTrace) error {
+	output, ok := fields["output"]
+	if !ok {
+		return nil
+	}
+	redactedOutput := output
+	for _, pointer := range r.policy.ResultJSONPointers {
+		updated, changed, err := replaceJSONPointer(redactedOutput, pointer, json.RawMessage(strconv.Quote(RedactionMarker)))
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact result", "payload.output"+pointer, err, r.credentials)
+		}
+		if changed {
+			redactedOutput = updated
+			trace.changed = true
+			trace.rules[RedactionRuleResultJSONPointers] = true
+		}
+	}
+	if digestTool {
+		digest, err := digestJSON(redactedOutput)
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact tool result", "payload.output", err, r.credentials)
+		}
+		delete(fields, "output")
+		fields["output_sha256"] = json.RawMessage(strconv.Quote(digest))
+		trace.digest = true
+	} else if !bytes.Equal(redactedOutput, output) {
+		fields["output"] = redactedOutput
+	}
+	return nil
+}
+
+func (r *Redactor) redactString(value string) (string, bool, bool, bool) {
+	redacted := value
+	queryChanged := false
+	fragmentChanged := false
+	if parsed, ok := parseRedactableURL(value); ok {
+		queryChanged, fragmentChanged = r.redactURL(parsed)
+		redacted = parsed.String()
+	}
+	redactedWithCredentials, credentialChanged := redactPlainString(redacted, r.credentials)
+	redacted = redactedWithCredentials
+	changed := redacted != value || queryChanged || fragmentChanged || credentialChanged
+	return redacted, changed, queryChanged, fragmentChanged
+}
+
+// redactURL strips the policy-selected query and fragment and masks a URL
+// password in place, reporting which of query and fragment changed.
+func (r *Redactor) redactURL(parsed *url.URL) (queryChanged, fragmentChanged bool) {
+	if r.policy.URLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
+		parsed.RawQuery, parsed.ForceQuery, queryChanged = "", false, true
+	}
+	if r.policy.URLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
+		parsed.Fragment, parsed.RawFragment, fragmentChanged = "", "", true
+	}
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			parsed.User = url.UserPassword(parsed.User.Username(), RedactionMarker)
+		}
+	}
+	return queryChanged, fragmentChanged
+}
+
+func redactPlainString(value string, credentials [][]byte) (string, bool) {
+	if len(credentials) == 0 {
+		return value, false
+	}
+	redacted := string(redactBytes(value, credentials))
+	return redacted, redacted != value
+}
+
+func parseRedactableURL(value string) (*url.URL, bool) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil, false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https", "ws", "wss", "ftp":
+		return parsed, true
+	default:
+		return nil, false
+	}
+}
+
+func eventInvocationAndTool(raw json.RawMessage) (string, string) {
+	fields, err := decodeJSONObject(raw)
+	if err != nil {
+		return "", ""
+	}
+	invocationID := stringField(fields, jsonFieldInvocationID)
+	tool := stringField(fields, "tool_name")
+	if tool == "" {
+		tool = stringField(fields, "tool_ref")
+	}
+	return invocationID, tool
+}
+
+func stringField(fields map[string]json.RawMessage, name string) string {
+	raw, ok := fields[name]
+	if !ok {
+		return ""
+	}
+	value, err := parseString(raw)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
+func toolNameIn(tool string, configured []string) bool {
+	for _, candidate := range configured {
+		if candidate == tool {
+			return true
+		}
+	}
+	return false
+}
+
+func digestJSON(raw json.RawMessage) (string, error) {
+	normalized, err := normalizeJSON(raw)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(normalized)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func validateJSONPointer(pointer string) error {
+	if pointer == "" {
+		return nil
+	}
+	if pointer[0] != '/' {
+		return errors.New("must be an RFC 6901 JSON Pointer")
+	}
+	for index := 1; index < len(pointer); index++ {
+		if pointer[index] != '~' {
+			continue
+		}
+		if index+1 >= len(pointer) || (pointer[index+1] != '0' && pointer[index+1] != '1') {
+			return errors.New("contains an invalid ~ escape")
+		}
+		index++
+	}
+	return nil
+}
+
+func decodeJSONPointer(pointer string) ([]string, error) {
+	if err := validateJSONPointer(pointer); err != nil {
+		return nil, err
+	}
+	if pointer == "" {
+		return nil, nil
+	}
+	parts := strings.Split(pointer[1:], "/")
+	for index, part := range parts {
+		part = strings.ReplaceAll(part, "~1", "/")
+		part = strings.ReplaceAll(part, "~0", "~")
+		parts[index] = part
+	}
+	return parts, nil
+}
+
+func replaceJSONPointer(raw json.RawMessage, pointer string, replacement json.RawMessage) (json.RawMessage, bool, error) {
+	tokens, err := decodeJSONPointer(pointer)
+	if err != nil {
+		return nil, false, err
+	}
+	replacement, err = normalizeJSON(replacement)
+	if err != nil {
+		return nil, false, err
+	}
+	return replaceJSONPointerTokens(raw, tokens, replacement)
+}
+
+func replaceJSONPointerTokens(raw json.RawMessage, tokens []string, replacement json.RawMessage) (json.RawMessage, bool, error) {
+	normalized, err := normalizeJSON(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(tokens) == 0 {
+		return cloneRaw(replacement), true, nil
+	}
+	trimmed := bytes.TrimSpace(normalized)
+	switch trimmed[0] {
+	case '{':
+		fields, err := decodeJSONObject(trimmed)
+		if err != nil {
+			return nil, false, err
+		}
+		child, ok := fields[tokens[0]]
+		if !ok {
+			return normalized, false, nil
+		}
+		updated, changed, err := replaceJSONPointerTokens(child, tokens[1:], replacement)
+		if err != nil {
+			return nil, false, err
+		}
+		if !changed {
+			return normalized, false, nil
+		}
+		fields[tokens[0]] = updated
+		encoded, err := json.Marshal(fields)
+		return encoded, true, err
+	case '[':
+		values, err := scriptArray(trimmed)
+		if err != nil {
+			return nil, false, err
+		}
+		index, valid := jsonPointerArrayIndex(tokens[0])
+		if !valid || index >= len(values) {
+			return normalized, false, nil
+		}
+		updated, changed, err := replaceJSONPointerTokens(values[index], tokens[1:], replacement)
+		if err != nil {
+			return nil, false, err
+		}
+		if !changed {
+			return normalized, false, nil
+		}
+		values[index] = updated
+		encoded, err := json.Marshal(values)
+		return encoded, true, err
+	default:
+		return normalized, false, nil
+	}
+}
+
+func jsonPointerArrayIndex(token string) (int, bool) {
+	if token == "" || (len(token) > 1 && token[0] == '0') {
+		return 0, false
+	}
+	value, err := strconv.ParseUint(token, 10, 64)
+	if err != nil || value > uint64(^uint(0)>>1) {
+		return 0, false
+	}
+	return int(value), true
+}
+
+func isRawCDPField(name string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(name, "-", "_"), " ", "_"))
+	switch normalized {
+	case "raw_cdp", "raw_cdp_frame", "raw_cdp_frames", "cdp_frame", "cdp_frames":
+		return true
+	default:
+		return false
+	}
+}
+
+// EnsureNoConfiguredCredentials is a small manifest-boundary helper. It
+// validates arbitrary serialized metadata without exposing the values in an
+// error message.
+func EnsureNoConfiguredCredentials(data []byte, credentials []string) error {
+	secretBytes, err := newRedactionCredentials(credentials)
+	if err != nil {
+		return err
+	}
+	if containsCredential(data, secretBytes) {
+		return newRedactionError(ErrRedactionCredentialSurvived, "validate metadata", "metadata", nil, secretBytes)
+	}
+	return nil
+}
+
+// RedactRawDiagnostics applies only credential byte replacement to an
+// explicitly separate diagnostic blob. It deliberately does not return an
+// Event and therefore cannot be used as strict semantic replay input. The
+// canonical event APIs reject raw CDP fields and raw_cdp=true.
+func RedactRawDiagnostics(data []byte, credentials []string) ([]byte, error) {
+	secretBytes, err := newRedactionCredentials(credentials)
+	if err != nil {
+		return nil, err
+	}
+	redacted := redactBytes(string(data), secretBytes)
+	if containsCredential(redacted, secretBytes) {
+		return nil, newRedactionError(ErrRedactionCredentialSurvived, "redact diagnostics", "diagnostic", nil, secretBytes)
+	}
+	return redacted, nil
+}
+
+// sameJSONStructure is intentionally used only to avoid marking a page-owned
+// object as redacted merely because canonical map encoding sorted its keys.
+// It compares JSON tokens without decoding numbers through float64.
+func sameJSONStructure(first, second []byte) bool {
+	var left, right any
+	leftDecoder := json.NewDecoder(bytes.NewReader(first))
+	rightDecoder := json.NewDecoder(bytes.NewReader(second))
+	leftDecoder.UseNumber()
+	rightDecoder.UseNumber()
+	if leftDecoder.Decode(&left) != nil || rightDecoder.Decode(&right) != nil {
+		return false
+	}
+	return jsonEquivalent(left, right)
+}
+
+func jsonEquivalent(left, right any) bool {
+	switch leftValue := left.(type) {
+	case map[string]any:
+		rightValue, ok := right.(map[string]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for key, value := range leftValue {
+			other, ok := rightValue[key]
+			if !ok || !jsonEquivalent(value, other) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		rightValue, ok := right.([]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for index := range leftValue {
+			if !jsonEquivalent(leftValue[index], rightValue[index]) {
+				return false
+			}
+		}
+		return true
+	case json.Number:
+		rightValue, ok := right.(json.Number)
+		return ok && leftValue == rightValue
+	default:
+		return fmt.Sprint(left) == fmt.Sprint(right)
+	}
+}

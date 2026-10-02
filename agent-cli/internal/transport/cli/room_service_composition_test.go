@@ -12,7 +12,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeDevicesWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	captureReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
@@ -103,11 +103,11 @@ func requireFixtureStep(tb testing.TB, step string, err error) {
 }
 
 // scriptedBrowserHandle asserts that a scripted runtime opened its own handle type.
-func scriptedBrowserHandle(tb testing.TB, value any) *testkit.ScriptedBrowserHandle {
+func scriptedBrowserHandle(tb testing.TB, value any) *webmcptest.ScriptedBrowserHandle {
 	tb.Helper()
-	handle, ok := value.(*testkit.ScriptedBrowserHandle)
+	handle, ok := value.(*webmcptest.ScriptedBrowserHandle)
 	if !ok {
-		tb.Fatalf("browser handle = %T, want *testkit.ScriptedBrowserHandle", value)
+		tb.Fatalf("browser handle = %T, want *webmcptest.ScriptedBrowserHandle", value)
 	}
 	return handle
 }

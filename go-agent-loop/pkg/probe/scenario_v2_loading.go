@@ -56,6 +56,9 @@ func LoadScenarioV2(input any, scenarioPath string, lookups ...CorpusLookup) (Sc
 			return ScenarioV2{}, err
 		}
 	}
+	if err := validateScenarioV2ProviderExpectations(result); err != nil {
+		return ScenarioV2{}, err
+	}
 	if err := resolveScenarioV2Fixtures(&result); err != nil {
 		return ScenarioV2{}, err
 	}
@@ -245,7 +248,7 @@ func (s ScenarioV2) Validate(lookups ...CorpusLookup) error {
 			return err
 		}
 	}
-	return nil
+	return validateScenarioV2ProviderExpectations(s)
 }
 
 // Valid reports whether a typed v2 scenario passes Validate.

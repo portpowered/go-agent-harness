@@ -10,8 +10,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -43,13 +43,13 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 		FrameID:     "frame-1",
 		InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
 	}
-	runtimeTargets := make([]testkit.TargetConfig, 0, len(targets))
+	runtimeTargets := make([]webmcptest.TargetConfig, 0, len(targets))
 	laneTargets := make([]discovery.Target, 0, len(targets))
 	publicIDs := make([]string, 0, len(targets))
 	for _, target := range targets {
 		publicID := publicTargetID(target.rawID)
 		publicIDs = append(publicIDs, string(publicID))
-		runtimeTargets = append(runtimeTargets, testkit.NewTargetConfig(webmcp.Target{
+		runtimeTargets = append(runtimeTargets, webmcptest.NewTargetConfig(webmcp.Target{
 			BrowserID: candidate.ID,
 			ID:        webmcp.TargetID(target.rawID),
 			Type:      "page",
@@ -57,11 +57,11 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 			URL:       target.url,
 			Origin:    target.url[:len(target.url)-1],
 			Eligible:  true,
-		}, testkit.WithInitialCatalog(pageTool)))
+		}, webmcptest.WithInitialCatalog(pageTool)))
 		laneTargets = append(laneTargets, exactSelectionLaneTarget(candidate.ID, string(publicID), target.title, target.url))
 	}
 
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate, runtimeTargets...))
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate, runtimeTargets...))
 	laneCandidate := discovery.BrowserCandidate{
 		ID:       string(candidate.ID),
 		Source:   discovery.SourceConfigured,
@@ -152,19 +152,19 @@ func executeExactTabSelection(t *testing.T, broker webmcp.Broker, browserID webm
 
 // assertExactSelectionOperations requires one open, list, and attach, with
 // the attach on the exact raw target and no activation.
-func assertExactSelectionOperations(t *testing.T, operations []testkit.Operation, rawTargetID webmcp.TargetID) {
+func assertExactSelectionOperations(t *testing.T, operations []webmcptest.Operation, rawTargetID webmcp.TargetID) {
 	t.Helper()
-	counts := make(map[testkit.OperationKind]int)
+	counts := make(map[webmcptest.OperationKind]int)
 	for _, operation := range operations {
 		counts[operation.Kind]++
-		if operation.Kind == testkit.OperationAttach && operation.TargetID != rawTargetID {
+		if operation.Kind == webmcptest.OperationAttach && operation.TargetID != rawTargetID {
 			t.Fatalf("attached target = %q, want exact raw target %s", operation.TargetID, rawTargetID)
 		}
 	}
-	if counts[testkit.OperationOpen] != 1 || counts[testkit.OperationListTargets] != 1 || counts[testkit.OperationAttach] != 1 {
+	if counts[webmcptest.OperationOpen] != 1 || counts[webmcptest.OperationListTargets] != 1 || counts[webmcptest.OperationAttach] != 1 {
 		t.Fatalf("exact selection operations = %#v, want one open/list/attach", operations)
 	}
-	if counts[testkit.OperationActivate] != 0 {
+	if counts[webmcptest.OperationActivate] != 0 {
 		t.Fatalf("exact selection unexpectedly activated a target: %#v", operations)
 	}
 }

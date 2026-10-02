@@ -99,7 +99,7 @@ trailing `$`). The lists are:
 | `session-contract` | agentsession/interface.go | go-device-gateway, go-llm-gateway |
 | `device-contract` | devices/interface.go and the device list/probe transports | go-device-gateway |
 | `agent-cli-production` | agent-cli/internal, non-test | agent-cli/internal/audio*, the retired wavio and loop clock packages |
-| `agent-cli-binary` | agent-cli/internal, non-test, except webmcp/testkit | `encoding/binary` |
+| `agent-cli-binary` | agent-cli/internal, non-test, except webmcp/hermetic | `encoding/binary` |
 
 `TestDepguardImportRulesRejectViolations` in tools/architecturegate runs the
 pinned depguard analyzer over these lists with a violating and an allowed

@@ -83,8 +83,8 @@ func TestAdoptSelectionRejectsIncompleteSelectionAndUsesBaseSelect(t *testing.T)
 		t.Fatalf("incomplete selection error = %v", err)
 	}
 	broker := &baseBroker{}
-	if err := adoptSelection(context.Background(), broker, discovery.Selection{BrowserID: "browser", TargetID: "tab"}, true); err != nil || broker.selectCalls != 1 {
-		t.Fatalf("base select adoption = %v calls=%d", err, broker.selectCalls)
+	if err := adoptSelection(context.Background(), broker, discovery.Selection{BrowserID: "browser", TargetID: "tab"}, true); err != nil || broker.CallCount("select") != 1 {
+		t.Fatalf("base select adoption = %v calls=%d", err, broker.CallCount("select"))
 	}
 	if err := adoptSelection(context.Background(), nil, discovery.Selection{}, false); !errors.Is(err, webmcp.ErrClosed) {
 		t.Fatalf("nil broker adoption = %v, want ErrClosed", err)

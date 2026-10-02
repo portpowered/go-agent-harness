@@ -23,21 +23,21 @@ func unverifiedError() error {
 
 func discoveryStageCases() []stageCase {
 	return []stageCase{
-		{name: "discover error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.discoverErr = errFake }, code: string(webmcp.ErrorEndpointNotFound), check: checkDiscovery, checkStatus: CheckFail},
-		{name: "no candidates", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.candidates = nil }, code: string(webmcp.ErrorEndpointNotFound), check: checkDiscovery, checkStatus: CheckFail},
+		{name: "discover error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.DiscoverErr = errFake }, code: string(webmcp.ErrorEndpointNotFound), check: checkDiscovery, checkStatus: CheckFail},
+		{name: "no candidates", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.Candidates = nil }, code: string(webmcp.ErrorEndpointNotFound), check: checkDiscovery, checkStatus: CheckFail},
 		{name: "remote candidate", mutate: func(b *fakeBroker, _ *config.BrowserConfig) {
-			b.candidates[0].Loopback = false
-			b.candidates[0].HTTPURL = "http://browser.example:9222"
+			b.Candidates[0].Loopback = false
+			b.Candidates[0].HTTPURL = "http://browser.example:9222"
 		}, code: string(webmcp.ErrorRemoteEndpointDenied), check: checkDiscovery, checkStatus: CheckFail},
 		{name: "stale browser", mutate: func(_ *fakeBroker, c *config.BrowserConfig) { c.Selection.Browser = "browser-z" }, code: string(webmcp.ErrorStaleSelection), check: checkSelection, checkStatus: CheckFail},
 		{name: "ambiguous browser", mutate: func(b *fakeBroker, c *config.BrowserConfig) {
 			c.Selection.Browser = ""
-			b.candidates = append(b.candidates, webmcp.BrowserCandidate{ID: "browser-b", Loopback: true})
+			b.Candidates = append(b.Candidates, webmcp.BrowserCandidate{ID: "browser-b", Loopback: true})
 		}, code: string(webmcp.ErrorAmbiguousBrowser), check: checkSelection, checkStatus: CheckFail},
 		{name: "version unavailable", mutate: func(b *fakeBroker, _ *config.BrowserConfig) {
-			b.candidates[0].Product, b.candidates[0].Protocol = "", ""
+			b.Candidates[0].Product, b.Candidates[0].Protocol = "", ""
 		}, code: string(webmcp.ErrorBrowserProtocol), check: checkVersion, checkStatus: CheckFail},
-		{name: "targets error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.targetsErr = errFake }, code: string(webmcp.ErrorEndpointUnreachable), check: checkTargets, checkStatus: CheckFail},
+		{name: "targets error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.ListTargetsErr = errFake }, code: string(webmcp.ErrorEndpointUnreachable), check: checkTargets, checkStatus: CheckFail},
 	}
 }
 
@@ -54,24 +54,24 @@ func selectionStageCases() []stageCase {
 		}, code: string(webmcp.ErrorStaleSelection), check: checkSelection, checkStatus: CheckFail},
 		{name: "ambiguous single", mutate: func(b *fakeBroker, c *config.BrowserConfig) {
 			c.Selection.Tab, c.Selection.AutoSelect = "", config.BrowserAutoSelectSingle
-			b.targets = append(b.targets, webmcp.Target{ID: "tab-b", Type: targetTypePage, Origin: testOrigin, Eligible: true})
+			b.Targets = append(b.Targets, webmcp.Target{ID: "tab-b", Type: targetTypePage, Origin: testOrigin, Eligible: true})
 		}, code: string(webmcp.ErrorAmbiguousTab), check: checkSelection, checkStatus: CheckFail},
 		{name: "single without targets", mutate: func(b *fakeBroker, c *config.BrowserConfig) {
 			c.Selection.Tab, c.Selection.AutoSelect = "", config.BrowserAutoSelectSingle
-			b.targets = nil
+			b.Targets = nil
 		}, code: string(webmcp.ErrorNoEligibleTab), check: checkSelection, checkStatus: CheckFail},
-		{name: "off without targets", mutate: func(b *fakeBroker, c *config.BrowserConfig) { c.Selection.Tab = ""; b.targets = nil }, code: string(webmcp.ErrorNoEligibleTab), check: checkSelection, checkStatus: CheckFail},
+		{name: "off without targets", mutate: func(b *fakeBroker, c *config.BrowserConfig) { c.Selection.Tab = ""; b.Targets = nil }, code: string(webmcp.ErrorNoEligibleTab), check: checkSelection, checkStatus: CheckFail},
 	}
 }
 
 func pageStageCases() []stageCase {
 	return []stageCase{
-		{name: "attach failure", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.selectErr = errFake }, code: string(webmcp.ErrorTargetAttachFailed), check: checkWebMCP, checkStatus: CheckFail},
-		{name: "unverified at select", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.selectErr = unverifiedError() }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
-		{name: "unsupported webmcp", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.page.WebMCPDomainSupported = false }, code: string(webmcp.ErrorUnsupportedWebMCP), check: checkWebMCP, checkStatus: CheckFail},
-		{name: "catalog error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.catalogErr = errFake }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
-		{name: "catalog unverified error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.catalogErr = unverifiedError() }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
-		{name: "catalog not ready", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.catalog.Context.CatalogReady = false }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
+		{name: "attach failure", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.SelectErr = errFake }, code: string(webmcp.ErrorTargetAttachFailed), check: checkWebMCP, checkStatus: CheckFail},
+		{name: "unverified at select", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.SelectErr = unverifiedError() }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
+		{name: "unsupported webmcp", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.Page.WebMCPDomainSupported = false }, code: string(webmcp.ErrorUnsupportedWebMCP), check: checkWebMCP, checkStatus: CheckFail},
+		{name: "catalog error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.ListToolsErr = errFake }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
+		{name: "catalog unverified error", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.ListToolsErr = unverifiedError() }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
+		{name: "catalog not ready", mutate: func(b *fakeBroker, _ *config.BrowserConfig) { b.Catalog.Context.CatalogReady = false }, code: string(webmcp.ErrorBrowserProtocol), check: checkCatalog, checkStatus: CheckFail},
 	}
 }
 
@@ -108,9 +108,9 @@ func TestDiagnoseUnselectedTargetLeavesPageToolsUnchecked(t *testing.T) {
 
 func TestDiagnoseSingleAutoSelectAndLegacyCatalog(t *testing.T) {
 	broker := readyBroker()
-	broker.catalog.Context = webmcp.PageContext{Connected: true, Ready: true}
-	broker.page.Key = webmcp.PageKey{}
-	broker.page.Origin, broker.page.Title = "", ""
+	broker.Catalog.Context = webmcp.PageContext{Connected: true, Ready: true}
+	broker.Page.Key = webmcp.PageKey{}
+	broker.Page.Origin, broker.Page.Title = "", ""
 	browser := readyBrowser()
 	browser.Selection.Tab, browser.Selection.AutoSelect = "", config.BrowserAutoSelectSingle
 	report, err := Diagnose(context.Background(), requestFor(browser, broker))
@@ -161,8 +161,8 @@ func TestSelectTargetUsesActivationWhenSupported(t *testing.T) {
 	if _, err := selectTarget(context.Background(), broker, target, true); err != nil {
 		t.Fatalf("selectTarget: %v", err)
 	}
-	if !broker.activated || len(broker.selected) != 0 {
-		t.Fatalf("activated=%t plain selects=%d", broker.activated, len(broker.selected))
+	if !broker.activated || len(broker.Selects) != 0 {
+		t.Fatalf("activated=%t plain selects=%d", broker.activated, len(broker.Selects))
 	}
 }
 
@@ -173,5 +173,5 @@ type activatingBroker struct {
 
 func (b *activatingBroker) SelectWithOptions(_ context.Context, _ webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
 	b.activated = options.Activate
-	return b.page, nil
+	return b.Page, nil
 }

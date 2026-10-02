@@ -53,36 +53,6 @@ func TestLoadSelectionsKeepsInvalidDocumentsAndDeduplicates(t *testing.T) {
 	}
 }
 
-func TestToLegacyProjectsProviderSteps(t *testing.T) {
-	versioned := probe.ScenarioV2{
-		SchemaVersion: probe.ScenarioV2Version,
-		ID:            "legacy-projection",
-		Steps: []probe.ScenarioV2Step{
-			{Type: probe.ScenarioV2StepSendText, Text: "hello"},
-			{Type: probe.ScenarioV2StepSleepFake, DurationMS: 5},
-			{Type: probe.ScenarioV2StepClose},
-		},
-		Expectations: []probe.ScenarioV2Expectation{{Type: probe.ScenarioV2ExpectationTranscriptContains, Text: "hello"}},
-	}
-	legacy, err := ToLegacy(versioned, allowAllCorpus{})
-	if err != nil {
-		t.Fatalf("project v2 scenario: %v", err)
-	}
-	if len(legacy.Steps) != 3 || legacy.Steps[0].Type != probe.StepSendText || legacy.Steps[1].Duration != 5 {
-		t.Fatalf("projected steps = %+v", legacy.Steps)
-	}
-	browser := versioned
-	browser.Steps = []probe.ScenarioV2Step{{Type: probe.ScenarioV2StepBrowserConnect}}
-	if _, err := ToLegacy(browser, allowAllCorpus{}); err == nil || !strings.Contains(err.Error(), "browser-aware probe executor") {
-		t.Fatalf("browser step projection error = %v", err)
-	}
-	fixture := versioned
-	fixture.BrowserFixture = "browser.json"
-	if _, err := ToLegacy(fixture, allowAllCorpus{}); err == nil {
-		t.Fatal("fixture-bearing scenario was projected")
-	}
-}
-
 func TestRecordingDirectoryIsRunScopedAndSlugged(t *testing.T) {
 	const fixtureRoot = "/root"
 	if got := RecordingDirectory("", 0, Selection{}); got != "" {

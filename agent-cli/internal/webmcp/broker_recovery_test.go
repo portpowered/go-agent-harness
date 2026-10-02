@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-selection", Product: "fixture", Loopback: true}
-	runtime := newRecoveryRuntime(candidate, testkit.NewTargetConfig(webmcp.Target{
+	runtime := newRecoveryRuntime(candidate, webmcptest.NewTargetConfig(webmcp.Target{
 		BrowserID: candidate.ID,
 		ID:        "tab-selection",
 		Type:      "page",
@@ -24,7 +25,7 @@ func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testi
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue)
+	handle := mustAs[*webmcptest.ScriptedBrowserHandle](t, handleValue)
 	handle.BlockListTargets()
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
@@ -41,7 +42,7 @@ func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testi
 		})
 		selectionDone <- selectionCall{page: page, err: selectErr}
 	}()
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationListTargets, operationCursor); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), webmcptest.OperationListTargets, operationCursor); err != nil {
 		t.Fatalf("wait blocked selection list: %v", err)
 	}
 
@@ -56,16 +57,16 @@ func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testi
 	if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != "" || classified.Details["reconnect_required"] != true {
 		t.Fatalf("selection loss details = %#v, want bounded browser identity and reconnect guidance", classified.Details)
 	}
-	if countRecoveryOperations(runtime.Operations(), testkit.OperationAttach) != 0 {
+	if countRecoveryOperations(runtime.Operations(), webmcptest.OperationAttach) != 0 {
 		t.Fatalf("selection operations = %#v, want no attach after list loss", runtime.Operations())
 	}
 }
 
 func TestStatefulBrokerDisconnectDuringEnableRetiresSelectionAndUnblocksOnce(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-enable", Product: "fixture", Loopback: true}
-	runtime := newRecoveryRuntime(candidate, testkit.NewTargetConfig(
+	runtime := newRecoveryRuntime(candidate, webmcptest.NewTargetConfig(
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-enable", Type: "page"},
-		testkit.WithBlockedEnable(),
+		webmcptest.WithBlockedEnable(),
 	))
 	defer closeAtTestEnd(t, runtime)
 
@@ -84,7 +85,7 @@ func TestStatefulBrokerDisconnectDuringEnableRetiresSelectionAndUnblocksOnce(t *
 		})
 		selectionDone <- selectionCall{page: page, err: selectErr}
 	}()
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationEnableWebMCP, operationCursor); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), hermetic.OperationEnableWebMCP, operationCursor); err != nil {
 		t.Fatalf("wait blocked enable: %v", err)
 	}
 	handle := runtime.Browser(candidate.ID)
@@ -109,16 +110,16 @@ func TestStatefulBrokerDisconnectDuringEnableRetiresSelectionAndUnblocksOnce(t *
 	if _, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{}); !isClassifiedCode(err, webmcp.ErrorBrowserDisconnected) {
 		t.Fatalf("catalog after enable loss = %v, want browser_disconnected", err)
 	}
-	if countRecoveryOperations(runtime.Operations(), testkit.OperationDisconnect) != 1 {
+	if countRecoveryOperations(runtime.Operations(), webmcptest.OperationDisconnect) != 1 {
 		t.Fatalf("disconnect operations = %#v, want one", runtime.Operations())
 	}
 }
 
 func TestStatefulBrokerDisconnectBeforeInvocationDispatchReturnsOneBrowserLoss(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-predispatch", Product: "fixture", Loopback: true}
-	runtime := newRecoveryRuntime(candidate, testkit.NewTargetConfig(
+	runtime := newRecoveryRuntime(candidate, webmcptest.NewTargetConfig(
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-predispatch", Type: "page"},
-		testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
+		webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
 	))
 	defer closeAtTestEnd(t, runtime)
 	broker, _, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-predispatch")
@@ -142,7 +143,7 @@ func TestStatefulBrokerDisconnectBeforeInvocationDispatchReturnsOneBrowserLoss(t
 		invokeDone <- invocationCall{result: result, err: invokeErr}
 	}()
 	created := assertInvocationCreated(t, watch, ref)
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationListTargets, operationCursor); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), webmcptest.OperationListTargets, operationCursor); err != nil {
 		t.Fatalf("wait pre-dispatch target check: %v", err)
 	}
 	if err := handle.Disconnect("pre_dispatch_loss"); err != nil {
@@ -158,7 +159,7 @@ func TestStatefulBrokerDisconnectBeforeInvocationDispatchReturnsOneBrowserLoss(t
 	if terminalEvent.Type != webmcp.BrokerEventInvocationTerminal || terminalEvent.InvocationID != created.InvocationID || terminalEvent.Reason != string(webmcp.ErrorBrowserDisconnected) {
 		t.Fatalf("pre-dispatch terminal event = %#v, want one correlated browser loss", terminalEvent)
 	}
-	if countRecoveryOperations(runtime.Operations(), testkit.OperationInvoke) != 0 {
+	if countRecoveryOperations(runtime.Operations(), webmcptest.OperationInvoke) != 0 {
 		t.Fatalf("pre-dispatch operations = %#v, want no page invocation", runtime.Operations())
 	}
 	if _, err := broker.WaitInvocation(context.Background(), created.InvocationID); err != nil {
@@ -171,9 +172,9 @@ func TestStatefulBrokerDisconnectBeforeInvocationDispatchReturnsOneBrowserLoss(t
 
 func TestStatefulBrokerDisconnectDuringCatalogRefreshReturnsBrowserLoss(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-refresh", Product: "fixture", Loopback: true}
-	runtime := newRecoveryRuntime(candidate, testkit.NewTargetConfig(
+	runtime := newRecoveryRuntime(candidate, webmcptest.NewTargetConfig(
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-refresh", Type: "page"},
-		testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object"}`)),
+		webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object"}`)),
 	))
 	defer closeAtTestEnd(t, runtime)
 	broker, session, _ := newRecoveryInvocationBroker(t, runtime, candidate, "tab-refresh")
@@ -186,7 +187,7 @@ func TestStatefulBrokerDisconnectDuringCatalogRefreshReturnsBrowserLoss(t *testi
 		_, refreshErr := broker.ListTools(context.Background(), webmcp.ListToolsOptions{Refresh: true})
 		refreshDone <- refreshErr
 	}()
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationEnableWebMCP, operationCursor); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), hermetic.OperationEnableWebMCP, operationCursor); err != nil {
 		t.Fatalf("wait blocked catalog refresh: %v", err)
 	}
 	handle := runtime.Browser(candidate.ID)
@@ -204,9 +205,9 @@ func TestStatefulBrokerDisconnectDuringCatalogRefreshReturnsBrowserLoss(t *testi
 
 func TestStatefulBrokerDisconnectAfterDispatchWinsOverLateResponse(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-postdispatch", Product: "fixture", Loopback: true}
-	runtime := newRecoveryRuntime(candidate, testkit.NewTargetConfig(
+	runtime := newRecoveryRuntime(candidate, webmcptest.NewTargetConfig(
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-postdispatch", Type: "page"},
-		testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
+		webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
 	))
 	defer closeAtTestEnd(t, runtime)
 	broker, session, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-postdispatch")
@@ -272,14 +273,14 @@ func TestStatefulBrokerDisconnectAfterDispatchWinsOverLateResponse(t *testing.T)
 	}
 }
 
-func newRecoveryRuntime(candidate webmcp.BrowserCandidate, target testkit.TargetConfig) *testkit.ScriptedBrowserRuntime {
-	return testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+func newRecoveryRuntime(candidate webmcp.BrowserCandidate, target webmcptest.TargetConfig) *webmcptest.ScriptedBrowserRuntime {
+	return webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets:   []testkit.TargetConfig{target},
+		Targets:   []webmcptest.TargetConfig{target},
 	})
 }
 
-func newRecoveryInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate, targetID webmcp.TargetID) (*webmcp.StatefulBroker, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func newRecoveryInvocationBroker(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate, targetID webmcp.TargetID) (*webmcp.StatefulBroker, *webmcptest.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
@@ -303,7 +304,7 @@ func newRecoveryInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserR
 		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open recovery handle: %v", err)
 	}
-	session := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue).TargetSession(targetID)
+	session := mustAs[*webmcptest.ScriptedBrowserHandle](t, handleValue).TargetSession(targetID)
 	if session == nil {
 		closeFailedSetupBroker(t, broker)
 		t.Fatal("recovery session is nil")
@@ -376,7 +377,7 @@ func isClassifiedCode(err error, code webmcp.ErrorCode) bool {
 	return errors.As(err, &classified) && classified != nil && classified.Code == code
 }
 
-func countRecoveryOperations(operations []testkit.Operation, kind testkit.OperationKind) int {
+func countRecoveryOperations(operations []webmcptest.Operation, kind webmcptest.OperationKind) int {
 	count := 0
 	for _, operation := range operations {
 		if operation.Kind == kind {

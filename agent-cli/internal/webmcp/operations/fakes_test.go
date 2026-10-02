@@ -3,11 +3,11 @@ package operations
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/selectionstore"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 const (
@@ -30,108 +30,25 @@ func (e testError) Error() string { return string(e) }
 
 const errTestBroker = testError("broker failure")
 
-// fakeBroker is an in-memory broker whose discovery, targets, catalog, and
-// invocation results are fixed by the test. It records the calls that
-// matter to the operations under test.
-type fakeBroker struct {
-	mu sync.Mutex
-
-	candidates     []webmcp.BrowserCandidate
-	discoverErr    error
-	targets        []webmcp.Target
-	listTargetsErr error
-	selectErr      error
-	selected       webmcp.PageContext
-	tools          []webmcp.ToolDescriptor
-	catalogContext webmcp.PageContext
-	listToolsErr   error
-	invokeResult   webmcp.InvokeResult
-	invokeErr      error
-	cancelErr      error
-	events         chan webmcp.BrokerEvent
-
-	selects []webmcp.TargetSelector
-	invokes []webmcp.InvokeRequest
-	cancels []webmcp.CancelRequest
-}
+// fakeBroker is the shared scripted broker; newFakeBroker scripts one
+// configured browser with one page and one tool, and selects the page a
+// selector names.
+type fakeBroker = webmcptest.Broker
 
 func newFakeBroker() *fakeBroker {
 	return &fakeBroker{
-		candidates: []webmcp.BrowserCandidate{{ID: testBrowserID, Source: webmcp.DiscoverySourceConfigured, Product: "Chrome", BrowserInstanceID: testInstanceID, HTTPURL: "http://127.0.0.1:9222"}},
-		targets:    []webmcp.Target{pageTarget(testTargetID, testOrigin)},
-		tools:      []webmcp.ToolDescriptor{{Ref: testToolRef, Name: testToolName, FrameID: "main", Origin: testOrigin, Generation: testGeneration}},
+		Candidates: []webmcp.BrowserCandidate{{ID: testBrowserID, Source: webmcp.DiscoverySourceConfigured, Product: "Chrome", BrowserInstanceID: testInstanceID, HTTPURL: "http://127.0.0.1:9222"}},
+		Targets:    []webmcp.Target{pageTarget(testTargetID, testOrigin)},
+		Catalog:    webmcp.ToolCatalogSnapshot{Generation: testGeneration, Tools: []webmcp.ToolDescriptor{{Ref: testToolRef, Name: testToolName, FrameID: "main", Origin: testOrigin, Generation: testGeneration}}},
+		SelectPage: func(selector webmcp.TargetSelector) webmcp.PageContext {
+			return webmcp.PageContext{Key: webmcp.PageKey(selector), Title: "Selected", URL: testOrigin + "/app", Origin: testOrigin, Connected: true, Ready: true, Generation: testGeneration}
+		},
 	}
 }
 
 func pageTarget(id webmcp.TargetID, origin string) webmcp.Target {
 	return webmcp.Target{ID: id, Type: targetTypePage, Title: "Page " + string(id), URL: origin + "/path?secret=1#frag", Origin: origin, Eligible: true, Generation: testGeneration}
 }
-
-func (b *fakeBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	return append([]webmcp.BrowserCandidate(nil), b.candidates...), b.discoverErr
-}
-
-func (b *fakeBroker) ListTargets(_ context.Context, selector webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	if b.listTargetsErr != nil {
-		return nil, b.listTargetsErr
-	}
-	targets := make([]webmcp.Target, 0, len(b.targets))
-	for _, target := range b.targets {
-		if target.BrowserID == "" || target.BrowserID == selector.BrowserID {
-			targets = append(targets, target)
-		}
-	}
-	return targets, nil
-}
-
-func (b *fakeBroker) Select(_ context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.selects = append(b.selects, selector)
-	if b.selectErr != nil {
-		return webmcp.PageContext{}, b.selectErr
-	}
-	b.selected = webmcp.PageContext{Key: webmcp.PageKey(selector), Title: "Selected", URL: testOrigin + "/app", Origin: testOrigin, Connected: true, Ready: true, Generation: testGeneration}
-	return b.selected, nil
-}
-
-func (b *fakeBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.selected, nil
-}
-
-func (b *fakeBroker) ListTools(_ context.Context, options webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	if b.listToolsErr != nil {
-		return webmcp.ToolCatalogSnapshot{}, b.listToolsErr
-	}
-	return webmcp.ToolCatalogSnapshot{Context: b.catalogContext, Generation: testGeneration, Tools: append([]webmcp.ToolDescriptor(nil), b.tools...)}, nil
-}
-
-func (b *fakeBroker) Invoke(_ context.Context, request webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.invokes = append(b.invokes, request)
-	return b.invokeResult, b.invokeErr
-}
-
-func (b *fakeBroker) Cancel(_ context.Context, request webmcp.CancelRequest) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.cancels = append(b.cancels, request)
-	return b.cancelErr
-}
-
-func (b *fakeBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	if b.events == nil {
-		closed := make(chan webmcp.BrokerEvent)
-		close(closed)
-		return closed
-	}
-	return b.events
-}
-
-func (b *fakeBroker) Close() error { return nil }
 
 // optionsBroker adds selection options and context refresh.
 type optionsBroker struct {
@@ -160,7 +77,7 @@ type activatorBroker struct {
 
 func (b *activatorBroker) Activate(_ context.Context, selector webmcp.TargetSelector) error {
 	b.activated = append(b.activated, selector)
-	return b.selectErr
+	return b.SelectErr
 }
 
 // canceller adds direct cancellation and invocation waiting.
@@ -172,10 +89,10 @@ type canceller struct {
 }
 
 func (b *canceller) CancelDirect(_ context.Context, request webmcp.DirectCancelRequest) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Lock()
+	defer b.Unlock()
 	b.directCancels = append(b.directCancels, request)
-	return b.cancelErr
+	return b.CancelErr
 }
 
 func (b *canceller) WaitInvocation(context.Context, webmcp.InvocationID) (webmcp.InvokeResult, error) {

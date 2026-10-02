@@ -57,7 +57,7 @@ func resolveStepKind(step Step, index int) (StepKind, error) {
 	if step.Kind != "" && step.Type != "" && step.Kind != step.Type {
 		return "", makeError(CategoryContradictory, fmt.Sprintf("steps[%d].type", index), "type and kind disagree")
 	}
-	if _, ok := stepKind(string(kind)); !ok {
+	if !knownStepKind(kind) {
 		return "", makeError(CategoryUnknownVariant, fmt.Sprintf("steps[%d].type", index), "unknown step variant %q", kind)
 	}
 	return kind, nil
@@ -374,4 +374,14 @@ func declaresAudioCorpus(steps []Step, corpusID string) bool {
 
 func lookupCorpus(lookup CorpusLookup, id string) bool {
 	return lookup != nil && lookup.Has(id)
+}
+
+// knownStepKind reports whether kind is one of the runner's step variants.
+func knownStepKind(kind StepKind) bool {
+	switch kind {
+	case StepSendText, StepSendAudio, StepSendToolResult, StepAdvanceTo, StepWait, StepClose:
+		return true
+	default:
+		return false
+	}
 }

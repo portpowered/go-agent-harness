@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerDirectCancelClassifiesTerminalAfterDispatch(t *testing.T) {
@@ -172,7 +173,7 @@ func TestStatefulBrokerDirectCancelRequiresExactTerminalAndBoundsLateEvent(t *te
 	if err := session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`)); err != nil {
 		t.Fatalf(`late terminal response: %v`, err)
 	}
-	cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel)
+	cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel)
 	if len(cancelOperations) != 1 || cancelOperations[0].InvocationID != dispatched.BrowserInvocationID {
 		t.Fatalf(`direct cancel operations = %#v, want one exact request`, cancelOperations)
 	}
@@ -181,14 +182,14 @@ func TestStatefulBrokerDirectCancelRequiresExactTerminalAndBoundsLateEvent(t *te
 func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T) {
 	tests := []struct {
 		name      string
-		terminate func(*testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession) error
+		terminate func(*webmcptest.ScriptedBrowserRuntime, *webmcptest.ScriptedTargetSession) error
 		wantCode  webmcp.ErrorCode
 		wantEvent webmcp.BrowserEventType
 		wantOut   string
 	}{
 		{
 			name: `navigation`,
-			terminate: func(_ *testkit.ScriptedBrowserRuntime, session *testkit.ScriptedTargetSession) error {
+			terminate: func(_ *webmcptest.ScriptedBrowserRuntime, session *webmcptest.ScriptedTargetSession) error {
 				return session.Navigate(`https://fixture.test/next`, `https://fixture.test`)
 			},
 			wantCode:  webmcp.ErrorPageNavigated,
@@ -197,7 +198,7 @@ func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T
 		},
 		{
 			name: `browser_disconnect`,
-			terminate: func(runtime *testkit.ScriptedBrowserRuntime, _ *testkit.ScriptedTargetSession) error {
+			terminate: func(runtime *webmcptest.ScriptedBrowserRuntime, _ *webmcptest.ScriptedTargetSession) error {
 				return runtime.Disconnect(`browser-direct-cancel`, `transport_lost`)
 			},
 			wantCode:  webmcp.ErrorBrowserDisconnected,
@@ -234,24 +235,24 @@ func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T
 	}
 }
 
-func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *webmcptest.ScriptedBrowserRuntime, *webmcptest.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: `browser-direct-cancel`, Loopback: true}
-	targetOptions := []testkit.ScriptedTargetSessionOption{
-		testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: `test_fixture`}),
-		testkit.WithInitialCatalog(pageTool(`write_state`, `frame-1`, `{}`)),
-		testkit.WithCancellationResponse(false),
+	targetOptions := []webmcptest.ScriptedTargetSessionOption{
+		webmcptest.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: `test_fixture`}),
+		webmcptest.WithInitialCatalog(pageTool(`write_state`, `frame-1`, `{}`)),
+		webmcptest.WithCancellationResponse(false),
 	}
 	if len(cancelErrors) > 0 && cancelErrors[0] != nil {
-		targetOptions = append(targetOptions, testkit.WithCancelError(cancelErrors[0]))
+		targetOptions = append(targetOptions, webmcptest.WithCancelError(cancelErrors[0]))
 	}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: `tab-a`, Type: `page`},
 				targetOptions...,
 			)},
@@ -281,7 +282,7 @@ func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.
 	if err != nil {
 		t.Fatalf(`open fixture handle: %v`, err)
 	}
-	session := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue).TargetSession(`tab-a`)
+	session := mustAs[*webmcptest.ScriptedBrowserHandle](t, handleValue).TargetSession(`tab-a`)
 	if session == nil {
 		t.Fatal(`fixture session is nil`)
 	}
@@ -289,7 +290,7 @@ func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.
 	fresh := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:           runtime,
 		Discoverer:        staticDiscoverer{candidate},
-		IDs:               testkit.NewDeterministicIDs(),
+		IDs:               hermetic.NewDeterministicIDs(),
 		Clock:             clock,
 		InvocationTimeout: 30 * time.Second,
 	})
@@ -300,7 +301,7 @@ func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.
 	return original, fresh, runtime, session, snapshot.Tools[0].Ref
 }
 
-func startDirectCancellation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, broker *webmcp.StatefulBroker, invocationID webmcp.InvocationID, ctx context.Context) <-chan error {
+func startDirectCancellation(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, broker *webmcp.StatefulBroker, invocationID webmcp.InvocationID, ctx context.Context) <-chan error {
 	t.Helper()
 	done := make(chan error, 1)
 	go func() {
@@ -311,7 +312,7 @@ func startDirectCancellation(t *testing.T, runtime *testkit.ScriptedBrowserRunti
 	}()
 	waitContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
-	if _, err := runtime.WaitForOperation(waitContext, testkit.OperationCancel); err != nil {
+	if _, err := runtime.WaitForOperation(waitContext, webmcptest.OperationCancel); err != nil {
 		t.Fatalf(`wait for direct cancel dispatch: %v`, err)
 	}
 	return done

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerOpenTabCreatesSelectsAndActivatesTarget(t *testing.T) {
@@ -20,10 +20,10 @@ func TestStatefulBrokerOpenTabCreatesSelectsAndActivatesTarget(t *testing.T) {
 		Origin:    "https://notes.example.test",
 		Eligible:  true,
 	}
-	base := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	base := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(opened,
-			testkit.WithInitialCatalog(webmcp.ToolDescriptor{
+		Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(opened,
+			webmcptest.WithInitialCatalog(webmcp.ToolDescriptor{
 				Name: "read_notes", FrameID: "frame-notes", InputSchema: []byte(`{"type":"object"}`),
 			}),
 		),
@@ -76,9 +76,9 @@ func TestStatefulBrokerOpenTabReportsSelectedWhileCatalogIsLate(t *testing.T) {
 		Origin:    "https://slow.example.test",
 		Eligible:  true,
 	}
-	base := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	base := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(opened)},
+		Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(opened)},
 	})
 	runtime := openTabRuntime{BrowserRuntime: base, opened: opened}
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{

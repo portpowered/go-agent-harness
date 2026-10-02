@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcptools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -22,8 +22,8 @@ const (
 
 func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-late", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{
 			BrowserID: candidate.ID,
 			ID:        "tab-late",
 			Type:      "page",
@@ -99,14 +99,14 @@ func TestStatefulBrokerReevaluatesLateCatalogOnTheSameAttachment(t *testing.T) {
 	}
 
 	operations := runtime.Operations()
-	counts := map[testkit.OperationKind]int{}
+	counts := map[webmcptest.OperationKind]int{}
 	for _, operation := range operations {
 		counts[operation.Kind]++
 	}
-	if counts[testkit.OperationAttach] != 1 || counts[testkit.OperationOpen] != 1 || counts[testkit.OperationListTargets] != 2 {
+	if counts[webmcptest.OperationAttach] != 1 || counts[webmcptest.OperationOpen] != 1 || counts[webmcptest.OperationListTargets] != 2 {
 		t.Fatalf("attachment operations = %#v, want one open, two attach target lookups, and one attach", counts)
 	}
-	if counts[testkit.OperationInvoke] != 1 {
+	if counts[webmcptest.OperationInvoke] != 1 {
 		t.Fatalf("invoke operations = %#v, want one late-tool invocation", counts)
 	}
 }

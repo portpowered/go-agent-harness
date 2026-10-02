@@ -113,14 +113,14 @@ func TestDiagnoseRuntimeConstructionFailures(t *testing.T) {
 
 func TestDiagnoseCleanupFailures(t *testing.T) {
 	broker := readyBroker()
-	broker.closeErr = errFake
+	broker.CloseErr = errFake
 	report, err := Diagnose(context.Background(), requestFor(readyBrowser(), broker))
 	requireFailure(t, report, err, ErrorCleanupFailed, checkCleanup, CheckFail)
 	if report.Status != StatusCleanupError {
 		t.Fatalf("status = %q", report.Status)
 	}
 
-	broker.catalogErr = errFake
+	broker.ListToolsErr = errFake
 	report, err = Diagnose(context.Background(), requestFor(readyBrowser(), broker))
 	requireFailure(t, report, err, string(webmcp.ErrorBrowserProtocol), checkCleanup, CheckFail)
 	if report.Error.Details["cleanup_error"] != true || !errors.Is(err, errFake) {

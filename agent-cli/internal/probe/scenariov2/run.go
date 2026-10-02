@@ -7,7 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/bundle"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
@@ -236,7 +236,7 @@ func (e *executor) persistedBrowserEvidence() *objective.BrowserEvidence {
 	if e == nil || len(e.eventOutput.Bytes()) == 0 {
 		return nil
 	}
-	events, err := testkit.ValidateEventStream(e.eventOutput.Bytes())
+	events, err := hermetic.ValidateEventStream(e.eventOutput.Bytes())
 	if err != nil || len(events) == 0 {
 		return nil
 	}
