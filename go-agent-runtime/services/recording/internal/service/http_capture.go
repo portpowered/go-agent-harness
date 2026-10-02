@@ -147,7 +147,9 @@ func captureHTTPHeaders(headers http.Header) recording.HTTPHeaders {
 	}
 	for name := range result {
 		switch strings.ToLower(name) {
-		case "authorization", "proxy-authorization", "x-api-key", "api-key", "cookie", "set-cookie":
+		case "authorization", "proxy-authorization", "x-api-key", "api-key", "cookie", "set-cookie",
+			// The ChatGPT account id identifies the signed-in workspace.
+			"chatgpt-account-id":
 			delete(result, name)
 		}
 	}

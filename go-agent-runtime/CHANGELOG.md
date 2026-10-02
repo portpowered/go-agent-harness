@@ -10,7 +10,9 @@
   `Build` fails before any network call, with "run `yui auth chatgpt`", when
   the store is missing, and needs no API key. Token refresh uses its own HTTP
   client, so a recording never captures it. The session runtime carries the
-  path from the host resolution to the provider build.
+  path from the host resolution to the provider build. With `ReplayPath` it
+  reads no auth store and never refreshes, so replay works with no login;
+  recording and replay use a fixed conversation id so captured bodies match.
 - `providers.OpenAILiveProvider` (`"openai-live"`) and
   `providers.OpenAILive1Model` (`"gpt-live-1"`): the built-in catalog lists
   `gpt-live-1` under `openai-live`.
@@ -27,6 +29,8 @@
 
 ### Changed
 
+- HTTP recordings drop the `chatgpt-account-id` request header, as they
+  already drop `Authorization` and cookies.
 - Security: a broad scope root such as `--allow-path /` or a parent of the
   home directory no longer exposes `~/.ssh` and the other home credential
   stores to `read_file`, `list_dir`, `read_image` or a symlink, provided the

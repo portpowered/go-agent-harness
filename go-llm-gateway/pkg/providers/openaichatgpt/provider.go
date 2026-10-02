@@ -22,10 +22,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
@@ -69,6 +71,14 @@ type CredentialSource interface {
 	Credential(ctx context.Context) (chatgptauth.Credential, error)
 }
 
+// ForceRefresher is a CredentialSource that can replace an access token the
+// backend rejected before its known expiry. *chatgptauth.Manager implements
+// it. On a 401 the provider force-refreshes once and retries the request
+// once, as Codex's UnauthorizedRecovery does (codex-rs/core/src/client.rs).
+type ForceRefresher interface {
+	ForceRefresh(ctx context.Context, rejected string) (chatgptauth.Credential, error)
+}
+
 // Provider is the `openai-chatgpt` text provider.
 type Provider struct {
 	credentials   CredentialSource
@@ -78,7 +88,9 @@ type Provider struct {
 	originator    string
 	clientVersion string
 	sessionID     string
+	idleTimeout   time.Duration
 	logger        logging.Logger
+	replay        *reasoningReplay
 
 	mu            sync.Mutex
 	resolvedModel string
@@ -94,7 +106,9 @@ func New(credentials CredentialSource, opts ...Option) *Provider {
 		baseURL:       DefaultBaseURL,
 		originator:    DefaultOriginator,
 		clientVersion: DefaultClientVersion,
+		idleTimeout:   DefaultStreamIdleTimeout,
 		logger:        logging.DummyLogger(),
+		replay:        newReasoningReplay(),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -148,42 +162,68 @@ func (p *Provider) InferStream(ctx context.Context, req providers.InferenceReque
 	if err != nil {
 		return nil, err
 	}
-	model, err := p.modelFor(ctx, req.Model, cred)
+	model, cred, err := p.modelFor(ctx, req.Model, cred)
 	if err != nil {
 		return nil, err
 	}
-	body, err := marshalRequest(req, model, p.sessionID)
+	body, err := marshalRequest(req, model, p.sessionID, p.replay)
 	if err != nil {
 		return nil, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+responsesPath, bytes.NewReader(body))
+	stream, err := p.send(ctx, "responses", cred, func(cred chatgptauth.Credential) (*http.Request, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+responsesPath, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("%s: create request: %w", ProviderName, err)
+		}
+		p.setHeaders(httpReq.Header, cred)
+		httpReq.Header.Set("Content-Type", contentTypeJSON)
+		httpReq.Header.Set("Accept", contentTypeSSE)
+		httpReq.Header.Set(headerOpenAIBeta, openAIBetaResponses)
+		httpReq.Header.Set(headerSessionID, p.sessionID)
+		httpReq.Header.Set(headerClientRequestID, p.sessionID)
+		return httpReq, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("%s: create request: %w", ProviderName, err)
-	}
-	p.setHeaders(httpReq.Header, cred)
-	httpReq.Header.Set("Content-Type", contentTypeJSON)
-	httpReq.Header.Set("Accept", contentTypeSSE)
-	httpReq.Header.Set(headerOpenAIBeta, openAIBetaResponses)
-	httpReq.Header.Set(headerSessionID, p.sessionID)
-	httpReq.Header.Set(headerClientRequestID, p.sessionID)
-
-	resp, err := p.client().Do(httpReq)
-	if err != nil {
-		return nil, requestError("responses", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		defer func() { closeBody(resp) }() // closure form keeps bodyclose aware of the release
-		code := readErrorCode(resp.Body)
-		p.logger.Error(ProviderName+": responses request failed",
-			logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "code", Value: code})
-		return nil, statusError(resp.StatusCode, code)
+		return nil, err
 	}
 	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		defer close(ch)
-		translateStream(resp.Body, ch, resp.Body.Close)
+		translateStream(stream, stream.Close, ch, p.idleTimeout, p.replay)
 	}()
 	return ch, nil
+}
+
+// send performs one backend request and returns the body of its 200
+// response, which the caller must close. On a 401
+// it force-refreshes the credential (when the source can) and retries once;
+// any other non-200 status is classified by statusError.
+func (p *Provider) send(ctx context.Context, operation string, cred chatgptauth.Credential, build func(chatgptauth.Credential) (*http.Request, error)) (io.ReadCloser, error) {
+	for attempt := 0; ; attempt++ {
+		req, err := build(cred)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := p.client().Do(req)
+		if err != nil {
+			return nil, requestError(operation, err)
+		}
+		if resp.StatusCode == http.StatusOK {
+			return resp.Body, nil
+		}
+		code := readErrorCode(resp.Body)
+		closeBody(resp)
+		p.logger.Error(ProviderName+": "+operation+" request failed",
+			logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "code", Value: code})
+		refresher, canRefresh := p.credentials.(ForceRefresher)
+		if resp.StatusCode != http.StatusUnauthorized || attempt > 0 || !canRefresh {
+			return nil, statusError(resp.StatusCode, code)
+		}
+		cred, err = refresher.ForceRefresh(ctx, cred.AccessToken)
+		if err != nil {
+			return nil, credentialError(err)
+		}
+	}
 }
 
 // credential fetches the current ChatGPT credential.
@@ -221,28 +261,28 @@ func (p *Provider) client() *http.Client {
 
 // modelFor picks the request model, then the configured model, then the
 // account's default model (listed once and cached).
-func (p *Provider) modelFor(ctx context.Context, requested string, cred chatgptauth.Credential) (string, error) {
+func (p *Provider) modelFor(ctx context.Context, requested string, cred chatgptauth.Credential) (string, chatgptauth.Credential, error) {
 	if model := strings.TrimSpace(requested); model != "" {
-		return model, nil
+		return model, cred, nil
 	}
 	if model := strings.TrimSpace(p.model); model != "" {
-		return model, nil
+		return model, cred, nil
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.resolvedModel != "" {
-		return p.resolvedModel, nil
+		return p.resolvedModel, cred, nil
 	}
-	list, err := p.listModels(ctx, cred)
+	list, cred, err := p.listModels(ctx, cred)
 	if err != nil {
-		return "", err
+		return "", cred, err
 	}
 	model, ok := DefaultModel(list)
 	if !ok {
-		return "", &providers.ProviderError{Provider: ProviderName, Detail: ErrNoModels.Error(), Err: errors.Join(providers.ErrUnsupportedRequest, ErrNoModels)}
+		return "", cred, &providers.ProviderError{Provider: ProviderName, Detail: ErrNoModels.Error(), Err: errors.Join(providers.ErrUnsupportedRequest, ErrNoModels)}
 	}
 	p.resolvedModel = model
-	return model, nil
+	return model, cred, nil
 }
 
 func closeBody(resp *http.Response) {

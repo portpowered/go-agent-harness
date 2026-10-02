@@ -67,3 +67,48 @@ func TestBuildOpenAIChatGPTWithoutLoginFailsFast(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenAIChatGPTReplaysACaptureWithNoLogin(t *testing.T) {
+	fake := fakechatgpt.New("chatgpt-access", "acct-1")
+	fake.Enqueue(fakechatgpt.TextReply("recorded answer"))
+	server := httptest.NewServer(fake)
+	authPath := filepath.Join(t.TempDir(), "auth", "chatgpt.json")
+	if err := chatgptauth.NewFileStore(authPath).Save(chatgptauth.Credential{
+		AccessToken: "chatgpt-access", RefreshToken: "refresh", AccountID: "acct-1", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("save credential: %v", err)
+	}
+	service := NewWithReplay(server.Client(), nil, clock.Real{}, &recordingServiceStub{}, catalog.New(), nil, &replayServiceStub{})
+	capturePath := filepath.Join(t.TempDir(), "capture.json")
+	request := llmproviders.InferenceRequest{Messages: []models.Message{models.NewTextMessage(models.RoleUser, "hi")}}
+
+	recorder, err := service.Build(t.Context(), runtimeproviders.Config{
+		Provider: runtimeproviders.OpenAIChatGPTProvider, Model: "gpt-test", BaseURL: server.URL, ChatGPTAuthPath: authPath, RecordPath: capturePath,
+	})
+	if err != nil {
+		t.Fatalf("record Build: %v", err)
+	}
+	if _, err := recorder.Infer(t.Context(), request); err != nil {
+		t.Fatalf("record Infer: %v", err)
+	}
+	writer, ok := recorder.(runtimeproviders.CaptureWriter)
+	if !ok {
+		t.Fatalf("recording provider %T is not a CaptureWriter", recorder)
+	}
+	if err := writer.FlushToFile(capturePath); err != nil {
+		t.Fatalf("flush capture: %v", err)
+	}
+	server.Close()
+
+	// No auth store, a dead backend: replay must need neither.
+	replayed, err := service.Build(t.Context(), runtimeproviders.Config{
+		Provider: runtimeproviders.OpenAIChatGPTProvider, Model: "gpt-test", BaseURL: server.URL, ReplayPath: capturePath,
+	})
+	if err != nil {
+		t.Fatalf("replay Build with no login: %v", err)
+	}
+	response, err := replayed.Infer(t.Context(), request)
+	if err != nil || response.Message.TextContent() != "recorded answer" {
+		t.Fatalf("replay = %q, %v; want the recorded answer", response.Message.TextContent(), err)
+	}
+}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -149,5 +150,46 @@ func TestOpenAIChatGPTWithoutLoginTellsTheUserToSignIn(t *testing.T) {
 				t.Fatalf("backend requests = %d, want 0", n)
 			}
 		})
+	}
+}
+
+func TestAskWithOpenAIChatGPTRunsAToolStepThroughTheLoop(t *testing.T) {
+	c := newChatGPTCLI(t)
+	c.signIn(t)
+	c.fake.Enqueue(fakechatgpt.Reply{Events: []string{
+		`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_1","summary":[],"encrypted_content":"enc-1"}}`,
+		`{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","call_id":"call_cli","name":"lookup","arguments":"{}"}}`,
+		`{"type":"response.completed","response":{}}`,
+	}}, fakechatgpt.TextReply("final answer"))
+
+	got := executeRoot(t, c.agentCLI, []string{"ask", "--provider", "openai-chatgpt", "--base-url", c.baseURL, "--model", "gpt-tools", "go"}, "")
+	if got.err != nil {
+		t.Fatalf("ask: %v (stderr %q)", got.err, got.stderr)
+	}
+	if !strings.Contains(got.stdout, "final answer") {
+		t.Fatalf("stdout = %q, want the final answer", got.stdout)
+	}
+	requests := c.fake.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("backend requests = %d, want 2 (tool call, then the answer)", len(requests))
+	}
+	var body struct {
+		Input []map[string]any `json:"input"`
+	}
+	if err := json.Unmarshal(requests[1].Body, &body); err != nil {
+		t.Fatalf("decode second request: %v", err)
+	}
+	var kinds []string
+	for _, item := range body.Input {
+		kinds = append(kinds, fmt.Sprint(item["type"]))
+		if item["type"] == "function_call_output" && item["call_id"] != "call_cli" {
+			t.Fatalf("function_call_output call_id = %v, want call_cli", item["call_id"])
+		}
+		if item["type"] == "reasoning" && item["encrypted_content"] != "enc-1" {
+			t.Fatalf("replayed reasoning = %v, want enc-1", item)
+		}
+	}
+	if want := "message reasoning function_call function_call_output"; strings.Join(kinds, " ") != want {
+		t.Fatalf("second request items = %v, want %s", kinds, want)
 	}
 }

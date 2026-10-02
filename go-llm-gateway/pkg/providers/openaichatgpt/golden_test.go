@@ -38,6 +38,11 @@ package openaichatgpt
 //   - stream_failed_usage_not_included.sse is response.failed with the code
 //     Codex maps at sse/responses.rs:408-420 and :688-690.
 //
+// Status mapping: only a 401 means "sign in again"; Codex maps a 403 to
+// misalignment_policy_violation or a Cloudflare block
+// (codex-rs/codex-api/src/api_bridge.rs:76-82, 207-214) and
+// server_is_overloaded/slow_down to ServerOverloaded (:63-73).
+//
 // Errors: error_usage_limit_reached.json is the body of
 // codex-rs/codex-api/src/endpoint/responses_websocket.rs:991-998, read the
 // way codex-rs/codex-api/src/api_bridge.rs:118-147 and OpenClaw
@@ -143,7 +148,11 @@ func TestRequestBodyMatchesGoldens(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := json.Marshal(buildRequest(tt.req, tt.opts))
+			request, err := buildRequest(tt.req, tt.opts)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			got, err := json.Marshal(request)
 			if err != nil {
 				t.Fatalf("marshal request: %v", err)
 			}
@@ -192,13 +201,61 @@ func renderUsage(usage messages.TokenUsage) string {
 	return fmt.Sprintf("prompt=%d completion=%d total=%d reasoning=%d", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.ReasoningTokens)
 }
 
-func translateFixture(body io.Reader) <-chan messages.StreamMessage {
+func translateFixture(body io.Reader, replay ...*reasoningReplay) <-chan messages.StreamMessage {
+	var keep *reasoningReplay
+	if len(replay) > 0 {
+		keep = replay[0]
+	}
 	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		defer close(ch)
-		translateStream(body, ch, func() error { return nil })
+		translateStream(body, func() error { return nil }, ch, 0, keep)
 	}()
 	return ch
+}
+
+// TestReasoningReplayMatchesGolden follows one tool step: the reasoning item
+// that preceded a function call (with its encrypted_content, without status
+// or plain content, as Codex replays ResponseItem::Reasoning) goes back
+// before that call in the next request; a reasoning item without
+// encrypted_content is dropped, as OpenClaw drops bare rs_ ids
+// (openai-responses-replay-messages-internal.ts:520-532).
+func TestReasoningReplayMatchesGolden(t *testing.T) {
+	replay := newReasoningReplay()
+	for range translateFixture(bytes.NewReader(readTestdata(t, "stream_reasoning_tool_call.sse")), replay) {
+	}
+	request, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+		messages.NewTextMessage(models.RoleUser, "weather in Paris?"),
+		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "call_1", Name: "get_weather", Arguments: `{"city":"Paris"}`}}},
+		{Role: models.RoleTool, ToolCallID: "call_1", ContentParts: []models.ContentPart{models.TextPart{Text: "sunny, 21C"}}},
+	}}, requestOptions{model: "gpt-test", sessionID: "session-fixed", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	got, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	assertJSONEqual(t, got, readTestdata(t, "request_reasoning_replay.json"))
+}
+
+func TestReasoningReplayIsBounded(t *testing.T) {
+	replay := newReasoningReplay()
+	for i := range maxReplayedCalls + 1 {
+		replay.remember(fmt.Sprintf("call_%d", i), []json.RawMessage{json.RawMessage(`{}`)})
+	}
+	if replay.before("call_0") != nil || replay.before(fmt.Sprintf("call_%d", maxReplayedCalls)) == nil {
+		t.Fatal("replay should drop the oldest call and keep the newest")
+	}
+}
+
+func TestToolResultWithoutCallIDIsRejected(t *testing.T) {
+	_, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+		{Role: models.RoleTool, ContentParts: []models.ContentPart{models.TextPart{Text: "orphan"}}},
+	}}, requestOptions{model: "gpt-test"})
+	if !errors.Is(err, ErrToolResultWithoutCallID) || !errors.Is(err, providers.ErrInvalidRequest) {
+		t.Fatalf("error = %v, want ErrToolResultWithoutCallID and ErrInvalidRequest", err)
+	}
 }
 
 func TestStreamTranslationMatchesGoldens(t *testing.T) {

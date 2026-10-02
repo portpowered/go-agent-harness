@@ -47,7 +47,7 @@ const (
 type responsesRequest struct {
 	Model             string         `json:"model"`
 	Instructions      string         `json:"instructions"`
-	Input             []inputItem    `json:"input"`
+	Input             []any          `json:"input"`
 	Tools             []functionTool `json:"tools,omitempty"`
 	ToolChoice        string         `json:"tool_choice,omitempty"`
 	ParallelToolCalls *bool          `json:"parallel_tool_calls,omitempty"`
@@ -98,7 +98,13 @@ type requestOptions struct {
 	model           string
 	reasoningEffort string
 	sessionID       string
+	// replay supplies reasoning items to send before earlier function calls.
+	replay *reasoningReplay
 }
+
+// ErrToolResultWithoutCallID reports a tool message with no ToolCallID; the
+// backend cannot match a function_call_output without its call_id.
+var ErrToolResultWithoutCallID = errors.New("tool result has no tool call id")
 
 // requestConfig is the provider-specific InferenceRequest.Config this
 // provider reads (for example `yui ask --model-config
@@ -108,22 +114,29 @@ type requestConfig struct {
 }
 
 // marshalRequest builds and encodes the Responses body for req.
-func marshalRequest(req providers.InferenceRequest, model, sessionID string) ([]byte, error) {
+func marshalRequest(req providers.InferenceRequest, model, sessionID string, replay *reasoningReplay) ([]byte, error) {
 	var config requestConfig
 	if len(bytes.TrimSpace(req.Config)) > 0 {
 		if err := json.Unmarshal(req.Config, &config); err != nil {
 			return nil, providers.NewInvalidRequestError(ProviderName, "config", ProviderName+": model config must be a JSON object")
 		}
 	}
-	body, err := json.Marshal(buildRequest(req, requestOptions{model: model, reasoningEffort: strings.TrimSpace(config.ReasoningEffort), sessionID: sessionID}))
+	request, err := buildRequest(req, requestOptions{model: model, reasoningEffort: strings.TrimSpace(config.ReasoningEffort), sessionID: sessionID, replay: replay})
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("%s: marshal request: %w", ProviderName, err)
 	}
 	return body, nil
 }
 
-func buildRequest(req providers.InferenceRequest, opts requestOptions) responsesRequest {
-	instructions, input := conversationToInput(req.Messages)
+func buildRequest(req providers.InferenceRequest, opts requestOptions) (responsesRequest, error) {
+	instructions, input, err := conversationToInput(req.Messages, opts.replay)
+	if err != nil {
+		return responsesRequest{}, err
+	}
 	if instructions == "" {
 		instructions = defaultInstructions
 	}
@@ -145,14 +158,15 @@ func buildRequest(req providers.InferenceRequest, opts requestOptions) responses
 	if opts.reasoningEffort != "" {
 		body.Reasoning = &reasoning{Effort: opts.reasoningEffort, Summary: reasoningSummaryAuto}
 	}
-	return body
+	return body, nil
 }
 
 // conversationToInput joins the system messages into instructions and maps
-// every other message to Responses input items.
-func conversationToInput(msgs []models.Message) (string, []inputItem) {
+// every other message to Responses input items. Reasoning items kept from an
+// earlier response go back right before the function call they preceded.
+func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string, []any, error) {
 	var instructions []string
-	input := make([]inputItem, 0, len(msgs))
+	input := make([]any, 0, len(msgs))
 	for _, msg := range msgs {
 		switch msg.Role {
 		case models.RoleSystem:
@@ -162,13 +176,19 @@ func conversationToInput(msgs []models.Message) (string, []inputItem) {
 		case models.RoleUser:
 			input = append(input, userItem(msg))
 		case models.RoleAssistant:
-			input = append(input, assistantItems(msg)...)
+			input = append(input, assistantItems(msg, replay)...)
 		case models.RoleTool:
+			if strings.TrimSpace(msg.ToolCallID) == "" {
+				return "", nil, &providers.ValidationError{
+					Provider: ProviderName, Feature: "tool_call_id", Detail: ProviderName + ": " + ErrToolResultWithoutCallID.Error(),
+					Err: errors.Join(providers.ErrInvalidRequest, ErrToolResultWithoutCallID),
+				}
+			}
 			output := msg.TextContent()
 			input = append(input, inputItem{Type: itemTypeFunctionCallOutput, CallID: msg.ToolCallID, Output: &output})
 		}
 	}
-	return strings.Join(instructions, "\n\n"), input
+	return strings.Join(instructions, "\n\n"), input, nil
 }
 
 func userItem(msg models.Message) inputItem {
@@ -202,10 +222,17 @@ func imageURL(part models.ImagePart) string {
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(part.Bytes)
 }
 
-// assistantItems replays an earlier model turn: its text as a completed
-// assistant message, then each tool call as a function_call item.
-func assistantItems(msg models.Message) []inputItem {
-	items := make([]inputItem, 0, len(msg.ToolCalls)+1)
+// assistantItems replays an earlier model turn: the reasoning items kept for
+// its tool calls first (reasoning precedes the output it led to, as in the
+// response), then its text as a completed assistant message, then each tool
+// call as a function_call item.
+func assistantItems(msg models.Message, replay *reasoningReplay) []any {
+	items := make([]any, 0, len(msg.ToolCalls)+1)
+	for _, call := range msg.ToolCalls {
+		for _, item := range replay.before(call.ID) {
+			items = append(items, item)
+		}
+	}
 	if text := msg.TextContent(); text != "" {
 		annotations := []string{}
 		items = append(items, inputItem{

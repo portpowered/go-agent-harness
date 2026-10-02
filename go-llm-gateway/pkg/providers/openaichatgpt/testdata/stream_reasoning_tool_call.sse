@@ -1,0 +1,21 @@
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs_1","summary":[]}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","item_id":"rs_1","output_index":0,"summary_index":0,"delta":"Need the weather"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_1","status":"completed","summary":[{"type":"summary_text","text":"Need the weather"}],"content":[{"type":"reasoning_text","text":"plain"}],"encrypted_content":"gAAAAencrypted-1"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"reasoning","id":"rs_bare","summary":[]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":1,"item":{"type":"reasoning","id":"rs_bare","summary":[]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":2,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_5","usage":{"input_tokens":30,"output_tokens":7,"total_tokens":37,"output_tokens_details":{"reasoning_tokens":4}}}}
+

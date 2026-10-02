@@ -15,8 +15,21 @@ import (
 
 var (
 	// ErrSignInAgain reports that the ChatGPT backend rejected the stored
-	// sign-in (HTTP 401 or 403). It also matches providers.ErrAuthentication.
+	// sign-in (HTTP 401) even after a forced token refresh. It also matches
+	// providers.ErrAuthentication. A 403 is not a sign-in failure: Codex
+	// reads it as a Cloudflare block or a policy violation.
 	ErrSignInAgain = errors.New("ChatGPT rejected the sign-in: run `yui auth chatgpt` again")
+	// ErrPolicyViolation reports a request the backend refused on policy
+	// grounds (misalignment_policy_violation, cyber_policy, bio_policy,
+	// invalid_prompt). It also matches providers.ErrInvalidRequest.
+	ErrPolicyViolation = errors.New("ChatGPT refused the request on policy grounds")
+	// ErrServerOverloaded reports server_is_overloaded or slow_down, which
+	// Codex surfaces as ServerOverloaded. It also matches
+	// providers.ErrRateLimited, so a caller may retry later.
+	ErrServerOverloaded = errors.New("ChatGPT Codex backend is overloaded")
+	// ErrBlocked reports a 403 that is not a policy code, such as the
+	// Cloudflare block Codex describes for restricted regions.
+	ErrBlocked = errors.New("ChatGPT Codex backend refused access (HTTP 403); this usually means the network or region is blocked")
 	// ErrUsageLimitReached reports that the plan's Codex allowance is used up
 	// (`usage_limit_reached`). It also matches providers.ErrRateLimited.
 	ErrUsageLimitReached = errors.New("ChatGPT plan usage limit reached")
@@ -36,6 +49,12 @@ const (
 	codeRateLimitExceeded = "rate_limit_exceeded"
 	codeContextLength     = "context_length_exceeded"
 	codeInsufficientQuota = "insufficient_quota"
+	codeServerOverloaded  = "server_is_overloaded"
+	codeSlowDown          = "slow_down"
+	codeMisalignment      = "misalignment_policy_violation"
+	codeCyberPolicy       = "cyber_policy"
+	codeBioPolicy         = "bio_policy"
+	codeInvalidPrompt     = "invalid_prompt"
 )
 
 // maxErrorBodyBytes bounds how much of a failed response is read to find its
@@ -88,24 +107,32 @@ func readErrorCode(body io.Reader) string {
 }
 
 // statusError classifies a non-2xx backend response from its status and
-// error code. It never carries the response body or a token.
+// error code. It never carries the response body or a token. Only a 401
+// means "sign in again"; a 403 goes through the code mapping like any other
+// status (Codex codex-api/src/api_bridge.rs maps a 403 to a policy violation
+// or a Cloudflare block, never to re-authentication).
 func statusError(status int, code string) error {
-	switch {
-	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+	if status == http.StatusUnauthorized {
 		return &providers.ProviderError{
 			Provider: ProviderName, StatusCode: status, Detail: ErrSignInAgain.Error(),
 			Err: errors.Join(providers.ErrProviderRejected, providers.ErrAuthentication, ErrSignInAgain),
 		}
-	case code != "":
-		if typed := codeError(status, code); typed != nil {
-			return typed
+	}
+	if typed := codeError(status, code); typed != nil {
+		return typed
+	}
+	if status == http.StatusForbidden {
+		detail := ErrBlocked.Error()
+		if code != "" {
+			detail += " (" + code + ")"
 		}
+		return &providers.ProviderError{Provider: ProviderName, StatusCode: status, Detail: detail, Err: errors.Join(providers.ErrProviderRejected, ErrBlocked)}
 	}
 	return providers.NewProviderHTTPError(ProviderName, status, code)
 }
 
-// codeError maps the plan-allowance and request-size codes to typed errors.
-// It returns nil for codes without a typed mapping.
+// codeError maps the plan-allowance, overload, policy and request-size codes
+// to typed errors. It returns nil for codes without a typed mapping.
 func codeError(status int, code string) error {
 	var typed, class error
 	switch code {
@@ -113,6 +140,10 @@ func codeError(status int, code string) error {
 		typed, class = ErrUsageLimitReached, providers.ErrRateLimited
 	case codeUsageNotIncluded:
 		typed, class = ErrUsageNotIncluded, providers.ErrProviderRejected
+	case codeServerOverloaded, codeSlowDown:
+		typed, class = ErrServerOverloaded, providers.ErrRateLimited
+	case codeMisalignment, codeCyberPolicy, codeBioPolicy, codeInvalidPrompt:
+		typed, class = ErrPolicyViolation, providers.ErrInvalidRequest
 	case codeRateLimitExceeded, codeInsufficientQuota:
 		return &providers.ProviderError{Provider: ProviderName, StatusCode: status, Detail: code, Err: errors.Join(providers.ErrProviderRejected, providers.ErrRateLimited)}
 	case codeContextLength:
@@ -147,11 +178,26 @@ func streamFailure(event string, failure *apiError) error {
 // user to run `yui auth chatgpt`; anything else (for example a refresh that
 // could not reach the issuer) is a transport error.
 func credentialError(err error) error {
-	if errors.Is(err, chatgptauth.ErrNotLoggedIn) || errors.Is(err, chatgptauth.ErrReauthRequired) || errors.Is(err, chatgptauth.ErrInsecureStore) {
-		return &providers.ProviderError{Provider: ProviderName, Detail: err.Error(), Err: errors.Join(providers.ErrAuthentication, err)}
+	// The detail is the sentinel's fixed text, never the wrapped issuer reply.
+	for _, sentinel := range []error{chatgptauth.ErrNotLoggedIn, chatgptauth.ErrReauthRequired, chatgptauth.ErrInsecureStore} {
+		if errors.Is(err, sentinel) {
+			return &providers.ProviderError{Provider: ProviderName, Detail: sentinel.Error(), Err: errors.Join(providers.ErrAuthentication, err)}
+		}
 	}
 	if cancelled := gateway.CancellationErrorOrNil(ProviderName+": credential cancelled", err); cancelled != nil {
 		return cancelled
+	}
+	var tokenErr *chatgptauth.TokenError
+	if errors.As(err, &tokenErr) {
+		// An issuer error may echo request text; keep only status and code.
+		detail := fmt.Sprintf("ChatGPT token %s failed", tokenErr.Operation)
+		if tokenErr.Status != 0 {
+			detail += fmt.Sprintf(" (HTTP %d)", tokenErr.Status)
+		}
+		if code := sanitizedCode(tokenErr.Code); code != "" {
+			detail += ": " + code
+		}
+		return &providers.ProviderError{Provider: ProviderName, Detail: detail, Err: errors.Join(providers.ErrTransport, tokenErr)}
 	}
 	return transportError("ChatGPT credential", err)
 }

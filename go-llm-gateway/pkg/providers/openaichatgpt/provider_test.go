@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,6 +41,58 @@ func signedInManager(t *testing.T, cred chatgptauth.Credential, issuer string) *
 	return chatgptauth.NewManager(store, chatgptauth.NewClient(chatgptauth.Config{Issuer: issuer, Now: testNow}))
 }
 
+// testIssuer is an in-process OAuth token endpoint: every refresh answers
+// with status and body, and is counted.
+type testIssuer struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	calls  int
+}
+
+func newTestIssuer(t *testing.T, status int, body string) *testIssuer {
+	t.Helper()
+	issuer := &testIssuer{}
+	issuer.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issuer.mu.Lock()
+		issuer.calls++
+		issuer.mu.Unlock()
+		if r.URL.Path != "/oauth/token" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Errorf("write token response: %v", err)
+		}
+	}))
+	t.Cleanup(issuer.server.Close)
+	return issuer
+}
+
+// refreshTo is an issuer whose refresh issues access token.
+func refreshTo(t *testing.T, token string) *testIssuer {
+	t.Helper()
+	return newTestIssuer(t, http.StatusOK, `{"access_token":"`+token+`","refresh_token":"refresh-2","expires_in":3600}`)
+}
+
+// unusedIssuer fails the test if any refresh reaches it.
+func unusedIssuer(t *testing.T) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("unexpected token refresh")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
+func (i *testIssuer) refreshes() int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.calls
+}
+
 func freshCredential() chatgptauth.Credential {
 	return chatgptauth.Credential{
 		AccessToken: testToken, RefreshToken: "refresh-secret", AccountID: testAccountID,
@@ -58,7 +111,7 @@ func newHarness(t *testing.T, opts ...openaichatgpt.Option) *harness {
 	fake := fakechatgpt.New(testToken, testAccountID)
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
-	manager := signedInManager(t, freshCredential(), "http://issuer.invalid")
+	manager := signedInManager(t, freshCredential(), unusedIssuer(t))
 	base := []openaichatgpt.Option{
 		openaichatgpt.WithBaseURL(server.URL + "/backend-api/codex"),
 		openaichatgpt.WithHTTPClient(server.Client()),
@@ -222,32 +275,27 @@ func TestEmptyModelListFailsWithTypedError(t *testing.T) {
 func TestBackendErrorsAreTypedAndCarryNoSecrets(t *testing.T) {
 	const bodySecret = "Provided authentication token is expired"
 	tests := []struct {
-		name  string
-		reply fakechatgpt.Reply
-		token string
-		want  []error
+		name    string
+		reply   fakechatgpt.Reply
+		want    []error
+		notWant []error
 	}{
-		{name: "401 asks to sign in again", token: "stale-token", want: []error{openaichatgpt.ErrSignInAgain, providers.ErrAuthentication}},
-		{name: "403 asks to sign in again", reply: fakechatgpt.Reply{Status: http.StatusForbidden, Body: `{"error":{"code":"forbidden","message":"` + bodySecret + `"}}`}, want: []error{openaichatgpt.ErrSignInAgain}},
+		{name: "403 is a block, not a sign-in failure", reply: fakechatgpt.Reply{Status: http.StatusForbidden, Body: `<html>Cloudflare: ` + bodySecret + ` blocked</html>`},
+			want: []error{openaichatgpt.ErrBlocked, providers.ErrProviderRejected}, notWant: []error{openaichatgpt.ErrSignInAgain, providers.ErrAuthentication}},
+		{name: "403 misalignment is a policy violation", reply: fakechatgpt.Reply{Status: http.StatusForbidden, Body: `{"error":{"code":"misalignment_policy_violation","message":"` + bodySecret + `"}}`},
+			want: []error{openaichatgpt.ErrPolicyViolation, providers.ErrInvalidRequest}, notWant: []error{providers.ErrAuthentication}},
 		{name: "usage limit", reply: fakechatgpt.Reply{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"usage_limit_reached","message":"` + bodySecret + `"}}`}, want: []error{openaichatgpt.ErrUsageLimitReached, providers.ErrRateLimited}},
 		{name: "usage not included", reply: fakechatgpt.Reply{Status: http.StatusTooManyRequests, Body: `{"error":{"type":"usage_not_included"}}`}, want: []error{openaichatgpt.ErrUsageNotIncluded}},
+		{name: "server overloaded", reply: fakechatgpt.Reply{Status: http.StatusServiceUnavailable, Body: `{"error":{"code":"server_is_overloaded","message":"` + bodySecret + `"}}`}, want: []error{openaichatgpt.ErrServerOverloaded, providers.ErrRateLimited}},
+		{name: "slow down", reply: fakechatgpt.Reply{Status: http.StatusServiceUnavailable, Body: `{"error":{"code":"slow_down"}}`}, want: []error{openaichatgpt.ErrServerOverloaded}},
 		{name: "context length", reply: fakechatgpt.Reply{Status: http.StatusBadRequest, Body: `{"error":{"code":"context_length_exceeded","message":"` + bodySecret + `"}}`}, want: []error{providers.ErrInvalidRequest}},
 		{name: "server error", reply: fakechatgpt.Reply{Status: http.StatusBadGateway, Body: `<html>` + bodySecret + `</html>`}, want: []error{providers.ErrTransport}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := fakechatgpt.New(testToken, testAccountID)
-			server := httptest.NewServer(fake)
-			defer server.Close()
-			cred := freshCredential()
-			if tt.token != "" {
-				cred.AccessToken = tt.token
-			} else {
-				fake.Enqueue(tt.reply)
-			}
-			provider := openaichatgpt.New(signedInManager(t, cred, "http://issuer.invalid"),
-				openaichatgpt.WithBaseURL(server.URL), openaichatgpt.WithHTTPClient(server.Client()), openaichatgpt.WithModel("gpt-test"))
-			_, err := provider.InferStream(t.Context(), userPrompt("hi"))
+			h := newHarness(t)
+			h.fake.Enqueue(tt.reply)
+			_, err := h.provider.InferStream(t.Context(), userPrompt("hi"))
 			if err == nil {
 				t.Fatal("InferStream succeeded, want error")
 			}
@@ -256,13 +304,99 @@ func TestBackendErrorsAreTypedAndCarryNoSecrets(t *testing.T) {
 					t.Errorf("error %v does not match %v", err, want)
 				}
 			}
-			for _, secret := range []string{bodySecret, testToken, "stale-token", "<html>"} {
-				if strings.Contains(err.Error(), secret) {
-					t.Errorf("error %q leaks %q", err, secret)
+			for _, notWant := range tt.notWant {
+				if errors.Is(err, notWant) {
+					t.Errorf("error %v must not match %v", err, notWant)
 				}
 			}
+			assertNoSecrets(t, err, bodySecret, testToken, "<html>")
 		})
 	}
+}
+
+func assertNoSecrets(t *testing.T, err error, secrets ...string) {
+	t.Helper()
+	for _, secret := range secrets {
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("error %q leaks %q", err, secret)
+		}
+	}
+}
+
+// staleProvider is a provider whose stored access token the fake backend
+// rejects, refreshing through issuer.
+func staleProvider(t *testing.T, issuer string, opts ...openaichatgpt.Option) (*openaichatgpt.Provider, *fakechatgpt.Server, *chatgptauth.FileStore) {
+	t.Helper()
+	fake := fakechatgpt.New(testToken, testAccountID)
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+	stale := freshCredential()
+	stale.AccessToken = "stale-token"
+	store := chatgptauth.NewFileStore(filepath.Join(t.TempDir(), "auth", "chatgpt.json"))
+	if err := store.Save(stale); err != nil {
+		t.Fatalf("save credential: %v", err)
+	}
+	manager := chatgptauth.NewManager(store, chatgptauth.NewClient(chatgptauth.Config{Issuer: issuer, Now: testNow}))
+	base := []openaichatgpt.Option{openaichatgpt.WithBaseURL(server.URL), openaichatgpt.WithHTTPClient(server.Client()), openaichatgpt.WithModel("gpt-test")}
+	return openaichatgpt.New(manager, append(base, opts...)...), fake, store
+}
+
+func TestUnauthorizedIsRefreshedAndRetriedOnce(t *testing.T) {
+	issuer := refreshTo(t, testToken)
+	provider, fake, store := staleProvider(t, issuer.server.URL)
+	fake.Enqueue(fakechatgpt.TextReply("after refresh"))
+
+	got, err := provider.Infer(t.Context(), userPrompt("hi"))
+	if err != nil || got.Message.TextContent() != "after refresh" {
+		t.Fatalf("Infer = %q, %v; want the reply after one refresh", got.Message.TextContent(), err)
+	}
+	if fake.Unauthorized() != 1 || issuer.refreshes() != 1 || len(fake.Requests()) != 2 {
+		t.Fatalf("unauthorized=%d refreshes=%d requests=%d; want 1, 1, 2", fake.Unauthorized(), issuer.refreshes(), len(fake.Requests()))
+	}
+	if stored, err := store.Load(); err != nil || stored.AccessToken != testToken {
+		t.Fatalf("stored token = %q, %v; want the refreshed token persisted", stored.AccessToken, err)
+	}
+}
+
+func TestUnauthorizedAfterRefreshAsksToSignInAgain(t *testing.T) {
+	issuer := refreshTo(t, "still-rejected")
+	provider, fake, _ := staleProvider(t, issuer.server.URL)
+
+	_, err := provider.InferStream(t.Context(), userPrompt("hi"))
+	if !errors.Is(err, openaichatgpt.ErrSignInAgain) || !errors.Is(err, providers.ErrAuthentication) {
+		t.Fatalf("error = %v, want ErrSignInAgain and ErrAuthentication", err)
+	}
+	if fake.Unauthorized() != 2 || issuer.refreshes() != 1 {
+		t.Fatalf("unauthorized=%d refreshes=%d; want exactly one retry after one refresh", fake.Unauthorized(), issuer.refreshes())
+	}
+	assertNoSecrets(t, err, "stale-token", "still-rejected")
+}
+
+func TestUnauthorizedWithADeadRefreshTokenAsksToSignInAgain(t *testing.T) {
+	const issuerText = "refresh token was already used: secret-detail"
+	issuer := newTestIssuer(t, http.StatusBadRequest, `{"error":"refresh_token_reused","error_description":"`+issuerText+`"}`)
+	provider, fake, _ := staleProvider(t, issuer.server.URL)
+
+	_, err := provider.InferStream(t.Context(), userPrompt("hi"))
+	if !errors.Is(err, chatgptauth.ErrReauthRequired) || !errors.Is(err, providers.ErrAuthentication) {
+		t.Fatalf("error = %v, want ErrReauthRequired and ErrAuthentication", err)
+	}
+	if !strings.Contains(err.Error(), "run `yui auth chatgpt`") || fake.Unauthorized() != 1 {
+		t.Fatalf("error = %q after %d unauthorized; want a sign-in message and no retry", err, fake.Unauthorized())
+	}
+	assertNoSecrets(t, err, issuerText, "stale-token", "refresh-secret")
+}
+
+func TestTransientRefreshFailureKeepsOnlyStatusAndCode(t *testing.T) {
+	const issuerText = "upstream exploded with secret-detail"
+	issuer := newTestIssuer(t, http.StatusBadGateway, `{"error":"temporarily_unavailable","error_description":"`+issuerText+`"}`)
+	provider, _, _ := staleProvider(t, issuer.server.URL)
+
+	_, err := provider.InferStream(t.Context(), userPrompt("hi"))
+	if !errors.Is(err, providers.ErrTransport) || !strings.Contains(err.Error(), "HTTP 502") {
+		t.Fatalf("error = %v, want a transport error naming HTTP 502", err)
+	}
+	assertNoSecrets(t, err, issuerText)
 }
 
 func TestStreamFailuresBecomeStreamErrors(t *testing.T) {
@@ -317,24 +451,14 @@ func TestMissingLoginFailsBeforeAnyRequest(t *testing.T) {
 }
 
 func TestExpiredLoginIsRefreshedBeforeTheRequest(t *testing.T) {
-	issuer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/oauth/token" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(`{"access_token":"` + testToken + `","refresh_token":"refresh-2","expires_in":3600}`)); err != nil {
-			t.Errorf("write token response: %v", err)
-		}
-	}))
-	defer issuer.Close()
+	issuer := refreshTo(t, testToken)
 	fake := fakechatgpt.New(testToken, testAccountID)
 	server := httptest.NewServer(fake)
 	defer server.Close()
 	expired := freshCredential()
 	expired.AccessToken = "expired-token"
 	expired.ExpiresAt = testNow().Add(-time.Minute)
-	provider := openaichatgpt.New(signedInManager(t, expired, issuer.URL),
+	provider := openaichatgpt.New(signedInManager(t, expired, issuer.server.URL),
 		openaichatgpt.WithBaseURL(server.URL), openaichatgpt.WithHTTPClient(server.Client()), openaichatgpt.WithModel("gpt-test"))
 	fake.Enqueue(fakechatgpt.TextReply("ok"))
 
@@ -392,7 +516,7 @@ func TestModelConfigSetsReasoningEffort(t *testing.T) {
 func TestTransportFailuresAndCancellationAreClassified(t *testing.T) {
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	provider := openaichatgpt.New(signedInManager(t, freshCredential(), "http://issuer.invalid"),
+	provider := openaichatgpt.New(signedInManager(t, freshCredential(), unusedIssuer(t)),
 		openaichatgpt.WithBaseURL(closed.URL), openaichatgpt.WithModel("gpt-test"))
 	if _, err := provider.Infer(t.Context(), userPrompt("hi")); !errors.Is(err, providers.ErrTransport) {
 		t.Fatalf("closed server error = %v, want ErrTransport", err)
@@ -416,9 +540,44 @@ func TestModelListErrorsAreTyped(t *testing.T) {
 		t.Fatalf("models error = %v, want a decode error without the body", err)
 	}
 
-	stale := openaichatgpt.New(signedInManager(t, chatgptauth.Credential{AccessToken: "stale", AccountID: testAccountID, ExpiresAt: testNow().Add(time.Hour)}, "http://issuer.invalid"),
-		openaichatgpt.WithBaseURL(h.server.URL), openaichatgpt.WithHTTPClient(h.server.Client()))
-	if _, err := stale.Models(t.Context()); !errors.Is(err, openaichatgpt.ErrSignInAgain) {
-		t.Fatalf("stale models error = %v, want ErrSignInAgain", err)
+	issuer := refreshTo(t, testToken)
+	stale, fake, _ := staleProvider(t, issuer.server.URL, openaichatgpt.WithModel(""))
+	fake.SetModels(`{"models":[{"slug":"gpt-a","visibility":"list","priority":1}]}`)
+	fake.Enqueue(fakechatgpt.TextReply("ok"))
+	if _, err := stale.Infer(t.Context(), userPrompt("hi")); err != nil {
+		t.Fatalf("Infer after a refreshed model list: %v", err)
+	}
+	if fake.Unauthorized() != 1 || issuer.refreshes() != 1 {
+		t.Fatalf("unauthorized=%d refreshes=%d; want the model list refreshed once and the request reusing the token", fake.Unauthorized(), issuer.refreshes())
+	}
+}
+
+func TestReasoningCarriesAcrossAToolStep(t *testing.T) {
+	h := newHarness(t)
+	h.fake.Enqueue(fakechatgpt.Reply{Events: []string{
+		`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_9","summary":[{"type":"summary_text","text":"plan"}],"encrypted_content":"enc-9"}}`,
+		`{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","call_id":"call_9","name":"lookup","arguments":"{}"}}`,
+		`{"type":"response.completed","response":{}}`,
+	}}, fakechatgpt.TextReply("done"))
+
+	first, err := h.provider.Infer(t.Context(), userPrompt("go"))
+	if err != nil || len(first.Message.ToolCalls) != 1 {
+		t.Fatalf("first Infer = %+v, %v", first.Message, err)
+	}
+	conversation := []models.Message{
+		messages.NewTextMessage(models.RoleUser, "go"), first.Message,
+		{Role: models.RoleTool, ToolCallID: "call_9", ContentParts: []models.ContentPart{models.TextPart{Text: "result"}}},
+	}
+	if _, err := h.provider.Infer(t.Context(), providers.InferenceRequest{Messages: conversation}); err != nil {
+		t.Fatalf("second Infer: %v", err)
+	}
+	var body struct {
+		Input []map[string]any `json:"input"`
+	}
+	if err := json.Unmarshal(h.fake.Requests()[1].Body, &body); err != nil {
+		t.Fatalf("decode second request: %v", err)
+	}
+	if len(body.Input) != 4 || body.Input[1]["type"] != "reasoning" || body.Input[1]["encrypted_content"] != "enc-9" || body.Input[2]["call_id"] != "call_9" {
+		t.Fatalf("second request input = %v, want user, reasoning(enc-9), function_call, function_call_output", body.Input)
 	}
 }

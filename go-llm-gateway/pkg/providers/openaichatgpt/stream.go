@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
@@ -13,12 +14,15 @@ import (
 )
 
 const (
-	// sseLineBytes bounds one SSE line (a large tool-call argument arrives as
-	// one data line).
-	sseLineBytes  = 1 << 20
-	sseDataPrefix = "data:"
-	sseDoneMarker = "[DONE]"
-	textIndex     = 0
+	// sseLineBytes bounds one SSE line (a large tool-call argument or an
+	// encrypted reasoning item arrives as one data line). OpenClaw caps a
+	// whole success body at 16 MiB; one line gets the same bound.
+	sseLineBytes = 16 << 20
+	// sseInitialBuffer is the scanner's starting buffer; it grows as needed.
+	sseInitialBuffer = 64 << 10
+	sseDataPrefix    = "data:"
+	sseDoneMarker    = "[DONE]"
+	textIndex        = 0
 )
 
 // Responses stream event types this translator reads. Every other type
@@ -43,6 +47,9 @@ const (
 // ErrStreamEnded reports a stream that closed before response.completed.
 var ErrStreamEnded = errors.New("stream ended before response.completed")
 
+// ErrStreamIdle reports a stream that sent nothing for the idle timeout.
+var ErrStreamIdle = errors.New("stream idle timeout: no data from the ChatGPT backend")
+
 // ErrUnresolvedToolCall reports a function call that was announced but never
 // completed before the response ended.
 var ErrUnresolvedToolCall = errors.New("stream ended with an unfinished function call")
@@ -52,19 +59,21 @@ type streamEvent struct {
 	Delta       string          `json:"delta"`
 	OutputIndex *int            `json:"output_index"`
 	ItemID      string          `json:"item_id"`
-	Item        *outputItem     `json:"item"`
+	Item        json.RawMessage `json:"item"`
 	Response    *responseObject `json:"response"`
 	Code        string          `json:"code"`
 	Error       *apiError       `json:"error"`
 }
 
 type outputItem struct {
-	Type      string       `json:"type"`
-	ID        string       `json:"id"`
-	CallID    string       `json:"call_id"`
-	Name      string       `json:"name"`
-	Arguments string       `json:"arguments"`
-	Content   []outputPart `json:"content"`
+	Type             string          `json:"type"`
+	Summary          json.RawMessage `json:"summary"`
+	EncryptedContent string          `json:"encrypted_content"`
+	ID               string          `json:"id"`
+	CallID           string          `json:"call_id"`
+	Name             string          `json:"name"`
+	Arguments        string          `json:"arguments"`
+	Content          []outputPart    `json:"content"`
 }
 
 type outputPart struct {
@@ -107,9 +116,14 @@ type toolCallState struct {
 
 // streamState translates one Responses stream into gateway stream messages.
 type streamState struct {
-	ch        chan<- messages.StreamMessage
-	open      blockKind
-	textItems map[string]bool // message items whose text arrived as deltas
+	ch chan<- messages.StreamMessage
+	// replay keeps reasoning items for the next request; nil keeps none.
+	replay *reasoningReplay
+	// pendingReasoning holds this response's reasoning items until the
+	// function call they precede completes.
+	pendingReasoning []json.RawMessage
+	open             blockKind
+	textItems        map[string]bool // message items whose text arrived as deltas
 	// untrackedText marks deltas without an item id since the last message
 	// item completed.
 	untrackedText bool
@@ -125,12 +139,20 @@ type streamState struct {
 // messages, and then MESSAGE.END (and USAGE.INFO when usage is known). A
 // failure is emitted as ERROR before MESSAGE.END. closeBody runs before
 // MESSAGE.END so a recording transport is flushed first.
-func translateStream(body io.Reader, ch chan<- messages.StreamMessage, closeBody func() error) {
-	state := &streamState{ch: ch, textItems: map[string]bool{}, toolCalls: map[int]*toolCallState{}}
+//
+// body is watched for idleness: when no byte arrives for idleTimeout (zero
+// disables the watch) the body is closed and the turn fails with
+// ErrStreamIdle, as Codex fails a stream after stream_idle_timeout.
+func translateStream(body io.Reader, closeBody func() error, ch chan<- messages.StreamMessage, idleTimeout time.Duration, replay *reasoningReplay) {
+	state := &streamState{ch: ch, replay: replay, textItems: map[string]bool{}, toolCalls: map[int]*toolCallState{}}
 	state.emit(messages.StreamTypeMessageStart, messages.NewMessageStartValue())
-	readErr := readSSE(body, state.handleData)
+	watched := watchIdle(body, closeBody, idleTimeout)
+	readErr := readSSE(watched, state.handleData)
+	if watched.idled() {
+		readErr = ErrStreamIdle
+	}
 	state.finish(readErr)
-	if err := closeBody(); err != nil && state.err == nil {
+	if err := watched.Close(); err != nil && state.err == nil {
 		state.err = transportError("close responses stream", err)
 	}
 	if state.err != nil {
@@ -149,7 +171,7 @@ func translateStream(body io.Reader, ch chan<- messages.StreamMessage, closeBody
 // joined) until handle reports the end or the body ends.
 func readSSE(body io.Reader, handle func(string) bool) error {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, sseLineBytes), sseLineBytes)
+	scanner.Buffer(make([]byte, 0, sseInitialBuffer), sseLineBytes)
 	var data []string
 	flush := func() bool {
 		if len(data) == 0 {
@@ -178,6 +200,18 @@ func readSSE(body io.Reader, handle func(string) bool) error {
 	return nil
 }
 
+// decodeItem decodes an event's item, or returns nil when there is none.
+func decodeItem(raw json.RawMessage) *outputItem {
+	if len(raw) == 0 {
+		return nil
+	}
+	var item outputItem
+	if json.Unmarshal(raw, &item) != nil {
+		return nil
+	}
+	return &item
+}
+
 // handleData applies one event and reports whether the stream is over.
 func (s *streamState) handleData(data string) bool {
 	if data == sseDoneMarker || strings.TrimSpace(data) == "" {
@@ -202,14 +236,14 @@ func (s *streamState) apply(event streamEvent) {
 		s.transition(blockReasoning)
 		s.emit(messages.StreamTypeReasoningDelta, messages.NewReasoningDeltaValue(event.Delta))
 	case eventOutputItemAdded:
-		if event.Item != nil && event.Item.Type == itemTypeFunctionCall {
-			s.startToolCall(s.indexOf(event), event.Item)
+		if item := decodeItem(event.Item); item != nil && item.Type == itemTypeFunctionCall {
+			s.startToolCall(s.indexOf(event), item)
 		}
 	case eventArgumentsDelta:
 		s.argumentsDelta(s.indexOf(event), event.Delta)
 	case eventOutputItemDone:
-		if event.Item != nil {
-			s.itemDone(s.indexOf(event), event.Item)
+		if item := decodeItem(event.Item); item != nil {
+			s.itemDone(s.indexOf(event), item)
 		}
 	case eventCompleted, eventDone:
 		s.complete(event.Response)
@@ -293,9 +327,16 @@ func (s *streamState) itemDone(index int, item *outputItem) {
 			call.args = item.Arguments
 		}
 		s.ch <- messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: index, Value: messages.NewToolCallEndValue(call.callID, call.name, call.args)}
+		if len(s.pendingReasoning) > 0 {
+			s.replay.remember(call.callID, s.pendingReasoning)
+			s.pendingReasoning = nil
+		}
 	case itemTypeMessage:
 		s.messageDone(item)
 	case itemTypeReasoning:
+		if replayable := replayableReasoning(item); replayable != nil {
+			s.pendingReasoning = append(s.pendingReasoning, replayable)
+		}
 		if s.open == blockReasoning {
 			s.transition(blockNone)
 		}
@@ -357,6 +398,8 @@ func (s *streamState) finish(readErr error) {
 	s.transition(blockNone)
 	switch {
 	case s.err != nil:
+	case errors.Is(readErr, ErrStreamIdle):
+		s.err = transportError("responses stream", readErr)
 	case readErr != nil:
 		if cancelled := gateway.CancellationErrorOrNil(ProviderName+": responses stream cancelled", readErr); cancelled != nil {
 			s.err = cancelled

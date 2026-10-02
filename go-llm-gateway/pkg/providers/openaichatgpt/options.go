@@ -2,6 +2,7 @@ package openaichatgpt
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 )
@@ -39,4 +40,11 @@ func WithLogger(logger logging.Logger) Option {
 // it, as Codex does.
 func WithSessionID(id string) Option {
 	return func(p *Provider) { p.sessionID = id }
+}
+
+// WithStreamIdleTimeout sets how long a response stream may send nothing
+// before the turn fails with ErrStreamIdle (default
+// DefaultStreamIdleTimeout, Codex's stream_idle_timeout). Zero disables it.
+func WithStreamIdleTimeout(timeout time.Duration) Option {
+	return func(p *Provider) { p.idleTimeout = timeout }
 }
