@@ -139,6 +139,13 @@ func assertRemoteRenderedSnapshot(t *testing.T, endpoint string, wantRendered []
 	if snapshot.Playback.QueuedSamples != 0 || snapshot.Playback.DroppedSamples != 0 || snapshot.Playback.CallbackCount != 2 {
 		t.Fatalf("remote playback evidence = %+v", snapshot.Playback)
 	}
+	stats, err := devicegw.ReadRemoteDeviceServerStats(context.Background(), endpoint)
+	if err != nil {
+		t.Fatalf("read remote stats: %v", err)
+	}
+	if stats.Playback != snapshot.Playback || stats.Capture != snapshot.Capture {
+		t.Fatalf("remote stats = %+v, want the snapshot's queue evidence %+v / %+v", stats, snapshot.Playback, snapshot.Capture)
+	}
 }
 
 func TestRemoteDeviceServerBackpressureUnblocksOnAdvanceAndDiscard(t *testing.T) {

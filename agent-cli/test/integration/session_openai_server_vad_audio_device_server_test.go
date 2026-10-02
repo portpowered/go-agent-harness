@@ -269,6 +269,9 @@ type remoteToolAudioDevice interface {
 	Advance(ctx context.Context, callbacks int) error
 	InjectCapture(ctx context.Context, samples []int16) error
 	Snapshot(ctx context.Context) (devicegw.DeviceServerSnapshot, error)
+	// Stats reads only the queue evidence; unlike Snapshot its cost does
+	// not grow with the samples rendered so far.
+	Stats(ctx context.Context) (devicegw.DeviceServerStats, error)
 }
 
 // remoteDeviceServer drives an audio-device-server process.
@@ -284,6 +287,10 @@ func (d remoteDeviceServer) InjectCapture(ctx context.Context, samples []int16) 
 
 func (d remoteDeviceServer) Snapshot(ctx context.Context) (devicegw.DeviceServerSnapshot, error) {
 	return devicegw.ReadRemoteDeviceServerSnapshot(ctx, d.endpoint)
+}
+
+func (d remoteDeviceServer) Stats(ctx context.Context) (devicegw.DeviceServerStats, error) {
+	return devicegw.ReadRemoteDeviceServerStats(ctx, d.endpoint)
 }
 
 // inProcessDuplexDevice is the manually clocked simulated registry that the
@@ -316,6 +323,10 @@ func (d inProcessDuplexDevice) Snapshot(context.Context) (devicegw.DeviceServerS
 		Playback: d.registry.PlaybackStats(), Capture: d.registry.CaptureStats(),
 		RenderedSamples: d.registry.RenderedSamples(), CapturedSamples: d.registry.CapturedSamples(), Trace: d.registry.Trace(),
 	}, nil
+}
+
+func (d inProcessDuplexDevice) Stats(context.Context) (devicegw.DeviceServerStats, error) {
+	return devicegw.DeviceServerStats{Playback: d.registry.PlaybackStats(), Capture: d.registry.CaptureStats()}, nil
 }
 
 // remoteToolAudioAgent is one running agent session of a scenario; done
@@ -516,9 +527,14 @@ func startPacedRemoteToolAudioTopology(t *testing.T, testCase remoteToolAudioCas
 // audio past a full queue; the process-edge latency checks still bound how
 // late the agent may be.
 //
-// Only these callbacks consume the queue, so one snapshot showing Q queued
+// Only these callbacks consume the queue, so one reading showing Q queued
 // samples covers the next Q/FrameSize callbacks; the device is asked again
-// only once that credit is spent.
+// only once that credit is spent. Mid-stream the reading is the queue stats
+// alone: a full snapshot carries every sample rendered so far, so polling it
+// per credit made the wait quadratic in the stream length and, on a loaded
+// race-enabled host, longer than the scenario deadline. The rendered stream
+// is read only for the tail: once every response has been sent and the
+// agent has delivered the expected stream or stopped delivering.
 type queueFedDevice struct {
 	remoteToolAudioDevice
 	allSent <-chan struct{}
@@ -531,6 +547,9 @@ type queueFedDevice struct {
 
 	mu     sync.Mutex
 	credit int // callbacks already known to render queued audio
+	// delivered is the agent-written sample count at the last tail poll;
+	// see renderableCallbacks.
+	delivered int
 }
 
 func (d *queueFedDevice) Advance(ctx context.Context, callbacks int) error {
@@ -572,11 +591,11 @@ func (d *queueFedDevice) awaitCredit(ctx context.Context) error {
 // renderableCallbacks reports how many callbacks may render now without an
 // underflow the agent did not cause.
 func (d *queueFedDevice) renderableCallbacks(ctx context.Context) (int, error) {
-	snapshot, err := d.Snapshot(ctx)
+	stats, err := d.Stats(ctx)
 	if err != nil {
 		return 0, err
 	}
-	queued := snapshot.Playback.QueuedSamples
+	queued := stats.Playback.QueuedSamples
 	if queued >= audio.FrameSize {
 		return queued / audio.FrameSize, nil
 	}
@@ -584,6 +603,24 @@ func (d *queueFedDevice) renderableCallbacks(ctx context.Context) (int, error) {
 	case <-d.allSent:
 	default:
 		return 0, nil
+	}
+	// Every sample the agent handed the device, consumed, queued or lost.
+	// While it is short of the expected stream and still growing, the agent
+	// is mid-stream: wait a poll rather than read the whole rendered stream.
+	playback := stats.Playback
+	delivered := int(playback.RenderedSamples-playback.ZeroFilledSamples+playback.DroppedSamples+playback.DiscardedSamples) + queued
+	if delivered < d.expectedNonzero && delivered != d.delivered {
+		d.delivered = delivered
+		return 0, nil
+	}
+	d.delivered = delivered
+	snapshot, err := d.Snapshot(ctx)
+	if err != nil {
+		return 0, err
+	}
+	queued = snapshot.Playback.QueuedSamples
+	if queued >= audio.FrameSize {
+		return queued / audio.FrameSize, nil
 	}
 	rendered := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if queued > 0 && len(rendered)+queued >= d.expectedNonzero {
