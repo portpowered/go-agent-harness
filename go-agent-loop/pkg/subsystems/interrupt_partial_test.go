@@ -49,8 +49,13 @@ func TestInterruptHandler_SavesOnlyPartialResponsesWithContent(t *testing.T) {
 			if err := NewInterruptHandler(nil, nil, nil).Execute(context.Background(), ls); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
-			if got := len(ls.History.ConversationBuffer) == 1; got != tt.saved {
-				t.Fatalf("partial saved = %t (history %d), want %t", got, len(ls.History.ConversationBuffer), tt.saved)
+			history := ls.History.ConversationBuffer
+			if got := len(history) > 0 && history[0].Role == messages.RoleAssistant; got != tt.saved {
+				t.Fatalf("partial saved = %t (history %d), want %t", got, len(history), tt.saved)
+			}
+			// A saved tool call is followed by its cancelled result.
+			if last := len(history) - 1; last >= 0 && len(history[0].ToolCalls) > 0 && history[last].Role != messages.RoleTool {
+				t.Fatalf("interrupted tool call has no result: history %d", len(history))
 			}
 			request, ok := ls.Outputs.ModelInbox.Read()
 			if !ok || len(request.Messages) != len(ls.History.ConversationBuffer) {

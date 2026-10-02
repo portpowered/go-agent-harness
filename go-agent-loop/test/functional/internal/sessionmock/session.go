@@ -14,10 +14,29 @@ type Session struct {
 	sendBuf *messages.TypedBuffer[messages.StreamMessage]
 	done    chan struct{}
 	once    sync.Once
+
+	// sentMu guards sent, the per-type tally of messages the provider
+	// accepted. It is kept apart from sendBuf so observing what the provider
+	// received never consumes the queue that WaitForSentMessage reads.
+	sentMu sync.Mutex
+	sent   map[messages.StreamMessageType]int
+	// sentSignal is closed and cleared by the next Send so WaitForSentCount
+	// blocks on a signal instead of polling.
+	sentSignal chan struct{}
 }
 
 func (s *Session) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.sendBuf.Write(ctx, msg)
+	if !s.sendBuf.Write(ctx, msg) {
+		return false
+	}
+	s.sentMu.Lock()
+	s.sent[msg.Type]++
+	if s.sentSignal != nil {
+		close(s.sentSignal)
+		s.sentSignal = nil
+	}
+	s.sentMu.Unlock()
+	return true
 }
 
 func (s *Session) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recvBuf }
@@ -48,6 +67,7 @@ func (m *Inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
 		sendBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
 		done:    make(chan struct{}),
+		sent:    make(map[messages.StreamMessageType]int),
 	}
 	s.recvBuf.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -72,6 +92,56 @@ func (m *Inferencer) AddServerEvent(ctx context.Context, event messages.StreamMe
 func (m *Inferencer) AddServerEventSequence(ctx context.Context, events []messages.StreamMessage) {
 	for _, event := range events {
 		m.AddServerEvent(ctx, event)
+	}
+}
+
+// SentCount reports how many messages of msgType the current provider session
+// has received from the runner. It does not consume the send queue, so a
+// scripted provider can gate its reply on the request having arrived, as a
+// real provider would, while WaitForSentMessage callers still see every frame.
+func (m *Inferencer) SentCount(msgType messages.StreamMessageType) int {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return 0
+	}
+	sess.sentMu.Lock()
+	defer sess.sentMu.Unlock()
+	return sess.sent[msgType]
+}
+
+// WaitForSentCount blocks until the current provider session has received at
+// least n messages of msgType, ctx ends, or timeout elapses, and reports
+// whether the count was reached. Like SentCount it never consumes the send
+// queue. timeout is a failure bound only: the wait wakes on each Send.
+func (m *Inferencer) WaitForSentCount(ctx context.Context, msgType messages.StreamMessageType, n int, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	select {
+	case <-m.connected:
+	case <-ctx.Done():
+		return false
+	}
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	for {
+		sess.sentMu.Lock()
+		count := sess.sent[msgType]
+		if sess.sentSignal == nil {
+			sess.sentSignal = make(chan struct{})
+		}
+		signal := sess.sentSignal
+		sess.sentMu.Unlock()
+		if count >= n {
+			return true
+		}
+		select {
+		case <-signal:
+		case <-ctx.Done():
+			return false
+		}
 	}
 }
 

@@ -93,6 +93,18 @@ func (h *InterruptHandler) Execute(ctx context.Context, curr *state.LoopState) e
 		h.toolCanceller.CancelCurrentExecution()
 	}
 
+	// Every tool call the interrupt cut off gets a cancelled result, so no
+	// tool call is left without its result, which providers reject.
+	for _, result := range cancelledToolResults(curr.History.ConversationBuffer) {
+		recordFullMessage(ctx, curr, messages.Tool, result)
+		curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, result)
+	}
+
+	// Held user turns were sent before the interrupt; they precede its text.
+	PlaceHeldUserMessages(curr, func(message messages.Message) {
+		recordFullMessage(ctx, curr, messages.User, message)
+	})
+
 	// 3. If the interrupt message carries text content, add it as a user turn so
 	//    the resumed inference has the caller's follow-up instruction.
 	for _, msg := range curr.Inputs.UserControlPlaneMessage {
@@ -187,4 +199,59 @@ func hasContent(m messages.Message) bool {
 		}
 	}
 	return false
+}
+
+// interruptedToolResultText is the content of a synthesized result for a tool
+// call that an interrupt cancelled before it returned.
+const interruptedToolResultText = "cancelled: interrupted before the tool returned a result"
+
+// cancelledToolResults returns a cancelled result for each tool call of the
+// latest assistant tool-call message that has no result after it.
+func cancelledToolResults(history []messages.Message) []messages.Message {
+	callsAt := -1
+	for index := len(history) - 1; index >= 0 && callsAt < 0; index-- {
+		switch {
+		case history[index].Role == messages.RoleAssistant && len(history[index].ToolCalls) > 0:
+			callsAt = index
+		case history[index].Role == messages.RoleUser:
+			return nil
+		}
+	}
+	if callsAt < 0 {
+		return nil
+	}
+	answered := make(map[string]bool)
+	for _, message := range history[callsAt+1:] {
+		if message.Role == messages.RoleTool {
+			answered[message.ToolCallID] = true
+		}
+	}
+	var results []messages.Message
+	for _, call := range history[callsAt].ToolCalls {
+		if !answered[call.ID] {
+			results = append(results, messages.Message{
+				Role:         messages.RoleTool,
+				ToolCallID:   call.ID,
+				Name:         call.Name,
+				ContentParts: []messages.ContentPart{messages.NewTextPart(interruptedToolResultText)},
+			})
+		}
+	}
+	return results
+}
+
+// recordFullMessage records a message the interrupt adds to history on the
+// kernel's full-message stream, as the coordinator does for the messages it
+// adds, so the stream and history agree.
+func recordFullMessage(ctx context.Context, curr *state.LoopState, source messages.ParticipantID, message messages.Message) {
+	if curr.Outputs.KernelDeltaInbox == nil {
+		return
+	}
+	messages.WriteKernelDelta(ctx, curr.Outputs.KernelDeltaInbox, messages.KernelDeltaRequest{
+		Source: source,
+		Delta: messages.StreamMessage{
+			Type:  messages.StreamTypeSystemFullMessage,
+			Value: messages.NewInferenceResultValue(string(source), message),
+		},
+	})
 }

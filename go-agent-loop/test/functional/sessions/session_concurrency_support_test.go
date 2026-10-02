@@ -230,7 +230,10 @@ func (k concurrentTurnKind) String() string {
 
 // queueServerEvents enqueues the scripted provider response for one turn of
 // the named session. Events are consumed by the mock session transport in FIFO
-// order, mirroring a replay source feeding a live provider connection.
+// order, mirroring a replay source feeding a live provider connection. The
+// walker calls it only once the provider received the turn's client input
+// (see providerInputFrames): a provider cannot answer a request it has not
+// seen yet.
 func queueServerEvents(ctx context.Context, inf *MockSessionInferencer, token string, kind concurrentTurnKind) {
 	switch kind {
 	case turnText:
@@ -287,6 +290,25 @@ func sendClientInputs(ctx context.Context, result *concurrentSessionResult, kind
 	}
 }
 
+// providerInputType is the provider-bound frame type that carries one turn's
+// client input: the user's text reaches the provider as TEXT.DELTA once the
+// coordinator dispatched it, and microphone audio as AUDIO.DELTA.
+func providerInputType(kind concurrentTurnKind) messages.StreamMessageType {
+	if kind == turnAudio {
+		return messages.StreamTypeAudioDelta
+	}
+	return messages.StreamTypeTextDelta
+}
+
+// providerInputFrames is how many providerInputType frames one turn's client
+// input produces.
+func providerInputFrames(kind concurrentTurnKind) int {
+	if kind == turnAudio {
+		return concurrentAudioChunksPerTurn
+	}
+	return 1
+}
+
 // messageEndProgress counts assistant MESSAGE.END deltas observed so far.
 // A scripted turn is complete when its model response reaches MESSAGE.END;
 // executed-tool-result delivery past that point is asynchronous engine
@@ -323,9 +345,10 @@ type concurrentSessionResult struct {
 
 // scriptProgress is the atomically published position of one script walker.
 type scriptProgress struct {
-	nextStep atomic.Int64 // index of the scripted turn being sent or awaited
-	awaiting atomic.Bool  // inputs sent; waiting for the turn's MESSAGE.END
-	baseline atomic.Int64 // completion counter sampled before the turn's inputs
+	nextStep  atomic.Int64 // index of the scripted turn being sent or awaited
+	awaiting  atomic.Bool  // inputs sent; waiting for the turn's MESSAGE.END
+	responded atomic.Bool  // provider received the inputs; scripted response queued
+	baseline  atomic.Int64 // completion counter sampled before the turn's inputs
 }
 
 // describeScriptProgress renders every unfinished session's script position
@@ -337,8 +360,8 @@ func describeScriptProgress(results []*concurrentSessionResult, turns []concurre
 		if next >= len(turns) {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("session %s: turn %d/%d (%s) awaiting=%t baseline=%d message_end=%d deltas=%d",
-			result.Token, next+1, len(turns), turns[next], result.progress.awaiting.Load(),
+		lines = append(lines, fmt.Sprintf("session %s: turn %d/%d (%s) awaiting=%t responded=%t baseline=%d message_end=%d deltas=%d",
+			result.Token, next+1, len(turns), turns[next], result.progress.awaiting.Load(), result.progress.responded.Load(),
 			result.progress.baseline.Load(), messageEndProgress(result), len(result.Scenario.Deltas())))
 	}
 	return strings.Join(lines, "\n")
@@ -597,18 +620,18 @@ func sessionScriptPlan(result *concurrentSessionResult, turns []concurrentTurnKi
 //
 // Scripted turns start only after the session observed its own SESSION.OPEN,
 // so provider startup cannot race the first turn's send. On send ticks the
-// participant queues the scripted provider response and performs its client
-// inputs synchronously. No wall clock, no sleeps. Failures flow through
+// participant performs its client inputs synchronously; it queues the scripted
+// provider response once the provider received those inputs, polled once per
+// logical tick. No wall clock, no sleeps. Failures flow through
 // report exactly once so the coordinator fails the test from its own
 // goroutine; done runs exactly once after the full scripted prefix succeeds.
 func runSessionScript(ctx context.Context, participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
 	ops := sessionScriptOps{
-		token: result.Token,
-		open:  func() bool { return sessionOpen(result) },
-		send: func(kind concurrentTurnKind) {
-			queueServerEvents(ctx, result.Inferencer, result.Token, kind)
-			sendClientInputs(ctx, result, kind)
-		},
+		token:       result.Token,
+		open:        func() bool { return sessionOpen(result) },
+		send:        func(kind concurrentTurnKind) { sendClientInputs(ctx, result, kind) },
+		received:    func(kind concurrentTurnKind) int { return result.Inferencer.SentCount(providerInputType(kind)) },
+		respond:     func(kind concurrentTurnKind) { queueServerEvents(ctx, result.Inferencer, result.Token, kind) },
 		completions: func() int { return messageEndProgress(result) },
 		completed:   func(tick uint64) { result.turnCompletedAt = append(result.turnCompletedAt, tick) },
 		progress:    &result.progress,
@@ -623,10 +646,16 @@ type sessionScriptOps struct {
 	token string
 	// open reports whether the session observed SESSION.OPEN.
 	open func() bool
-	// send queues the scripted provider response and performs the client
-	// inputs of one turn. The engine consumes both concurrently, so the turn
-	// may complete before send even returns.
+	// send performs the client inputs of one turn.
 	send func(kind concurrentTurnKind)
+	// received is the monotone count of providerInputType(kind) frames the
+	// provider has received. It must be allocation-free: it is polled once
+	// per logical tick.
+	received func(kind concurrentTurnKind) int
+	// respond queues the scripted provider response of one turn. The engine
+	// consumes it concurrently, so the turn may complete before respond
+	// even returns.
+	respond func(kind concurrentTurnKind)
 	// completions is the monotone turn-completion counter (assistant
 	// MESSAGE.END deltas). It must be allocation-free: it is polled once per
 	// logical tick.
@@ -639,12 +668,22 @@ type sessionScriptOps struct {
 
 // walkSessionScript is the tick-driven state machine behind runSessionScript.
 //
-// The completion baseline is sampled BEFORE send: the scripted provider
+// The scripted provider response is queued only after the provider received
+// the turn's client input. The user's text and the provider's reply travel
+// through independent pipes (the user runner and the provider receive
+// buffer), so a response queued up front can reach the engine BEFORE the
+// request it answers. The coordinator then dispatches the late user text as a
+// new turn, which resets the model delta window of the response still in
+// flight; the response's TOOLCALL.START/END are reconstructed out of the
+// message at its MESSAGE.END and the tool call is never executed. No real
+// provider answers a request it has not received, so the walker waits for it.
+//
+// The completion baseline is sampled BEFORE send and respond: the scripted
 // response is injected straight into the provider receive buffer, so the
-// engine can emit the turn's MESSAGE.END while send is still performing the
-// client inputs. Sampling after send would fold that MESSAGE.END into the
-// baseline and the walker would wait forever for a completion it already
-// consumed, observing logical ticks until the coordinator's run budget fires.
+// engine can emit the turn's MESSAGE.END while respond is still running.
+// Sampling later would fold that MESSAGE.END into the baseline and the walker
+// would wait forever for a completion it already consumed, observing logical
+// ticks until the coordinator's run budget fires.
 func walkSessionScript(participant *timeharness.Participant, ops sessionScriptOps, plan []sessionScriptStep, done func(), report func(error)) {
 	var reportedErr error
 	reportOnce := func(err error) {
@@ -656,7 +695,9 @@ func walkSessionScript(participant *timeharness.Participant, ops sessionScriptOp
 
 	nextStep := 0
 	baseline := 0
+	receivedBaseline := 0
 	awaitingCompletion := false
+	responded := false
 	tick := uint64(concurrentOpenTick)
 	for {
 		if _, err := participant.Observe(tick); err != nil {
@@ -678,17 +719,28 @@ func walkSessionScript(participant *timeharness.Participant, ops sessionScriptOp
 				continue
 			}
 			baseline = ops.completions()
+			receivedBaseline = ops.received(step.kind)
 			ops.progress.baseline.Store(int64(baseline))
 			ops.progress.awaiting.Store(true)
 			ops.send(step.kind)
 			awaitingCompletion = true
+		}
+		if !responded {
+			if ops.received(step.kind)-receivedBaseline < providerInputFrames(step.kind) {
+				continue
+			}
+			ops.respond(step.kind)
+			responded = true
+			ops.progress.responded.Store(true)
 			continue
 		}
 		if ops.completions() > baseline {
 			ops.completed(tick - 1)
 			awaitingCompletion = false
+			responded = false
 			nextStep++
 			ops.progress.awaiting.Store(false)
+			ops.progress.responded.Store(false)
 			ops.progress.nextStep.Store(int64(nextStep))
 		}
 	}

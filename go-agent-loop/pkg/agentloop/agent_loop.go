@@ -82,6 +82,7 @@ func New(opts ...Option) (*AgentLoop, error) {
 	if cfg.TickRate > 0 {
 		eng.SetTickRate(cfg.TickRate)
 	}
+	eng.SetSettleRecordTimeout(cfg.SettleRecordTimeout)
 	seedHistory(eng, cfg)
 
 	return &AgentLoop{

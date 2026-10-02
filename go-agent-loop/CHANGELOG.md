@@ -95,3 +95,45 @@ every program that imports `pkg/probe`. These names have no replacement:
   delivered late. Terminal session failures queue behind every delta the
   session already produced instead of evicting the oldest queued delta; they
   still evict once the session context has ended.
+
+### Fixed
+
+- A user turn that arrives while a model response is still streaming no
+  longer drops that response's tool calls. Previously the coordinator reset
+  the response's delta window when it dispatched the user turn, so the
+  response's MESSAGE.END rebuilt a message without the tool calls the client
+  had already seen complete, and they never executed. The response is not
+  cancelled, so it now completes from its own deltas and its tool calls run.
+- A user turn that arrives while a response is open, or while a tool batch
+  has not reported its results, now joins the conversation history (and the
+  kernel's full-message stream) only after that exchange completes:
+  `[user, assistant answer, user]`, or `[user, assistant tool_call, tool,
+  user]`. History no longer splits a tool call from its result, which Chat
+  Completions and Anthropic reject, and no inference request ends on an
+  assistant message, which current Claude models reject as a prefill.
+  `History.HeldUserMessages` holds such turns in the meantime.
+  - Duplex sessions: the user turn is still forwarded to the provider
+    immediately.
+  - Turn-based loops: the model answers the held turn once the exchange
+    completes. A tool continuation carries it. After a final answer, the loop
+    answers it instead of ending. Previously the new pass retired the open
+    exchange, and its remaining deltas, including tool results, were dropped
+    as stale.
+  - Explicit interrupts (`SendInterrupt`) place held turns at once, ahead of
+    the interrupt's own text; barge-in cancellation behaves as before.
+  - Every way the loop ends places held turns, so a turn the user sent is
+    never lost: a final answer, session close or stop, a failed tool or
+    interaction end (before LOOP.END), and a terminal model ERROR or
+    cancellation (as the engine exits). On that exit the recorders are
+    flushed outside the history lock with a bounded context, which
+    `agentloop.WithSettleRecordTimeout` (`Engine.SetSettleRecordTimeout`)
+    configures; the default is `engine.DefaultSettleRecordTimeout` (3s).
+    The new `subsystems.Recorder.Flush(ctx, []messages.Message)` records
+    that settled history copy.
+  - Only assistant response content opens a response. A user's input
+    transcription (TRANSCRIPT deltas with RoleUser from realtime providers)
+    and session events such as SESSION.OPEN do not hold typed turns.
+- An interrupt that cuts off tool calls before they return now adds a
+  cancelled result for each one, so history never leaves a tool call
+  without its result. The results are also recorded on the kernel's
+  full-message stream.
