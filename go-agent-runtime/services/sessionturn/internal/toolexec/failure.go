@@ -37,7 +37,15 @@ func (e *Executor) pageSightTool(call messages.ToolCall) bool {
 // failure records the original error for operators, then projects the
 // customer-safe provider result.
 func (e *Executor) failure(call messages.ToolCall, err error) messages.ToolCallResponse {
-	e.recordDiagnostic(call, err)
+	return e.failureWithCause(call, err, nil)
+}
+
+// failureWithCause is failure for an err that a secondary operator-only
+// cause accompanied, such as a panic in the timed-out call's permission
+// re-check. The call still records one diagnostic, carrying both, and the
+// provider sees only err.
+func (e *Executor) failureWithCause(call messages.ToolCall, err, cause error) messages.ToolCallResponse {
+	e.recordDiagnosticWithCause(call, err, cause)
 	err = providerSafe(err)
 	if e.pageSightTool(call) {
 		return e.pageSightFailure(call)
@@ -54,10 +62,24 @@ func (e *Executor) failure(call messages.ToolCall, err error) messages.ToolCallR
 }
 
 func (e *Executor) recordDiagnostic(call messages.ToolCall, err error) {
+	e.recordDiagnosticWithCause(call, err, nil)
+}
+
+// recordDiagnosticWithCause records err, joined on one line with an optional
+// cause. The display error code is derived from err alone, and a recovered
+// panic's stack (from err or cause) goes in the diagnostic's Stack field.
+func (e *Executor) recordDiagnosticWithCause(call messages.ToolCall, err, cause error) {
 	if e.diagnostics == nil || err == nil {
 		return
 	}
 	diagnostic := sessiontrace.ToolDiagnostic{ToolCallID: call.ID, ToolName: call.Name, Error: err}
+	if cause != nil {
+		diagnostic.Error = fmt.Errorf("%w; %w", err, cause)
+	}
+	var panicked *panicError
+	if errors.As(diagnostic.Error, &panicked) {
+		diagnostic.Stack = panicked.Stack()
+	}
 	switch {
 	case e.pageSightTool(call):
 		diagnostic.Source = e.presentation.PageSightSource
@@ -95,8 +117,9 @@ func genericFailure(call messages.ToolCall, err error) messages.ToolCallResponse
 }
 
 // panicError preserves a recovered panic's value and goroutine stack for the
-// operator diagnostic path. Unwrap exposes only the classification so callers
-// keep matching the stable sentinel.
+// operator diagnostic path. Error is one line (classification and value);
+// Stack returns the multi-line stack separately. Unwrap exposes only the
+// classification so callers keep matching the stable sentinel.
 type panicError struct {
 	kind  sessionturn.Error
 	value any
@@ -108,8 +131,11 @@ func newPanicError(kind sessionturn.Error, value any) *panicError {
 }
 
 func (p *panicError) Error() string {
-	return fmt.Sprintf("%s: %v\n%s", p.kind, p.value, p.stack)
+	return fmt.Sprintf("%s: %v", p.kind, p.value)
 }
+
+// Stack returns the recovering goroutine's stack.
+func (p *panicError) Stack() []byte { return p.stack }
 
 func (p *panicError) Unwrap() error { return p.kind }
 

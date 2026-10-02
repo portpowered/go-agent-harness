@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -34,6 +35,10 @@ func sessionToolDiagnosticSink(out io.Writer) serviceSession.SessionToolDiagnost
 			return
 		}
 		writeAdvisory(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
+		if len(diagnostic.Stack) > 0 {
+			// The recovered panic's stack follows its one-line advisory.
+			writeAdvisory(out, "tool diagnostic stack: call_id=%q\n%s\n", diagnostic.ToolCallID, bytes.TrimRight(diagnostic.Stack, "\n"))
+		}
 	})
 }
 
