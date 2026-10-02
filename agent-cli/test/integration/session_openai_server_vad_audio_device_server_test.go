@@ -571,7 +571,7 @@ func (d *queueFedDevice) Advance(ctx context.Context, callbacks int) error {
 		if err := d.awaitCredit(ctx); err != nil {
 			return err
 		}
-		stats, err := d.remoteToolAudioDevice.AdvanceStats(ctx, 1)
+		stats, err := d.AdvanceStats(ctx, 1)
 		if err != nil {
 			return err
 		}
