@@ -245,20 +245,18 @@ func sessionEventBlockedByAdmission(session messages.Session, msg messages.Strea
 
 func forwardSessionCompleteMessage(ctx context.Context, session messages.Session, msg messages.Message, requestResponse bool) error {
 	if requestResponse {
-		sender, ok := session.(sessionMessageSender)
-		if !ok {
+		if !messages.SupportsSessionMessages(session) {
 			return errors.New("session does not support complete messages")
 		}
-		if !sender.SendMessage(ctx, msg) {
+		if !messages.SendSessionMessage(ctx, session, msg) {
 			return errors.New("session rejected complete message")
 		}
 		return nil
 	}
-	sender, ok := session.(sessionMessageWithoutResponseSender)
-	if !ok {
+	if !messages.SupportsSessionMessagesWithoutResponse(session) {
 		return errors.New("session does not support complete messages without response")
 	}
-	if !sender.SendMessageWithoutResponse(ctx, msg) {
+	if !messages.SendSessionMessageWithoutResponse(ctx, session, msg) {
 		return errors.New("session rejected complete message without response")
 	}
 	return nil

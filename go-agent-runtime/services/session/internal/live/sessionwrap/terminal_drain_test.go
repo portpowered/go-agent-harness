@@ -2,8 +2,9 @@ package sessionwrap
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -39,7 +40,7 @@ func TestTerminalDrainSyncReceivePublishesQueuedProviderMessages(t *testing.T) {
 			t.Errorf("close relay session: %v", err)
 		}
 	})
-	syncer, ok := session.(ReceiveSyncer)
+	syncer, ok := session.(messages.SessionReceiveSyncer)
 	if !ok {
 		t.Fatal("terminal drain session does not expose SyncReceive")
 	}
@@ -68,7 +69,7 @@ func TestTerminalDrainSyncReceiveReturnsAfterClose(t *testing.T) {
 	if err := session.Close(); err != nil {
 		t.Fatal(err)
 	}
-	syncer, ok := session.(ReceiveSyncer)
+	syncer, ok := session.(messages.SessionReceiveSyncer)
 	if !ok {
 		t.Fatal("terminal drain session does not expose SyncReceive")
 	}

@@ -260,18 +260,6 @@ func TestTraceDeviceServiceUsesUploadedCaptureAndReportsUnavailablePlayback(t *t
 	}
 }
 
-func TestTraceDeviceServiceForwardsRTCBinding(t *testing.T) {
-	wantErr := errors.New("rtc binding failed")
-	inner := &traceContractDeviceService{bindErr: wantErr}
-	wrapper := traceDeviceService{inner: inner}
-	if _, err := wrapper.BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, wantErr) {
-		t.Fatalf("forwarded RTC binding error = %v, want %v", err, wantErr)
-	}
-	if _, err := (traceDeviceService{}).BindRTC(context.Background(), runtimeDevices.RTCBindingRequest{}); !errors.Is(err, runtimeDevices.ErrUnavailable) {
-		t.Fatalf("nil-inner RTC binding error = %v, want %v", err, runtimeDevices.ErrUnavailable)
-	}
-}
-
 func TestTraceDeviceAdaptersRejectInvalidInputs(t *testing.T) {
 	wantErr := errors.New("open failed")
 	if _, err := (traceDeviceService{}).Open(context.Background(), runtimeDevices.Request{}); !errors.Is(err, runtimeDevices.ErrUnavailable) {
@@ -442,18 +430,10 @@ func TestRemoteRenderMonitorCapturesRenderedDeviceSamples(t *testing.T) {
 type traceContractDeviceService struct {
 	handle  runtimeDevices.Handle
 	openErr error
-	bindErr error
 }
 
 func (s *traceContractDeviceService) Open(_ context.Context, _ runtimeDevices.Request) (runtimeDevices.Handle, error) {
 	return s.handle, s.openErr
-}
-
-func (s *traceContractDeviceService) BindRTC(context.Context, runtimeDevices.RTCBindingRequest) (runtimeDevices.RTCBinding, error) {
-	if s.bindErr != nil {
-		return nil, s.bindErr
-	}
-	return nil, runtimeDevices.ErrUnavailable
 }
 
 type traceContractHandle struct {

@@ -2,6 +2,7 @@ package testing
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,7 +200,7 @@ type recordingBuffer struct {
 	buf *messages.TypedBuffer[messages.StreamMessage]
 }
 
-func newRecordingBuffer(inner *messages.TypedBuffer[messages.StreamMessage], rec *SessionRecorder) *recordingBuffer {
+func newRecordingBuffer(ctx context.Context, inner *messages.TypedBuffer[messages.StreamMessage], rec *SessionRecorder) *recordingBuffer {
 	// Create a relay buffer with the same capacity.
 	relay := messages.NewTypedBuffer[messages.StreamMessage](inner.Cap())
 
@@ -207,20 +208,22 @@ func newRecordingBuffer(inner *messages.TypedBuffer[messages.StreamMessage], rec
 	// Watches the inner session's Done() channel to terminate when the session
 	// ends, preventing goroutine leaks (TypedBuffer channels are never closed).
 	go func() {
+		defer close(rec.relayDone)
 		for {
 			select {
 			case msg := <-inner.Chan():
 				rec.recordMessage(DirectionServerToClient, msg)
-				relay.Write(rec.relayCtx, msg)
+				relay.Write(ctx, msg)
 			case <-rec.inner.Done():
-				rec.cancel()
 				return
-			case <-rec.relayCtx.Done():
+			case <-rec.stop:
+				return
+			case <-ctx.Done():
 				return
 			case reply := <-rec.barrier.Requests():
 				rec.barrier.Relay(reply, inner, func(msg messages.StreamMessage) bool {
 					rec.recordMessage(DirectionServerToClient, msg)
-					relay.Write(rec.relayCtx, msg)
+					relay.Write(ctx, msg)
 					return true
 				})
 			}

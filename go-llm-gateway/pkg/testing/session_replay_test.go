@@ -538,7 +538,7 @@ func TestSessionReplayer_OutcomeReportsSuccessfulReplayCompletion(t *testing.T) 
 
 func TestSessionReplayer_ReplaysFlushedCaptureToCompletionOutcome(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
+	rec := newTestSessionRecorder(t, t.Context(), fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
 
 	fake.inbound.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,

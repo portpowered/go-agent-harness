@@ -100,9 +100,6 @@ func TestFactoryRejectsInvalidAdmissionBeforeOpeningPorts(t *testing.T) {
 	if _, err := NewFactory(nil).Open(context.Background(), devices.Request{PlaybackEnabled: true}); !errors.Is(err, devices.ErrUnavailable) {
 		t.Fatalf("nil audio service error = %v, want ErrUnavailable", err)
 	}
-	if _, err := factory.BindRTC(context.Background(), devices.RTCBindingRequest{}); !errors.Is(err, devices.ErrUnavailable) {
-		t.Fatalf("BindRTC error = %v, want ErrUnavailable", err)
-	}
 }
 
 func TestFileAdaptersDelegateRequests(t *testing.T) {

@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
-// The session runner's local barge-in asks the provider session whether it
-// runs its own turn detection, what its input format is and whether provider
-// audio is still playing locally. orderedSession and terminalDrainSession
-// forward those questions through the embedded messages.SessionCapabilities.
+// Every session wrapper relays the provider session's optional capabilities
+// through the embedded messages.SessionCapabilities and overrides only the
+// ones it answers itself.
 
 var (
 	_ messages.BargeInCapableSession = (*orderedSession)(nil)
@@ -18,7 +18,23 @@ var (
 )
 
 // A turn replay renders provider audio through its own session media, so it
-// answers playback questions itself.
+// answers media and playback questions itself instead of relaying them.
+
+func (s *mediaSession) SupportsRTCMedia() bool { return s != nil && s.media != nil }
+
+func (s *mediaSession) RTCMedia() sharedaudio.MediaEndpoints {
+	if s == nil || s.media == nil {
+		return sharedaudio.MediaEndpoints{}
+	}
+	return sharedaudio.MediaEndpoints{Inbound: s.media.Endpoints().Inbound}
+}
+
+// RTCMediaWithOptions ignores options: the turn replay fixed its inbound
+// framing when it created its media.
+func (s *mediaSession) RTCMediaWithOptions(sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
+	return s.RTCMedia()
+}
+
 func (s *mediaSession) LocalPlayback() messages.LocalPlaybackState {
 	activity := s.media.PlaybackActivity()
 	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}

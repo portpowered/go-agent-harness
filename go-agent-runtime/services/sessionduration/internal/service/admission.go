@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const streamAdmissionBufferCapacity = 1024
@@ -35,7 +34,7 @@ func (a *EventAdmission) closeWithDrain(receive, source *messages.TypedBuffer[me
 		if receive != nil && source != nil {
 			for {
 				msg, ok := source.Read()
-				if !ok || !writeAdmittedMessage(receive, context.Background(), msg) {
+				if !ok || !writeDrainedMessage(receive, msg) {
 					break
 				}
 				if onAdmit != nil {
@@ -84,12 +83,12 @@ func NewAdmissionInferencer(inner messages.SessionInferencer, admission *EventAd
 	return &AdmissionInferencer{inner: inner, admission: admission, closeDone: closeDone}
 }
 
-func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
+func (i *AdmissionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	if i == nil || i.inner == nil {
 		return nil, errors.New("session duration inferencer is unavailable")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("session duration context is required")
 	}
 	session, err := i.inner.ConnectSession(ctx)
 	if err != nil {
@@ -190,10 +189,10 @@ type AdmissionSession struct {
 	providerTerminalSeen  bool
 }
 
-func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
-	if ctx == nil {
-		ctx = context.Background()
-	}
+// NewAdmissionSession relays inner through admission for the lifetime of ctx.
+// Without a context, an inner session or its streams, the session is inert:
+// it is done at once and admits nothing.
+func NewAdmissionSession(ctx context.Context, inner messages.Session, admission *EventAdmission, onClose func(error)) *AdmissionSession {
 	s := &AdmissionSession{
 		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
 		inner:               inner,
@@ -202,7 +201,7 @@ func NewAdmissionSession(ctx context.Context, inner messages.Session, admission 
 		done:                make(chan struct{}),
 		onClose:             onClose,
 	}
-	if inner != nil && inner.Receive() != nil && inner.Done() != nil {
+	if ctx != nil && inner != nil && inner.Receive() != nil && inner.Done() != nil {
 		go s.forward(ctx)
 	} else {
 		s.closeDone()
@@ -214,75 +213,12 @@ func (s *AdmissionSession) Send(ctx context.Context, msg messages.StreamMessage)
 	return s != nil && s.inner != nil && s.inner.Send(ctx, msg)
 }
 
-// RequestResponse forwards the optional explicit response capability while
-// retaining the admission wrapper's compatibility with replay sessions.
-func (s *AdmissionSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	if s == nil || s.inner == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-	}
-	return messages.RequestSessionResponse(ctx, s.inner)
-}
-
-func (s *AdmissionSession) SupportsResponseRequests() bool {
-	return s != nil && s.inner != nil && messages.SupportsSessionResponseRequests(s.inner)
-}
-
-// SendMessage forwards the optional complete-message capability of the
-// wrapped provider session. Duration admission must not hide the rich message
-// path used to deliver a tool result on the next model turn.
-func (s *AdmissionSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	sender, ok := s.inner.(completeMessageSender)
-	return ok && sender.SendMessage(ctx, msg)
-}
-
-// SendMessageWithoutResponse forwards deferred complete messages for callers
-// that batch more than one tool result before requesting the next response.
-func (s *AdmissionSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	sender, ok := s.inner.(completeMessageSenderWithoutResponse)
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
-}
-
-func (s *AdmissionSession) SupportsCompleteMessages() bool {
-	complete, _ := completeMessageCapabilities(s.inner)
-	return complete
-}
-
-func (s *AdmissionSession) SupportsCompleteMessagesWithoutResponse() bool {
-	_, withoutResponse := completeMessageCapabilities(s.inner)
-	return withoutResponse
-}
-
 func (s *AdmissionSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.receive
 }
 
 func (s *AdmissionSession) Done() <-chan struct{} {
 	return s.done
-}
-
-func (s *AdmissionSession) RTCMedia() (audio.MediaEndpoints, bool) {
-	if owner, ok := s.inner.(interface{ RTCMedia() audio.MediaEndpoints }); ok {
-		return owner.RTCMedia(), true
-	}
-	if owner, ok := s.inner.(interface {
-		RTCMedia() (audio.MediaEndpoints, bool)
-	}); ok {
-		return owner.RTCMedia()
-	}
-	return audio.MediaEndpoints{}, false
-}
-
-func (s *AdmissionSession) TerminalError() error {
-	if source, ok := s.inner.(interface{ TerminalError() error }); ok {
-		return source.TerminalError()
-	}
-	return nil
 }
 
 func (s *AdmissionSession) ProviderTerminalMessage() (messages.StreamMessage, bool) {

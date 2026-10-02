@@ -49,10 +49,6 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 	return newHandle(capture, playback), nil
 }
 
-func (f *Factory) BindRTC(context.Context, devices.RTCBindingRequest) (devices.RTCBinding, error) {
-	return nil, devices.ErrUnavailable
-}
-
 func validateRequest(ctx context.Context, request devices.Request) error {
 	if err := contextError(ctx); err != nil {
 		return err

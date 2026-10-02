@@ -294,64 +294,6 @@ func assertHandlePlaybackStats(t *testing.T, handle devices.Handle, outputID str
 	}
 }
 
-func TestFactoryUnavailableAndUnselectedRTCBindingResults(t *testing.T) {
-	var missing *Factory
-	if _, err := missing.Open(context.Background(), devices.Request{CaptureEnabled: true}); !errors.Is(err, devices.ErrUnavailable) {
-		t.Fatalf("nil factory Open() error = %v, want devices.ErrUnavailable", err)
-	}
-	if _, err := missing.BindRTC(context.Background(), devices.RTCBindingRequest{InputPresent: true}); !errors.Is(err, devices.ErrUnavailable) {
-		t.Fatalf("nil factory BindRTC() error = %v, want devices.ErrUnavailable", err)
-	}
-
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	binding, err := NewFactory(registry, mixer.DefaultFormat()).BindRTC(context.Background(), devices.RTCBindingRequest{})
-	if err != nil || binding != nil {
-		t.Fatalf("BindRTC() without selected directions = (%v, %v), want (nil, nil)", binding, err)
-	}
-	if got := registry.Observations().OpenCount; got != 0 {
-		t.Fatalf("unselected RTC binding opened %d devices, want none", got)
-	}
-}
-
-func TestFactoryBindsSelectedRTCDirections(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatal(err)
-	}
-	factory := NewFactory(registry, mixer.DefaultFormat())
-	tests := []struct {
-		name       string
-		request    devices.RTCBindingRequest
-		wantInput  string
-		wantOutput string
-	}{
-		{name: "input", request: devices.RTCBindingRequest{InputPresent: true, BypassSelfHearing: true}, wantInput: testInputDevice},
-		{name: "output", request: devices.RTCBindingRequest{OutputPresent: true, BypassSelfHearing: true}, wantOutput: testOutputDevice},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			binding, err := factory.BindRTC(context.Background(), test.request)
-			if err != nil {
-				t.Fatalf("BindRTC() error = %v", err)
-			}
-			selection, ok := binding.(interface{ SelectedDeviceIDs() (string, string) })
-			if !ok {
-				t.Fatal("RTC binding does not expose selected device IDs")
-			}
-			inputID, outputID := selection.SelectedDeviceIDs()
-			if inputID != test.wantInput || outputID != test.wantOutput {
-				t.Fatalf("selected devices = (%q, %q), want (%q, %q)", inputID, outputID, test.wantInput, test.wantOutput)
-			}
-			if err := binding.Close(); err != nil {
-				t.Fatalf("Close() error = %v", err)
-			}
-		})
-	}
-}
-
 func TestFactoryRejectsDirectionlessAndNegativeRequests(t *testing.T) {
 	inner, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {
@@ -377,17 +319,6 @@ func TestFactoryRejectsInvalidRemoteEndpoint(t *testing.T) {
 	_, err := factory.Open(context.Background(), devices.Request{PlaybackEnabled: true, RemoteEndpoint: "192.0.2.10:19090"})
 	if !errors.Is(err, devices.ErrInvalidRemoteEndpoint) {
 		t.Fatalf("Open remote error = %v, want ErrInvalidRemoteEndpoint", err)
-	}
-}
-
-func TestFactoryBindRTCRejectsInvalidRemoteEndpoint(t *testing.T) {
-	factory := NewFactory(devicegw.NewPlatformDeviceRegistry(), mixer.DefaultFormat())
-	_, err := factory.BindRTC(context.Background(), devices.RTCBindingRequest{
-		InputPresent:   true,
-		RemoteEndpoint: "192.0.2.10:19090",
-	})
-	if !errors.Is(err, devices.ErrInvalidRemoteEndpoint) {
-		t.Fatalf("BindRTC remote error = %v, want ErrInvalidRemoteEndpoint", err)
 	}
 }
 

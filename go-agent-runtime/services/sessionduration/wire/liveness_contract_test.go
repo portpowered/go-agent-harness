@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -148,11 +149,11 @@ func TestPublicLivenessUsesCurrentResponseForCancellationWithoutID(t *testing.T)
 	}
 }
 
-// capabilityProvider is a provider session that runs turn detection, owns
-// local playback and declares its input rate.
+// capabilityProvider is a provider session with every barge-in capability,
+// response requests and complete messages. It records the calls it receives.
 type capabilityProvider struct {
 	messages.Session
-	interrupts int
+	calls []string
 }
 
 func (*capabilityProvider) ProviderTurnDetection() bool { return true }
@@ -161,34 +162,80 @@ func (*capabilityProvider) LocalPlayback() messages.LocalPlaybackState {
 	return messages.LocalPlaybackState{Active: true, Level: 1234}
 }
 func (p *capabilityProvider) InterruptLocalPlayback(context.Context) bool {
-	p.interrupts++
+	p.calls = append(p.calls, "interrupt playback")
+	return true
+}
+func (p *capabilityProvider) Send(_ context.Context, msg messages.StreamMessage) bool {
+	p.calls = append(p.calls, string(msg.Type))
+	return true
+}
+func (p *capabilityProvider) RequestResponse(context.Context) messages.SessionSendOutcome {
+	p.calls = append(p.calls, "request response")
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+func (p *capabilityProvider) SendMessage(context.Context, messages.Message) bool {
+	p.calls = append(p.calls, "complete message")
 	return true
 }
 
-// The recording, strict-replay and live-recorder paths wrap the provider in a
-// session recorder and the admission session. The runner's local barge-in
-// reads turn detection, local playback and the input rate through both.
-func TestAdmissionSessionForwardsBargeInCapabilities(t *testing.T) {
+// connectAdmissionChain wraps provider the way the recording, strict-replay
+// and live-recorder paths do: a session recorder inside the admission session.
+func connectAdmissionChain(t *testing.T, provider messages.Session) messages.Session {
+	t.Helper()
 	service := NewService()
-	provider := &capabilityProvider{Session: newPublicSession()}
-	recorded := gwtesting.NewSessionRecorder(provider)
-	var session messages.Session = service.NewAdmissionSession(context.Background(), recorded, service.NewEventAdmission(), nil)
+	recorded, err := gwtesting.NewSessionRecorder(t.Context(), provider)
+	if err != nil {
+		t.Fatalf("NewSessionRecorder: %v", err)
+	}
+	var session messages.Session = service.NewAdmissionSession(t.Context(), recorded, service.NewEventAdmission(), nil)
 	t.Cleanup(func() {
 		if err := session.Close(); err != nil {
 			t.Errorf("close admission session: %v", err)
 		}
 	})
-	detector, ok := session.(messages.SessionTurnDetection)
-	if !ok || !detector.ProviderTurnDetection() {
-		t.Fatal("provider turn detection was not forwarded")
+	return session
+}
+
+// The runner's barge-in reaches the provider through the recorder and the
+// admission session: turn detection, input rate, playback, response cancel,
+// response requests and complete messages.
+func TestAdmissionChainRelaysBargeInCapabilities(t *testing.T) {
+	provider := &capabilityProvider{Session: newPublicSession()}
+	session := connectAdmissionChain(t, provider)
+	ctx := t.Context()
+	capable, ok := session.(messages.BargeInCapableSession)
+	if !ok || !capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 1234 {
+		t.Fatal("barge-in answers were not relayed")
 	}
-	format, ok := session.(messages.SessionInputFormat)
-	if !ok || format.InputAudioSampleRate() != 24000 {
-		t.Fatal("input sample rate was not forwarded")
+	if !capable.InterruptLocalPlayback(ctx) || !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel}) {
+		t.Fatal("playback interrupt or response cancel was not relayed")
 	}
-	playback, ok := session.(messages.SessionLocalPlayback)
-	if !ok || playback.LocalPlayback().Level != 1234 || !playback.InterruptLocalPlayback(context.Background()) || provider.interrupts != 1 {
-		t.Fatal("local playback was not forwarded")
+	if !messages.RequestSessionResponse(ctx, session).OK() || !messages.SendSessionMessage(ctx, session, messages.Message{ToolCallID: "call"}) {
+		t.Fatal("response request or complete message was not relayed")
+	}
+	// The recorder records a response request as the RESPONSE.CREATE it sends.
+	want := []string{"interrupt playback", string(messages.StreamTypeResponseCancel), string(messages.StreamTypeResponseCreate), "complete message"}
+	if !slices.Equal(provider.calls, want) {
+		t.Fatalf("provider calls = %v, want %v", provider.calls, want)
+	}
+}
+
+// The admission chain advertises nothing the provider lacks.
+func TestAdmissionChainDoesNotAdvertiseMissingCapabilities(t *testing.T) {
+	session := connectAdmissionChain(t, newPublicSession())
+	ctx := t.Context()
+	capable, ok := session.(messages.BargeInCapableSession)
+	if !ok {
+		t.Fatal("admission chain does not expose the barge-in capabilities")
+	}
+	if capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 0 || capable.LocalPlayback().Active || capable.InterruptLocalPlayback(ctx) {
+		t.Fatal("a barge-in capability the provider lacks was advertised")
+	}
+	if messages.SupportsSessionResponseRequests(session) || messages.SupportsSessionMessages(session) || messages.SupportsSessionMessagesWithoutResponse(session) {
+		t.Fatal("response requests or complete messages were advertised")
+	}
+	if _, ok := messages.SessionMedia(session); ok {
+		t.Fatal("media was advertised")
 	}
 }
 
@@ -198,7 +245,11 @@ func TestAdmissionSessionForwardsBargeInCapabilities(t *testing.T) {
 func TestAdmissionSessionSyncReceivePublishesQueuedProviderMessages(t *testing.T) {
 	service := NewService()
 	provider := newPublicSession()
-	var session messages.Session = service.NewAdmissionSession(context.Background(), gwtesting.NewSessionRecorder(provider), service.NewEventAdmission(), nil)
+	recorded, err := gwtesting.NewSessionRecorder(t.Context(), provider)
+	if err != nil {
+		t.Fatalf("NewSessionRecorder: %v", err)
+	}
+	var session messages.Session = service.NewAdmissionSession(t.Context(), recorded, service.NewEventAdmission(), nil)
 	t.Cleanup(func() {
 		if err := session.Close(); err != nil {
 			t.Errorf("close admission session: %v", err)

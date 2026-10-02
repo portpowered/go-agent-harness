@@ -6,7 +6,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // CapturingInferencerOptions configures provider media capture around an
@@ -41,7 +40,6 @@ type CapturingInferencer struct {
 	onProviderDone    func(error)
 	onMediaAttached   func(bool)
 	captureMu         sync.Mutex
-	captureFlush      func() error
 	connectedSession  messages.Session
 }
 
@@ -62,17 +60,11 @@ func (i *CapturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 		i.media.Fail(err)
 		return nil, err
 	}
-	if flusher, ok := i.inner.(interface{ FlushCapture() error }); ok {
-		i.captureMu.Lock()
-		i.captureFlush = flusher.FlushCapture
-		i.captureMu.Unlock()
-	}
 	i.captureMu.Lock()
 	i.connectedSession = s
 	i.captureMu.Unlock()
 	mediaAttached := false
-	if providerMedia, ok := s.(sharedaudio.MediaSession); ok {
-		endpoints := CaptureMediaEndpoints(s, providerMedia, i.continuous)
+	if endpoints, ok := CaptureMediaEndpoints(s, i.continuous); ok {
 		mediaAttached = (!i.requireInbound || endpoints.Inbound != nil) &&
 			(!i.requireOutbound || endpoints.Outbound != nil)
 		i.media.Attach(ctx, endpoints)
@@ -98,41 +90,22 @@ func (i *CapturingInferencer) ConnectSession(ctx context.Context) (messages.Sess
 	}), nil
 }
 
-// FlushCapture forwards provider capture finalization after session join.
-func (i *CapturingInferencer) FlushCapture() error {
-	if i == nil {
-		return nil
-	}
-	i.captureMu.Lock()
-	flush := i.captureFlush
-	i.captureMu.Unlock()
-	if flush == nil {
-		return nil
-	}
-	return flush()
-}
-
 // SyncReceive forwards a receive barrier to the connected provider session so
 // messages it already queued become visible to the session runner.
 func (i *CapturingInferencer) SyncReceive(ctx context.Context) {
-	if i == nil {
-		return
-	}
-	i.captureMu.Lock()
-	connected := i.connectedSession
-	i.captureMu.Unlock()
-	if syncer, ok := connected.(ReceiveSyncer); ok {
-		syncer.SyncReceive(ctx)
-	}
+	messages.SessionCapabilities{Wrapped: i.connected()}.SyncReceive(ctx)
 }
 
 // TerminalError reads joined provider state without waiting for Done scheduling.
 func (i *CapturingInferencer) TerminalError() error {
-	i.captureMu.Lock()
-	connected := i.connectedSession
-	i.captureMu.Unlock()
-	if provider, ok := connected.(interface{ TerminalError() error }); ok {
-		return provider.TerminalError()
+	return messages.SessionCapabilities{Wrapped: i.connected()}.TerminalError()
+}
+
+func (i *CapturingInferencer) connected() messages.Session {
+	if i == nil {
+		return nil
 	}
-	return nil
+	i.captureMu.Lock()
+	defer i.captureMu.Unlock()
+	return i.connectedSession
 }

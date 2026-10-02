@@ -15,37 +15,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-func TestAdmissionContractForwardsCapabilities(t *testing.T) {
-	inferencer, wrapped, inner := newConnectedAdmission(t)
-	defer closeAdmissionForTest(t, inferencer, wrapped)
-	if !wrapped.SupportsResponseRequests() {
-		t.Fatal("response request capability was not forwarded")
-	}
-	if wrapped.RequestResponse(context.Background()).Status != messages.SessionSendSucceeded || !inner.responseSent {
-		t.Fatal("response request capability was not forwarded")
-	}
-	if !wrapped.SupportsCompleteMessages() || !wrapped.SupportsCompleteMessagesWithoutResponse() {
-		t.Fatal("complete-message capability was not forwarded")
-	}
-	if !wrapped.SendMessage(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !inner.messageSent {
-		t.Fatal("complete message was not forwarded")
-	}
-	if !wrapped.SendMessageWithoutResponse(context.Background(), messages.NewTextMessage(messages.RoleUser, "tool")) || !inner.withoutSent {
-		t.Fatal("deferred complete message was not forwarded")
-	}
-	if !wrapped.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta}) {
-		t.Fatal("stream message was not forwarded")
-	}
-	if _, ok := wrapped.RTCMedia(); !ok {
-		t.Fatal("RTC media capability was not forwarded")
-	}
-	terminalErr := errors.New("terminal")
-	inner.terminalErr = terminalErr
-	if !errors.Is(wrapped.TerminalError(), terminalErr) {
-		t.Fatal("terminal error capability was not forwarded")
-	}
-}
-
 func TestAdmissionContractRetainsProviderTerminal(t *testing.T) {
 	inferencer, wrapped, inner := newConnectedAdmission(t)
 	defer closeAdmissionForTest(t, inferencer, wrapped)

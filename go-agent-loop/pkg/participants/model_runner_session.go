@@ -229,12 +229,8 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	return messageEndOwned
 }
 
-type initialSessionConfigSentMarker interface {
-	InitialSessionConfigSent() bool
-}
-
 func providerSentInitialSessionConfig(session messages.Session) bool {
-	marker, ok := session.(initialSessionConfigSentMarker)
+	marker, ok := session.(messages.SessionInitialConfigMarker)
 	return ok && marker.InitialSessionConfigSent()
 }
 

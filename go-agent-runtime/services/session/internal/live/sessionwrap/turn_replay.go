@@ -36,7 +36,7 @@ func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session
 }
 
 type mediaSession struct {
-	messages.SessionCapabilities // playback is answered by the session's own media
+	messages.SessionCapabilities // media and playback are answered by the session's own media
 	barrier                      messages.RelayBarrier
 	inner                        messages.Session
 	media                        *sharedaudio.SessionMedia
@@ -88,13 +88,6 @@ func (s *mediaSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 
 func (s *mediaSession) Done() <-chan struct{} { return s.done }
 
-func (s *mediaSession) RTCMedia() sharedaudio.MediaEndpoints {
-	if s == nil || s.media == nil {
-		return sharedaudio.MediaEndpoints{}
-	}
-	return sharedaudio.MediaEndpoints{Inbound: s.media.Endpoints().Inbound}
-}
-
 func (s *mediaSession) TerminalError() error {
 	if s == nil {
 		return nil
@@ -105,10 +98,8 @@ func (s *mediaSession) TerminalError() error {
 	if err != nil {
 		return err
 	}
-	if terminal, ok := s.inner.(interface{ TerminalError() error }); ok {
-		if err := terminal.TerminalError(); err != nil {
-			return fmt.Errorf("turn replay provider session: %w", err)
-		}
+	if err := s.SessionCapabilities.TerminalError(); err != nil {
+		return fmt.Errorf("turn replay provider session: %w", err)
 	}
 	if terminal, ok := s.inner.(interface{ Err() error }); ok {
 		if err := terminal.Err(); err != nil {
@@ -251,12 +242,12 @@ func (s *mediaSession) fail(err error) {
 	s.media.FailInbound(err)
 }
 
-func CaptureMediaEndpoints(session messages.Session, providerMedia sharedaudio.MediaSession, continuous bool) sharedaudio.MediaEndpoints {
-	if !continuous {
-		return providerMedia.RTCMedia()
+// CaptureMediaEndpoints opens the media session exposes, with continuous
+// inbound framing when requested and supported, and reports whether it
+// exposes any.
+func CaptureMediaEndpoints(session messages.Session, continuous bool) (sharedaudio.MediaEndpoints, bool) {
+	if continuous {
+		return messages.SessionMediaWithOptions(session, sharedaudio.MediaSessionOptions{InboundContinuous: true})
 	}
-	if configurable, ok := session.(sharedaudio.ConfigurableMediaSession); ok {
-		return configurable.RTCMediaWithOptions(sharedaudio.MediaSessionOptions{InboundContinuous: true})
-	}
-	return providerMedia.RTCMedia()
+	return messages.SessionMedia(session)
 }

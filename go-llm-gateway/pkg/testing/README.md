@@ -226,10 +226,7 @@ client := &http.Client{Transport: recorder}
 recorder.FlushToFile("captures/my-test.http.json")
 
 // Session recording
-sessionRec := testing.NewSessionRecorder(
-    realSession,
-    testing.WithSessionRelayContext(ctx),
-)
+sessionRec, err := testing.NewSessionRecorder(ctx, realSession)
 // ... use sessionRec as messages.Session ...
 sessionRec.FlushToFile("captures/my-test.session.json")
 

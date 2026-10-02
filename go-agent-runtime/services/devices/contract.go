@@ -9,12 +9,10 @@ package devices
 import (
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	selfhearing "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/selfhearing"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -183,40 +181,12 @@ type PlaybackStatsProvider interface {
 // inert; registry access and worker startup happen only in Open.
 type Service interface {
 	Open(context.Context, Request) (Handle, error)
-	BindRTC(context.Context, RTCBindingRequest) (RTCBinding, error)
 }
 
 // RemoteEndpointValidator is an optional, side-effect-free capability for
 // validating remote device selectors before the service opens its workers.
 type RemoteEndpointValidator interface {
 	ValidateRemoteEndpoint(string) error
-}
-
-// RTCBindingRequest is the normalized, host-neutral RTC device request. The
-// service owns the registry and all device lifecycle decisions; callers pass
-// only selectors, negotiated rates and observation hooks.
-type RTCBindingRequest struct {
-	Inferencer                 messages.SessionInferencer
-	RemoteEndpoint             string
-	InputDevice                string
-	OutputDevice               string
-	InputPresent               bool
-	OutputPresent              bool
-	SelfHearingConfig          selfhearing.PCM16SelfHearingConfig
-	FeedbackWarningWriter      io.Writer
-	BypassSelfHearing          bool
-	InputSampleRate            int
-	OutputSampleRate           int
-	OutputVoice                string
-	HoldToneConfig             *audio.HoldToneConfig
-	PlaybackObserver           PlaybackObserver
-	PlaybackReceiptObserver    PlaybackReceiptObserver
-	PlaybackSamplesObserver    PlaybackSamplesObserver
-	PreGateSamplesObserver     CaptureSamplesObserver
-	UploadedSamplesObserver    CaptureSamplesObserver
-	RenderedSamplesObserver    RenderedSamplesObserver
-	RenderedSamplesUnavailable func()
-	CaptureObserver            CaptureObserver
 }
 
 // PlaybackObserver receives the final playback queue snapshot at device
@@ -237,32 +207,6 @@ type CaptureObserver func(deviceID string, stats audio.CaptureQueueStats)
 
 // RenderedSamplesObserver observes PCM rendered by a local playback device.
 type RenderedSamplesObserver func(sampleRate int, samples []int16)
-
-// HasInput reports whether this request selects an input direction. An empty
-// device ID still selects the registry default when InputPresent is set.
-func (request RTCBindingRequest) HasInput() bool {
-	return request.InputPresent || request.InputDevice != ""
-}
-
-// HasOutput reports whether this request selects an output direction. An
-// empty device ID still selects the registry default when OutputPresent is set.
-func (request RTCBindingRequest) HasOutput() bool {
-	return request.OutputPresent || request.OutputDevice != ""
-}
-
-// HasDevices reports whether either media direction is selected.
-func (request RTCBindingRequest) HasDevices() bool {
-	return request.HasInput() || request.HasOutput()
-}
-
-// RTCBinding owns selected local devices and the provider-facing session
-// decorator. Its public surface intentionally exposes no concrete device or
-// mutable runtime state.
-type RTCBinding interface {
-	Inferencer() messages.SessionInferencer
-	Errors() <-chan error
-	Close() error
-}
 
 // ProbeRequest is the transport-neutral configuration for a live device
 // probe. Provider construction is supplied by the application graph through
