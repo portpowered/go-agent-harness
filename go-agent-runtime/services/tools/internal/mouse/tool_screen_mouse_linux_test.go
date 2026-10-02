@@ -78,9 +78,14 @@ if [ "${GO_AGENT_HARNESS_XDOTOOL_MODE}" = fail ]; then
   printf 'capture failed\n' >&2
   exit 2
 fi
-# Like scrot, never overwrite: an existing target gets a numbered sibling.
-target="${3}"
-if [ -e "$target" ]; then
+# Like scrot, never overwrite an existing target without -o/--overwrite:
+# it gets a numbered sibling instead.
+overwrite=no
+for arg; do
+  case "$arg" in -o|--overwrite) overwrite=yes ;; esac
+  target="$arg"
+done
+if [ -e "$target" ] && [ "$overwrite" = no ]; then
   target="${target%.png}_000.png"
 fi
 cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "$target"`)
@@ -318,3 +323,41 @@ func TestLinuxProcessErrorIdentity(t *testing.T) {
 	}
 
 }
+<<<<<<< HEAD
+||||||| parent of 2ea5bfe58 (ci(nightly-e2e): own cache names, pinned action, split pinned Chrome; scrot --overwrite)
+
+// screenDisplayBounds reports the host display's bounds, or empty when
+// discovery fails.
+func screenDisplayBounds(index int) image.Rectangle {
+	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
+	if err != nil {
+		return image.Rectangle{}
+	}
+	return bounds
+}
+=======
+
+// screenDisplayBounds reports the host display's bounds, or empty when
+// discovery fails.
+func screenDisplayBounds(index int) image.Rectangle {
+	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
+	if err != nil {
+		return image.Rectangle{}
+	}
+	return bounds
+}
+
+// TestLinuxScreenCaptureWritesIntoTheReservedTempFile covers scrot's
+// no-overwrite default: the capture reserves its temp file before running
+// scrot, so it must pass --overwrite or decode the empty reservation.
+func TestLinuxScreenCaptureWritesIntoTheReservedTempFile(t *testing.T) {
+	fakeLinuxDesktop(t, tinyPNG(t))
+	img, err := display.NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2))
+	if err != nil {
+		t.Fatalf("capture into the reserved temp file: %v", err)
+	}
+	if got := img.Bounds(); got.Dx() != 2 || got.Dy() != 2 {
+		t.Fatalf("captured image bounds = %v, want the 2x2 fixture", got)
+	}
+}
+>>>>>>> 2ea5bfe58 (ci(nightly-e2e): own cache names, pinned action, split pinned Chrome; scrot --overwrite)

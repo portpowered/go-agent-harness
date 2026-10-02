@@ -330,15 +330,7 @@ go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestBundledSiteAdaptersStockChromeJourneys$/^capital_one_shopping$' -count=1 -v
 ```
 
-Run the read-only live-site gate (selected by the `e2e` build tag) against a
-temporary Chrome profile. It does not require model credentials and performs a
-bounded 20-page scan without activating an offer:
-
-```bash
-go test -tags e2e ./agent-cli/internal/webmcp/chrome \
-  -run '^TestCapitalOneShoppingAdapterLive$' -count=1 -v
-```
-
-Live offers change over time. Acceptance should assert the requested scan
-bound, structured reward/cost semantics, successful tool lifecycle, and
-grounded reporting rather than a permanent merchant list.
+There is no automated test against the live site: it flaked in CI, and its
+offers change over time. When checking the live site by hand, assert the
+requested scan bound, structured reward/cost semantics, successful tool
+lifecycle, and grounded reporting rather than a permanent merchant list.

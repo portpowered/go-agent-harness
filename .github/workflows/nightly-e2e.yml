@@ -30,24 +30,40 @@ jobs:
     name: Nightly e2e (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
-    # actions: write lets go-cache-save delete superseded main caches.
+    # actions: write lets go-cache-save delete superseded nightly-e2e caches.
     permissions:
       contents: read
       actions: write
     strategy:
       fail-fast: false
       matrix:
+        # Every leg saves under its own nightly-e2e-* cache name so a
+        # scheduled run never prunes or supersedes the caches CI relies on,
+        # and parallel legs never race on one key. A cold leg restores the
+        # matching CI cache (same cached paths) as its fallback.
         include:
-          # The pinned Chrome for Testing artifact is darwin/arm64 only.
-          - name: pinned Chrome
+          # The pinned Chrome for Testing artifact is darwin/arm64 only. The
+          # pinned tests are split in two legs so each stays under three
+          # minutes with a cold cache: the compiled-CLI journeys, and the
+          # in-process adapter suites.
+          - name: pinned Chrome CLI
             runner: macos-14
-            cache: macos-webmcp
+            cache: nightly-e2e-pinned-cli
+            fallback: macos
             audio: false
             packages: ./agent-cli/internal/webmcp/chrome
-            run: ^(TestPinnedChrome.*|TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome)$
+            run: ^(TestPinnedChromeWebMCPCLIJourneyThroughActualBinary|TestPinnedChromeWebMCPStaleReferenceThroughActualBinary|TestPinnedChromeWebMCPClassificationContractTwice|TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome)$
+          - name: pinned Chrome adapter
+            runner: macos-14
+            cache: nightly-e2e-pinned-adapter
+            fallback: macos
+            audio: false
+            packages: ./agent-cli/internal/webmcp/chrome
+            run: ^(TestPinnedChromeConnectionSurvivesOpenerContextCancel|TestPinnedChromeWebMCPAdapterIntegration|TestPinnedChromeLateCatalogReevaluation|TestPinnedChromeTopologyRecoverySuite|TestPinnedChromeCubecadeTwoIndependentBrokerSessions)$
           - name: stock Chrome
             runner: macos-14
-            cache: macos-webmcp
+            cache: nightly-e2e-stock-chrome
+            fallback: macos
             audio: false
             packages: ./agent-cli/internal/webmcp/chrome
             run: ^(TestManagedBrowser.*|TestBundledSiteAdaptersStockChromeJourneys|TestYouTubeAdapterStockChromeJourney)$
@@ -57,19 +73,22 @@ jobs:
           # Recording or Accessibility permission.)
           - name: macOS devices
             runner: macos-14
-            cache: macos
+            cache: nightly-e2e-macos-devices
+            fallback: macos
             audio: true
             packages: ./agent-cli/test/functional ./go-agent-runtime/services/tools/internal/mouse ./go-agent-runtime/services/tools/internal/display
             run: .
           - name: Linux devices
             runner: ubuntu-latest
-            cache: nightly-e2e-linux
+            cache: nightly-e2e-linux-devices
+            fallback: unit
             audio: true
             packages: ./agent-cli/test/functional ./go-agent-runtime/services/tools/internal/mouse
             run: ^(TestLinuxPhysicalAudioDeviceLoop|TestLinuxRealScreenAndMouse)$
           - name: Windows devices
             runner: windows-latest
-            cache: windows
+            cache: nightly-e2e-windows-devices
+            fallback: windows
             audio: true
             packages: ./go-device-gateway/pkg/devices ./go-agent-runtime/services/tools/internal/mouse
             run: ^(TestWASAPIOpenHasLiveDataPath|TestWASAPIDeviceRegistryConformance|TestWindowsMouseOperationsRestoreCursor|TestWindowsScreenCaptureAndRecord)$
@@ -85,10 +104,11 @@ jobs:
         uses: ./.github/actions/go-cache
         with:
           cache-name: ${{ matrix.cache }}
+          fallback-cache-names: ${{ matrix.fallback }}
 
       - name: Install a virtual sound card
         if: matrix.audio
-        uses: LABSN/sound-ci-helpers@v1
+        uses: LABSN/sound-ci-helpers@d08c889a7bba7d9b1b059f8f76dac4672ea3a9cf # v1
 
       - name: Install desktop tools (Linux)
         if: runner.os == 'Linux'
