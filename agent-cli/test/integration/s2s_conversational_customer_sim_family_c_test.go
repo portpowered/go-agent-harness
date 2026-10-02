@@ -167,6 +167,12 @@ type familyCProviderFixture struct {
 	actionIndex        int
 	pendingCall        *familyCFunctionCall
 	pendingResult      bool
+	// finalResponseSent and finalSilenceSeen gate the provider close on the
+	// product's own end-of-input commit, so session.closed never races the
+	// commit the child sends when its stdin reaches EOF.
+	finalResponseSent bool
+	finalSilenceSeen  bool
+	closeSent         bool
 }
 
 func runFamilyCProcess(t *testing.T, imagePath string) familyCProcessRun {
@@ -343,14 +349,7 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 				return
 			}
 		case rtEventConversationItemCreate:
-			if event.Item.Type == rtItemFunctionCallOutput {
-				if err := f.handleToolResult(event.Item.CallID, event.Item.Output); err != nil {
-					f.failProtocol(err.Error())
-					return
-				}
-				continue
-			}
-			if err := f.handleImage(event.Item.Content); err != nil {
+			if err := f.handleItemCreate(event.Item.Type, event.Item.CallID, event.Item.Output, event.Item.Content); err != nil {
 				f.failProtocol(err.Error())
 				return
 			}
@@ -363,14 +362,30 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 				f.failProtocol(err.Error())
 				return
 			}
-		case rtEventInputAudioCommit, rtEventResponseCancel:
-			// The fixture models the server-VAD-shaped commit and accepts the
-			// normal client controls without creating a second response.
+		case rtEventInputAudioCommit:
+			if !f.handleInputCommit(connection) {
+				return
+			}
+		case rtEventResponseCancel:
+			// The fixture accepts the normal client cancel without creating a
+			// second response.
 		default:
 			// session.created and provider metadata are server-to-client only;
 			// optional client events are irrelevant to this image-boundary proof.
 		}
 	}
+}
+
+// handleItemCreate records a client conversation item: a tool result for the
+// pending call, or image content the product attached.
+func (f *familyCProviderFixture) handleItemCreate(itemType, callID, output string, content []struct {
+	Type     string `json:"type"`
+	ImageURL string `json:"image_url"`
+}) error {
+	if itemType == rtItemFunctionCallOutput {
+		return f.handleToolResult(callID, output)
+	}
+	return f.handleImage(content)
 }
 
 func (f *familyCProviderFixture) handleImage(content []struct {
@@ -514,10 +529,30 @@ func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		return err
 	}
 	if marker == 3 {
-		<-time.After(25 * time.Millisecond) // let the client drain the final response
-		return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_c_complete"})
+		f.mu.Lock()
+		f.finalResponseSent = true
+		f.mu.Unlock()
 	}
 	return nil
+}
+
+// handleInputCommit closes the completed conversation once the product has
+// committed the end of its input: the final response was sent, the customer's
+// trailing silence arrived after it, and this is the commit the child sends
+// at stdin EOF. A close sent on a timer instead (the fixture used to wait
+// 25ms) can land while the child is sending that commit; the closed provider
+// then rejects it and the child exits 1.
+func (f *familyCProviderFixture) handleInputCommit(connection *websocket.Conn) bool {
+	f.mu.Lock()
+	ready := f.finalResponseSent && f.finalSilenceSeen && !f.closeSent
+	if ready {
+		f.closeSent = true
+	}
+	f.mu.Unlock()
+	if !ready {
+		return true
+	}
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_c_complete"}) == nil
 }
 
 func (f *familyCProviderFixture) sendSessionReady(connection *websocket.Conn) error {
@@ -698,6 +733,9 @@ func (f *familyCProviderFixture) handleInputAudio(connection *websocket.Conn, en
 		return false
 	}
 	if customerSimulationSilent(audio) {
+		f.mu.Lock()
+		f.finalSilenceSeen = f.finalSilenceSeen || f.finalResponseSent
+		f.mu.Unlock()
 		return f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}) == nil &&
 			f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}) == nil
 	}

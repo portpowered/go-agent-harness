@@ -297,6 +297,38 @@ func TestSessionModelRunner_RunReleasesHeldOnsetOnInjectedClock(t *testing.T) {
 	}
 }
 
+// When the onset window expires while the frame that completes the onset is
+// already queued, both select cases are ready. The queued speech must still
+// decide the barge-in: the cancel reaches the provider ahead of the held
+// audio. select chooses at random, so the setup is repeated enough times that
+// a timer-first ordering cannot pass by luck.
+func TestSessionModelRunner_HeldOnsetExpiryYieldsToQueuedSpeech(t *testing.T) {
+	ctx := context.Background()
+	for attempt := range 32 {
+		fake := clock.NewDeterministic(time.Time{}, time.Millisecond)
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(nil, 16, nil)
+		runner.SetClock(fake)
+		state := newInFlightRunState(t, session, runner, "resp-held")
+		sendUserAudio(t, runner, session, state, heldOnsetFrame())
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio(heldOnsetFrame(), messages.SessionAudioInputPolicyInterrupt), SessionAdmitWaiting); err != nil {
+			t.Fatalf("attempt %d: enqueue onset-completing speech: %v", attempt, err)
+		}
+		fake.AdvanceBy(DefaultBargeInConfig().MinSpeech)
+		if done, err := runner.awaitSessionStep(ctx, session, state); done || err != nil {
+			t.Fatalf("attempt %d: session step = done:%t err:%v, want the loop to continue", attempt, done, err)
+		}
+		sent := session.sentMessages()
+		if len(sent) != 3 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta || sent[2].Type != messages.StreamTypeAudioDelta {
+			types := make([]messages.StreamMessageType, len(sent))
+			for index, msg := range sent {
+				types[index] = msg.Type
+			}
+			t.Fatalf("attempt %d: sent %v, want RESPONSE.CANCEL then both speech frames", attempt, types)
+		}
+	}
+}
+
 // A held frame that the provider rejects when it is finally released is the
 // runner's terminal audio failure, published so the engine observes it.
 func TestSessionModelRunner_HeldOnsetReleaseFailureIsPublished(t *testing.T) {

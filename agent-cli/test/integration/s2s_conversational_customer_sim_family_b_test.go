@@ -129,15 +129,16 @@ func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *te
 	})
 
 	script := probe.FamilyBSpokenScript()
+	var childStderr lockedBuffer
 	result, runErr := probe.RunCustomerSimulationSuite(context.Background(), probe.CustomerSimulationSuiteOptions{
 		BinaryPath: buildAgentBinary(t), RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime",
 		BaseURL: fixture.WebSocketURL(), APIKey: "hermetic-key", SystemPrompt: scenario.TextSeed,
 		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBCorrectionSpeech()}}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: 5 * time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
-		ReplayService: replaywire.NewService(),
+		ReplayService: replaywire.NewService(), CaptureErrorSink: &childStderr,
 	})
 	if runErr != nil {
-		t.Fatalf("RunCustomerSimulationSuite: %v\nprovider=%+v", runErr, fixture.Snapshot())
+		t.Fatalf("RunCustomerSimulationSuite: %v\nprovider=%+v\nchild stderr=%s", runErr, fixture.Snapshot(), childStderr.String())
 	}
 	if len(result.Runs) != 1 {
 		t.Fatalf("suite runs = %d, want 1", len(result.Runs))

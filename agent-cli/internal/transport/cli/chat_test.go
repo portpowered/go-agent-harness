@@ -232,49 +232,66 @@ func (b *frameWatchBuffer) String() string {
 	return b.buf.String()
 }
 
+// chatTextCancelAfterPromptOutput is the text session's complete stdout when
+// Ctrl+C is pressed after the initial prompt frame was flushed.
+func chatTextCancelAfterPromptOutput() string {
+	return "Port OS Agent Chat (type 'exit' or 'quit' to end)\n---\n" +
+		"\x1b[?25l\x1b[?2004h\r\r\n" + chatPrompt + strings.Repeat(" ", 59) + "\r\x1b[A \x1b[J" +
+		"\r\x1b[2K\r\x1b[?2004l\x1b[?25h\x1b[?1002l\x1b[?1003l\x1b[?1006l"
+}
+
 // testTextSessionCancelsThroughRoot presses Ctrl+C in the text session TUI.
-// The TUI flushes frames on a 60 fps ticker, so a Ctrl+C queued before the
-// program starts races the first flush. The key is sent only once the
-// initial prompt frame is on stdout, which fixes the frame sequence.
 func testTextSessionCancelsThroughRoot(t *testing.T) {
 	agentCLI := newTestAgentCLI(t, &chatTestInferencer{response: "unused"})
-	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
 	agentCLI.router.ChatCommand.openMicrophone = func() (audio.AudioSource, error) { return audio.NewSliceSource(nil), nil }
-	stdin, keys := io.Pipe()
+	got := executeInteractiveRootAfterPrompt(t, agentCLI, []string{"chat"}, "\x03")
+	if got.err != nil {
+		t.Fatalf("ExecuteContext() error = %v", got.err)
+	}
+	if want := chatTextCancelAfterPromptOutput(); got.stdout != want {
+		t.Fatalf("stdout = %q, want %q", got.stdout, want)
+	}
+	if got.stderr != "" {
+		t.Fatalf("stderr = %q, want empty", got.stderr)
+	}
+}
+
+// executeInteractiveRootAfterPrompt runs an interactive root command and
+// types keys only once the text session's initial prompt frame is on stdout.
+// The TUI flushes frames on a 60 fps ticker, so keys queued before the
+// program starts race the first flush and make the frame sequence depend on
+// scheduling; waiting for the prompt fixes it.
+func executeInteractiveRootAfterPrompt(t *testing.T, agentCLI *AgentCLI, args []string, keys string) chatRun {
+	t.Helper()
+	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
+	stdin, keyboard := io.Pipe()
 	stdout := newFrameWatchBuffer(chatPrompt)
 	var stderr bytes.Buffer
 	root := agentCLI.Generate()
 	root.SetIn(stdin)
 	root.SetOut(stdout)
 	root.SetErr(&stderr)
-	root.SetArgs([]string{"chat"})
+	root.SetArgs(args)
 	returned := make(chan struct{})
 	pressed := make(chan struct{})
 	go func() {
 		defer close(pressed)
 		select {
 		case <-stdout.seen:
-			_, err := keys.Write([]byte("\x03"))
-			keys.CloseWithError(err)
-		case <-returned: // chat ended without showing its prompt
+			_, err := keyboard.Write([]byte(keys))
+			keyboard.CloseWithError(err)
+		case <-returned: // the command ended without showing its prompt
 		}
 	}()
 	err := root.ExecuteContext(context.Background())
 	close(returned)
-	keys.CloseWithError(errors.New("chat returned"))
+	keyboard.CloseWithError(errors.New("chat returned"))
 	<-pressed
+	code := 0
 	if err != nil {
-		t.Fatalf("ExecuteContext() error = %v", err)
+		code = 1
 	}
-	want := "Port OS Agent Chat (type 'exit' or 'quit' to end)\n---\n" +
-		"\x1b[?25l\x1b[?2004h\r\r\n" + chatPrompt + strings.Repeat(" ", 59) + "\r\x1b[A \x1b[J" +
-		"\r\x1b[2K\r\x1b[?2004l\x1b[?25h\x1b[?1002l\x1b[?1003l\x1b[?1006l"
-	if got := stdout.String(); got != want {
-		t.Fatalf("stdout = %q, want %q", got, want)
-	}
-	if stderr.String() != "" {
-		t.Fatalf("stderr = %q, want empty", stderr.String())
-	}
+	return chatRun{err: err, exitCode: code, stdout: stdout.String(), stderr: stderr.String()}
 }
 
 // assertChatFlagParseError requires success when wantErr is empty, and
