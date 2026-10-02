@@ -26,6 +26,14 @@ type Coordinator struct {
 	latestModelResponse   *modelResponseAssembly
 	anonymousModelStream  *modelResponseAssembly
 	modelResponsesOverlap bool
+
+	// modelResponseOpen is true from a model response's first delta until its
+	// MESSAGE.END, a terminal ERROR, or an interrupt. A user turn that lands
+	// inside that span must not discard the response; see dispatchUserOutputs.
+	modelResponseOpen bool
+	// deferredUserTurn records a turn-based user turn whose inference waits
+	// for the open response to finish; see dispatchUserOutputs.
+	deferredUserTurn bool
 }
 
 func NewCoordinator(
@@ -62,6 +70,7 @@ func (c *Coordinator) sendInferenceResult(ctx context.Context, state *state.Loop
 // tool output -> triggers agent
 // agent -(if has no tool call)-> user (close current loop on current turn end)
 func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error {
+	c.trackOpenModelResponse(curr)
 	completedModelResponses, err := c.observeModelResponses(curr.Inputs.ModelInputDelta)
 	if err != nil {
 		return err
@@ -93,6 +102,9 @@ func (c *Coordinator) dispatchToolOutputs(ctx context.Context, curr *state.LoopS
 	for _, message := range curr.Inputs.ToolOutputMessage {
 		c.sendInferenceResult(ctx, curr, messages.Tool, message)
 	}
+	// The continuation below carries the whole conversation, including any
+	// user turn that arrived while the tool-calling response streamed.
+	c.deferredUserTurn = false
 	// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
 	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 	curr.History.CurrentModelDeltaCount = 0
@@ -133,7 +145,14 @@ func (c *Coordinator) dispatchModelOutputs(ctx context.Context, curr *state.Loop
 	// LOOP.END after all SYSTEM.FULL_MESSAGE messages in the same delta inbox.
 	// DuplexSession suppresses auto-termination; the session persists until
 	// the control plane closes it (session_close or stop).
-	if hasFinalResponse && curr.Mode != state.DuplexSession {
+	switch {
+	case hasFinalResponse && c.deferredUserTurn:
+		// A user turn arrived while this response streamed. It is answered
+		// now, from a conversation that holds both turns, instead of ending
+		// the loop with that turn unanswered.
+		c.deferredUserTurn = false
+		c.dispatchInference(ctx, curr)
+	case hasFinalResponse && curr.Mode != state.DuplexSession:
 		c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: hasFinalResponse})
 		curr.Inputs.TerminateLoop = true
 	}
@@ -191,7 +210,32 @@ func (c *Coordinator) dispatchUserOutputs(ctx context.Context, curr *state.LoopS
 		c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
 		c.sendInferenceResult(ctx, curr, messages.User, message)
 	}
+	if c.modelResponseOpen {
+		// A user turn does not cancel a response that is still streaming:
+		// the client already saw its deltas, so its tool calls must still
+		// execute. The response keeps its delta window (later model deltas
+		// are inserted ahead of this turn's deltas, so it still reconstructs
+		// from one contiguous window); the user message is already in
+		// history at its arrival position. Explicit cancellation goes through
+		// InterruptHandler, which resets the window itself.
+		if curr.Mode != state.DuplexSession {
+			// A turn-based pass bump would retire the open response: the
+			// ordering layer drops its remaining deltas as stale, MESSAGE.END
+			// included. Defer this turn's inference until the response ends.
+			c.deferredUserTurn = true
+			return
+		}
+		// Session deltas carry no LoopPassID, so the pass bump cannot retire
+		// the provider's response; the request forwards the text to it.
+		c.dispatchInference(ctx, curr)
+		return
+	}
 	c.resetModelDeltaWindow(curr)
+	c.dispatchInference(ctx, curr)
+}
+
+// dispatchInference starts the next model pass over the whole conversation.
+func (c *Coordinator) dispatchInference(ctx context.Context, curr *state.LoopState) {
 	curr.History.CurrentPassID++
 	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
 		curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,

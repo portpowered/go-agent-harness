@@ -130,6 +130,34 @@ func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseVa
 	)
 }
 
+// trackOpenModelResponse follows the model response lifecycle across this
+// tick's model deltas: a response is open from its first delta until its
+// MESSAGE.END or a terminal ERROR. Stale-pass deltas never reach
+// ModelInputDelta, and tool acknowledgements are not responses of their own.
+// An interrupt cancels the response, and the resumed inference it dispatches
+// carries the whole conversation, so it also settles a deferred user turn.
+func (c *Coordinator) trackOpenModelResponse(curr *state.LoopState) {
+	if hasInterruptMessage(curr.Inputs.UserControlPlaneMessage) {
+		c.modelResponseOpen = false
+		c.deferredUserTurn = false
+	}
+	for _, delta := range curr.Inputs.ModelInputDelta {
+		if delta.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+			continue
+		}
+		switch value := delta.Value.(type) {
+		case *messages.MessageEndValue:
+			c.modelResponseOpen = false
+		case *messages.ErrorValue:
+			if value.IsTerminal() {
+				c.modelResponseOpen = false
+			}
+		default:
+			c.modelResponseOpen = true
+		}
+	}
+}
+
 func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {
 	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 	curr.History.CurrentModelDeltaCount = 0
