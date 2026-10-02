@@ -166,6 +166,41 @@ func TestBrowserLoginStillWaitsWhenTheBrowserCannotOpen(t *testing.T) {
 	}
 }
 
+func TestCallbackWithoutStateIsRejectedAndTheLoginKeepsWaiting(t *testing.T) {
+	server, err := ListenCallback(t.Context(), "state-1", 0)
+	if err != nil {
+		t.Fatalf("ListenCallback: %v", err)
+	}
+	base := "http://127.0.0.1:" + strconv.Itoa(server.Port()) + callbackPath
+	for _, step := range []struct {
+		query string
+		want  int
+	}{{"?code=c", http.StatusBadRequest}, {"?code=c&state=", http.StatusBadRequest}, {"?code=good&state=state-1", http.StatusOK}} {
+		query, want := step.query, step.want
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, base+query, nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", query, err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			t.Fatalf("close body: %v", err)
+		}
+		if resp.StatusCode != want {
+			t.Fatalf("GET %s = %d, want %d", query, resp.StatusCode, want)
+		}
+	}
+	code, err := server.Wait(t.Context())
+	if err != nil || code != "good" {
+		t.Fatalf("Wait = %q, %v; want the code from the valid redirect only", code, err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestCallbackServerCancelEndsTheLogin(t *testing.T) {
 	server, err := ListenCallback(t.Context(), "state-1", 0)
 	if err != nil {

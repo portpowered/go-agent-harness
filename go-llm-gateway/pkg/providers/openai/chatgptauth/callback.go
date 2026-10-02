@@ -18,6 +18,9 @@ const (
 	callbackPath              = "/auth/callback"
 	cancelPath                = "/cancel"
 	callbackReadHeaderTimeout = 10 * time.Second
+	callbackReadTimeout       = 10 * time.Second
+	callbackWriteTimeout      = 10 * time.Second
+	callbackIdleTimeout       = 30 * time.Second
 	missingEntitlementMarker  = "missing_codex_entitlement"
 	htmlContentType           = "text/html; charset=utf-8"
 )
@@ -73,7 +76,15 @@ func startCallbackServer(listener net.Listener, state string) *CallbackServer {
 	mux := http.NewServeMux()
 	mux.HandleFunc(callbackPath, s.handleCallback)
 	mux.HandleFunc(cancelPath, s.handleCancel)
-	s.server = &http.Server{Handler: mux, ReadHeaderTimeout: callbackReadHeaderTimeout}
+	// Bounded timeouts keep a stalled or hostile local client from holding
+	// the listener open for the rest of the login.
+	s.server = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: callbackReadHeaderTimeout,
+		ReadTimeout:       callbackReadTimeout,
+		WriteTimeout:      callbackWriteTimeout,
+		IdleTimeout:       callbackIdleTimeout,
+	}
 	go s.serve()
 	return s
 }

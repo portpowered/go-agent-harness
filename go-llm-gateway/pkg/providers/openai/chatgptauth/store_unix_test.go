@@ -39,3 +39,24 @@ func TestFileStoreWritesOwnerOnlyFilesAndRefusesReadableOnes(t *testing.T) {
 		t.Fatalf("Load after re-Save restored 0600 = %v", err)
 	}
 }
+
+func TestFileStoreTightensALooseStoreDirectory(t *testing.T) {
+	store := newTestStore(t, newVirtualClock(), nil)
+	dir := filepath.Dir(store.Path())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	if err := store.Save(storedCredentialFixture(t, time.Time{})); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Mode().Perm() != storeDirMode {
+		t.Fatalf("store directory mode = %v, want 0700", info.Mode().Perm())
+	}
+}
