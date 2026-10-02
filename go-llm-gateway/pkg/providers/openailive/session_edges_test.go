@@ -132,3 +132,63 @@ func TestRTCMediaWriteFailsOnAClosedSessionAndCancelStopsPlayback(t *testing.T) 
 		}
 	})
 }
+
+const burstDeltas = 500
+
+func burstServer(steps ...fakelive.Step) *fakelive.Server {
+	burst := make([]live.Event, burstDeltas)
+	for i := range burst {
+		burst[i] = audioDelta([]byte{1, 0})
+	}
+	return newFake(append([]fakelive.Step{fakelive.AwaitStarted(), fakelive.Send(burst...)}, steps...)...)
+}
+
+// A reader far behind the provider still receives every message: the
+// outbox waits for it, and nothing is counted as dropped.
+func TestSlowReaderReceivesEveryMessageWithNoDropsCounted(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := connectFake(t, burstServer(), pcmConfig())
+		synctest.Wait() // the receive buffer fills and the pump waits
+		skipOpen(t, session)
+		audio := 0
+		for audio < burstDeltas {
+			if next(t, session).Type == messages.StreamTypeAudioDelta {
+				audio++
+			}
+		}
+		if drops := as[messages.SessionDropCounters](t, session).OutputDrops(); drops != 0 {
+			t.Fatalf("OutputDrops = %d after every message arrived, want 0", drops)
+		}
+	})
+}
+
+// When the client closes while its reader has stopped, messages that no
+// longer fit are dropped, and each is counted exactly once.
+func TestDropsDuringCloseAreCountedOncePerMessage(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := connectFake(t, burstServer(), pcmConfig())
+		synctest.Wait()
+		if err := session.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+		synctest.Wait() // the pump has delivered or dropped everything
+		received := 0
+		for {
+			msg, ok := session.Receive().Read()
+			if !ok {
+				break
+			}
+			received++
+			if msg.Type == messages.StreamTypeSessionClose {
+				break
+			}
+		}
+		// open + created, the segment's start, audio start, every delta,
+		// audio end and message end, and SESSION.CLOSE.
+		const emitted = 2 + 2 + burstDeltas + 2 + 1
+		drops := as[messages.SessionDropCounters](t, session).OutputDrops()
+		if drops == 0 || int(drops)+received != emitted {
+			t.Fatalf("received %d and counted %d drops, want them to add up to the %d emitted with some dropped", received, drops, emitted)
+		}
+	})
+}

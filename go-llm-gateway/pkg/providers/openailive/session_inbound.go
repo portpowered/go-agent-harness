@@ -21,9 +21,6 @@ func (s *liveSession) HandleEvent(ctx context.Context, event models.SessionEvent
 		return nil
 	}
 	if closed, ok := decoded.(SessionClosed); ok {
-		// Mark first, so a Close waiting on the handshake is released even
-		// if delivery below waits for a slow reader.
-		s.markClosed()
 		s.handleClosed(closed)
 		return nil
 	}
@@ -92,6 +89,9 @@ func (s *liveSession) handleClosed(closed SessionClosed) {
 	s.emitLocked(out...)
 	s.emitTerminalLocked(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: closeValue(s.sessionID, closed.Reason, segmentOpen)})
 	s.mu.Unlock()
+	// SESSION.CLOSE is queued before a Close waiting on the handshake is
+	// released, so ending the session cannot strand it.
+	s.markClosed()
 	// Let the reader take the end of the stream before the socket closes,
 	// unless the client is closing and may have stopped reading.
 	s.awaitBacklog(0, true)

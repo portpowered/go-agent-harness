@@ -31,16 +31,25 @@ type outboxEntry struct {
 // emitLocked queues msgs. Callers hold mu.
 func (s *liveSession) emitLocked(msgs ...messages.StreamMessage) {
 	for _, msg := range msgs {
-		s.outbox = append(s.outbox, outboxEntry{msg: msg})
+		s.enqueueLocked(outboxEntry{msg: msg})
 	}
-	s.backlog += len(msgs)
-	s.wakePump()
 }
 
 // emitTerminalLocked queues a terminal message after everything before it.
 // Callers hold mu.
 func (s *liveSession) emitTerminalLocked(msg messages.StreamMessage) {
-	s.outbox = append(s.outbox, outboxEntry{msg: msg, terminal: true})
+	s.enqueueLocked(outboxEntry{msg: msg, terminal: true})
+}
+
+// enqueueLocked hands one entry to the pump. After the pump has drained and
+// exited (the session ended), the entry is written at once without waiting,
+// so a terminal record emitted late is never stranded. Callers hold mu.
+func (s *liveSession) enqueueLocked(entry outboxEntry) {
+	if s.pumpExited {
+		s.deliverNow(entry)
+		return
+	}
+	s.outbox = append(s.outbox, entry)
 	s.backlog++
 	s.wakePump()
 }
@@ -88,29 +97,34 @@ func (s *liveSession) deliver(closing context.Context, entry outboxEntry) {
 		s.base.WriteTerminal(entry.msg)
 		return
 	}
-	if s.base.TryDeliver(entry.msg) || closing.Err() != nil {
-		return
-	}
-	if outcome := s.base.DeliverWait(closing, entry.msg); outcome.Status == messages.BufferWriteCancelled {
-		// The close handshake started while the reader was behind.
+	if outcome := s.base.DeliverWait(closing, entry.msg); !outcome.OK() {
+		// The close handshake started, or the session ended, while the reader
+		// was behind: write only if it fits. A message that does not is
+		// dropped and counted once, here.
 		s.base.TryDeliver(entry.msg)
 	}
+}
+
+// deliverNow writes one entry without waiting.
+func (s *liveSession) deliverNow(entry outboxEntry) {
+	s.publishRTCMedia(entry.msg)
+	if entry.terminal {
+		s.base.WriteTerminal(entry.msg)
+		return
+	}
+	s.base.TryDeliver(entry.msg)
 }
 
 // drainOutbox delivers what is left after the session ended, without waiting.
 func (s *liveSession) drainOutbox() {
 	s.mu.Lock()
-	batch := s.outbox
+	defer s.mu.Unlock()
+	for _, entry := range s.outbox {
+		s.deliverNow(entry)
+	}
 	s.outbox = nil
 	s.backlog = 0
-	s.mu.Unlock()
-	for _, entry := range batch {
-		if entry.terminal {
-			s.base.WriteTerminal(entry.msg)
-		} else {
-			s.base.TryDeliver(entry.msg)
-		}
-	}
+	s.pumpExited = true
 	s.signalDrained()
 }
 

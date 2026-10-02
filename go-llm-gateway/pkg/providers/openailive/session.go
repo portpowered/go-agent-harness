@@ -84,6 +84,9 @@ type liveSession struct {
 	watching bool
 	outbox   []outboxEntry
 	backlog  int
+	// pumpExited is set once the pump has drained after the session ended;
+	// later entries are written directly.
+	pumpExited bool
 	// pumpWake wakes the pump; drained reports its progress.
 	pumpWake chan struct{}
 	drained  chan struct{}
