@@ -177,6 +177,14 @@ func TestSessionModelRunner_StalledConsumerOverflowEndsSession(t *testing.T) {
 		if !ok || !isError || value.Classification != sessionDeltaOverflowClassification || !errors.Is(value.Err, ErrSessionDeltaOverflow) {
 			t.Fatalf("terminal delta = %#v, want the session_delta_overflow ERROR", got)
 		}
+		// Each tool-call delta the session forwarded before it ended is
+		// dropped exactly once: shed from the abandoned queue, shed after
+		// overflow, or evicted by the terminal ERROR. Deltas the provider
+		// queued after the session ended were never forwarded.
+		forwarded := int64(8 - session.recv.Len())
+		if drops := runner.DeltaOutbox.Drops(); drops != forwarded {
+			t.Fatalf("outbox drops = %d, want one per forwarded delta (%d)", drops, forwarded)
+		}
 	})
 }
 

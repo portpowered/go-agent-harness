@@ -45,6 +45,8 @@ heard until render callbacks advance. The Go harness helpers are:
 
 - `audio.InjectRemoteDeviceServerCapture`
 - `audio.AdvanceRemoteDeviceServer`
+- `audio.AdvanceRemoteDeviceServerWithStats` (advances and returns the queue
+  stats after those callbacks, saving a separate stats request)
 - `audio.ReadRemoteDeviceServerSnapshot`
 - `audio.ReadRemoteDeviceServerStats` (queue stats only; poll this per
   callback, since a snapshot carries every sample rendered and captured so

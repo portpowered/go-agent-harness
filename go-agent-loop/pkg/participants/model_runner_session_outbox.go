@@ -57,6 +57,8 @@ type sessionOutbox struct {
 	// abandon is closed on overflow to release a pump waiting for capacity.
 	abandon  chan struct{}
 	overflow bool
+	// writing reports that the pump has taken pending[0] and is writing it.
+	writing bool
 }
 
 type sessionOutboxEntry struct {
@@ -86,11 +88,13 @@ func (r *ModelRunner) writeSessionTerminal(ctx context.Context, msg messages.Str
 
 func (q *sessionOutbox) write(ctx context.Context, entry sessionOutboxEntry) {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	if q.overflow {
-		q.writeAbandoned(entry)
+		drained := q.drained
+		q.mu.Unlock()
+		q.writeAbandoned(entry, drained)
 		return
 	}
+	defer q.mu.Unlock()
 	mustDeliver := entry.terminal || messages.MustDeliver(entry.msg)
 	if q.drained == nil {
 		// The session goroutine is the outbox's only writer, so spare
@@ -107,9 +111,11 @@ func (q *sessionOutbox) write(ctx context.Context, entry sessionOutboxEntry) {
 	switch {
 	case !mustDeliver && len(q.pending) >= q.out.Cap():
 		q.out.Shed(entry.msg)
-	case len(q.pending) >= q.limit:
+	case !entry.terminal && len(q.pending) >= q.limit:
+		// A terminal record is admitted past the bound: the session publishes
+		// at most one per failure, and it must follow what is queued.
 		q.abandonLocked()
-		q.writeAbandoned(entry)
+		q.out.Shed(entry.msg)
 	default:
 		q.pending = append(q.pending, entry)
 	}
@@ -119,7 +125,13 @@ func (q *sessionOutbox) write(ctx context.Context, entry sessionOutboxEntry) {
 // reading, so the session is about to end with ErrSessionDeltaOverflow.
 func (q *sessionOutbox) abandonLocked() {
 	q.overflow = true
-	for _, entry := range q.pending {
+	pending := q.pending
+	if q.writing && len(pending) > 0 {
+		// The pump owns the head it is writing: that write may still land,
+		// and the pump accounts for it when released (see pumpEntry).
+		pending = pending[1:]
+	}
+	for _, entry := range pending {
 		q.out.Shed(entry.msg)
 	}
 	q.pending = nil
@@ -128,12 +140,17 @@ func (q *sessionOutbox) abandonLocked() {
 
 // writeAbandoned handles a write after overflow: only a terminal record is
 // still delivered, evicting the oldest queued delta when the outbox is full.
-func (q *sessionOutbox) writeAbandoned(entry sessionOutboxEntry) {
-	if entry.terminal {
-		q.out.WriteTerminal(entry.msg)
+// It first waits for a released pump to finish its last write, so that
+// write never lands behind the terminal record. Called without q.mu.
+func (q *sessionOutbox) writeAbandoned(entry sessionOutboxEntry, drained <-chan struct{}) {
+	if !entry.terminal {
+		q.out.Shed(entry.msg)
 		return
 	}
-	q.out.Shed(entry.msg)
+	if drained != nil {
+		<-drained // the pump was released on overflow and exits without waiting
+	}
+	q.out.WriteTerminal(entry.msg)
 }
 
 // overflowErr reports ErrSessionDeltaOverflow once the queue overflowed.
@@ -164,11 +181,13 @@ func (q *sessionOutbox) pump(ctx context.Context, drained chan struct{}) {
 			return
 		}
 		entry := q.pending[0]
+		q.writing = true
 		q.mu.Unlock()
 
 		q.pumpEntry(ctx, entry)
 
 		q.mu.Lock()
+		q.writing = false
 		if len(q.pending) > 0 {
 			q.pending[0] = sessionOutboxEntry{}
 			q.pending = q.pending[1:]
@@ -180,7 +199,11 @@ func (q *sessionOutbox) pump(ctx context.Context, drained chan struct{}) {
 func (q *sessionOutbox) pumpEntry(ctx context.Context, entry sessionOutboxEntry) {
 	if ctx.Err() == nil {
 		outcome := q.out.WriteWaitContextOrDone(ctx, q.abandon, entry.msg)
-		if outcome.OK() || outcome.Status == messages.BufferWriteStopped {
+		if outcome.OK() {
+			return
+		}
+		if outcome.Status == messages.BufferWriteStopped && !entry.terminal {
+			q.out.Shed(entry.msg) // abandoned on overflow before it was written
 			return
 		}
 	}
