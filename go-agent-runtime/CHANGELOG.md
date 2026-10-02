@@ -23,6 +23,15 @@
 - `providers.OpenAILiveProvider` (`"openai-live"`) and
   `providers.OpenAILive1Model` (`"gpt-live-1"`): the built-in catalog lists
   `gpt-live-1` under `openai-live`.
+- `providers.OpenAILiveCodexModel` (`"gpt-live-1-codex"`), listed under
+  `openai-live` next to `gpt-live-1`, also `Duplex` with client delegation.
+  It runs on the ChatGPT login: `providers.SessionConfig.ChatGPTAuthPath`
+  names the auth store (`yui auth chatgpt`), `ClientVersion` is sent as the
+  route's `version` header, and `CodexTransport` optionally replaces the
+  route's network edges (a hermetic fake, or STUN/TURN servers).
+  `session.LiveRequest` carries `ChatGPTAuthPath` and `ClientVersion` to it,
+  and `wire.ProviderInferenceDependencies.CodexTransport` injects the
+  transport.
 - `providers.RealtimeModel.Duplex` and `providers.RealtimeModel.Delegation`,
   with the values `providers.RealtimeDelegationClient` and
   `providers.RealtimeDelegationResponses`. `gpt-live-1` is `Duplex` with
@@ -67,6 +76,14 @@
   base URL, else `wss://api.openai.com/v1/live/sessions`; `/live/sessions` is
   appended when missing and HTTP(S) becomes WS(S). The provider's timers use
   the service clock.
+- `BuildSession` routes `openai-live` `gpt-live-1-codex` to the WebRTC route
+  (`go-llm-gateway/pkg/providers/openailive/codexlive`), signed by the
+  ChatGPT auth store through `chatgptauth.Manager`, which refreshes the
+  token before every call and sideband dial. It needs the store and no API
+  key: without a sign-in it fails before any network operation, and it
+  refuses `RecordPath` and `ReplayPath` (the route has no provider capture
+  yet). `gpt-live-1` still needs an API key; its refusal now names
+  `gpt-live-1-codex` as the ChatGPT alternative.
 - `audioio`: `openai-live` resolves the 24 kHz realtime rate when no rate is
   requested (new `audioio.ProviderOpenAILive`), and gets no transcription
   config, since GPT-Live transcripts are always on.

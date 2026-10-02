@@ -21,7 +21,14 @@ type LiveRequest struct {
 	// inferencer/provider factory at admission time and is never interpreted as
 	// an environment variable, API key, or replay payload by the runtime.
 	CredentialReference string
-	Instructions        string
+	// ChatGPTAuthPath is the host's ChatGPT auth store (`yui auth chatgpt`)
+	// for a model that runs on the ChatGPT login (openai-live
+	// gpt-live-1-codex). It names a file, not a secret; the provider service
+	// reads and refreshes it.
+	ChatGPTAuthPath string
+	// ClientVersion is the host's build version, for providers that send it.
+	ClientVersion string
+	Instructions  string
 	// OpeningPrompt is sent as the first user turn after the provider accepts
 	// the session. It is data supplied by the host, so an empty prompt remains
 	// a valid audio-only session.

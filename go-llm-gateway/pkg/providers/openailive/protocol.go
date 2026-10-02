@@ -1,6 +1,10 @@
 package openailive
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/internal/livesession"
+)
 
 // Model1 is the only GPT-Live model and snapshot.
 const Model1 = "gpt-live-1"
@@ -12,9 +16,9 @@ const DefaultEndpoint = "wss://api.openai.com/v1/live/sessions"
 // Audio format types for SessionAudio.Format. One format applies to both
 // input and output for the whole session.
 const (
-	AudioTypePCM  = "audio/pcm"  // mono signed 16-bit little-endian PCM
-	AudioTypePCMU = "audio/pcmu" // G.711 mu-law, one byte per sample
-	AudioTypePCMA = "audio/pcma" // G.711 A-law, one byte per sample
+	AudioTypePCM  = livesession.AudioTypePCM // mono signed 16-bit little-endian PCM
+	AudioTypePCMU = "audio/pcmu"             // G.711 mu-law, one byte per sample
+	AudioTypePCMA = "audio/pcma"             // G.711 A-law, one byte per sample
 )
 
 // Sample rates GPT-Live accepts. PCM takes 16 or 24 kHz; G.711 takes 8 kHz.
@@ -33,11 +37,11 @@ const (
 
 // Session close reasons carried by session.closed.
 const (
-	CloseReasonCloseRequested = "close_requested"
-	CloseReasonExpired        = "expired"
-	CloseReasonContent        = "content"
-	CloseReasonRemoteHangup   = "remote_hangup"
-	CloseReasonConnectionLost = "connection_lost"
+	CloseReasonCloseRequested = livesession.CloseReasonCloseRequested
+	CloseReasonExpired        = livesession.CloseReasonExpired
+	CloseReasonContent        = livesession.CloseReasonContent
+	CloseReasonRemoteHangup   = livesession.CloseReasonRemoteHangup
+	CloseReasonConnectionLost = livesession.CloseReasonConnectionLost
 )
 
 // SessionStatusActive is the status of a running SessionResource.

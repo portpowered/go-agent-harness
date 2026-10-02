@@ -15,11 +15,16 @@
 //   - BuildSessionStart (start.go), which turns a models.SessionConfig and the
 //     GPT-Live Options carried in its raw Config into a strict session.start
 //     event;
-//   - Provider (provider.go), the "openai-live" session provider: it dials the
-//     primary WebSocket with headers from a CredentialProvider, waits for
-//     session.started, and maps the session onto the harness stream with
-//     synthesized speech segments (segments.go), a fail-closed outbound
-//     mapping and the session.close handshake.
+//   - Provider (provider.go), the "openai-live" session provider for
+//     gpt-live-1: it dials the primary WebSocket with headers from a
+//     CredentialProvider, waits for session.started, and runs the session on
+//     the shared state machine (internal/livesession: synthesized speech
+//     segments, a fail-closed outbound mapping and the close handshake) with
+//     the public dialect (session.go).
+//
+// gpt-live-1-codex, the model a ChatGPT login opens, is the same provider
+// name on a different route: the codexlive subpackage runs the same state
+// machine over WebRTC and a sideband in the quicksilver dialect.
 //
 // A client delegation (session.delegation.created) becomes DELEGATION.CREATED
 // with no response id, once the user transcript covering it arrives or a

@@ -9,7 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -34,12 +33,30 @@ func ProviderValues(cfg config.Config, request serviceSession.Request, inspectio
 	if err != nil {
 		return provider, "", "", "", err
 	}
-	model = resolveModel(cfg, request, model, replayModel, defaultModel(provider))
+	model = resolveModel(cfg, request, model, replayModel, provider, defaultModel(provider, request.ConfigDir))
 	apiKey, model, baseURL = applyProviderOverrides(request, apiKey, model, baseURL)
+	if provider == config.ProviderOpenAILive && request.ReplayPath == "" {
+		// The model picks the credential: the ChatGPT sign-in for
+		// gpt-live-1-codex, an API key otherwise.
+		credential, err := config.ResolveOpenAILiveCredential(model, apiKey, request.ConfigDir)
+		if err != nil {
+			return provider, model, "", baseURL, err
+		}
+		return provider, model, credential.APIKey, baseURL, nil
+	}
 	if err := validateProviderCredential(provider, apiKey, request.ReplayPath); err != nil {
 		return provider, model, "", baseURL, err
 	}
 	return provider, model, apiKey, baseURL, nil
+}
+
+// chatGPTAuthPath is the ChatGPT auth store a session on model runs on, or
+// empty when it runs on an API key.
+func chatGPTAuthPath(provider, model, configDir string) string {
+	if provider != config.ProviderOpenAILive || model != config.OpenAILiveChatGPTModel {
+		return ""
+	}
+	return config.ChatGPTAuthStorePath(configDir)
 }
 
 // CredentialValues resolves the raw provider credential a live invocation
@@ -79,15 +96,17 @@ func selectProvider(cfg config.Config, request serviceSession.Request, inspectio
 }
 
 // defaultModel is the live model a provider uses when none is configured.
-func defaultModel(provider string) string {
+// For openai-live the credential found picks it, the ChatGPT sign-in under
+// configDir first.
+func defaultModel(provider, configDir string) string {
 	if provider == config.ProviderOpenAILive {
-		return runtimeProviders.OpenAILive1Model
+		return config.DefaultOpenAILiveModel(configDir)
 	}
 	return cliLiveDefaultModel
 }
 
-func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel, fallback string) string {
-	if cfg.Session != nil && cfg.Session.Model != "" && request.Model == "" && sessionModelApplies(fallback, cfg.Session.Model) {
+func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel, provider, fallback string) string {
+	if cfg.Session != nil && cfg.Session.Model != "" && request.Model == "" && sessionModelApplies(provider, cfg.Session.Model) {
 		model = cfg.Session.Model
 	}
 	if model == "" {
@@ -100,11 +119,11 @@ func resolveModel(cfg config.Config, request serviceSession.Request, model, repl
 }
 
 // sessionModelApplies reports whether a configured session.model belongs to
-// the provider whose default is fallback. session.model usually names a
-// Realtime model, which GPT-Live admission would reject, so openai-live takes
-// only a GPT-Live model from it and otherwise keeps gpt-live-1.
-func sessionModelApplies(fallback, sessionModel string) bool {
-	if fallback != runtimeProviders.OpenAILive1Model {
+// provider. session.model usually names a Realtime model, which GPT-Live
+// admission would reject, so openai-live takes only a GPT-Live model from it
+// and otherwise keeps its credential's default.
+func sessionModelApplies(provider, sessionModel string) bool {
+	if provider != config.ProviderOpenAILive {
 		return true
 	}
 	return strings.HasPrefix(strings.TrimSpace(sessionModel), liveModelPrefix)
@@ -125,9 +144,6 @@ func applyProviderOverrides(request serviceSession.Request, apiKey, model, baseU
 
 func validateProviderCredential(provider, apiKey, replayPath string) error {
 	if apiKey == "" && provider != config.ProviderLocal && replayPath == "" {
-		if provider == config.ProviderOpenAILive {
-			return fmt.Errorf("%s requires an OpenAI API key (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s); a ChatGPT sign-in is not accepted for %s", provider, config.ConfigFileName, runtimeProviders.OpenAILive1Model)
-		}
 		if provider == config.ProviderGrok {
 			return fmt.Errorf("grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in %s)", config.ConfigFileName)
 		}
@@ -147,7 +163,7 @@ func providerConfig(cfg config.Config, provider string) (string, string, string,
 			return cfg.Model.Grok.Model, cfg.Model.Grok.APIKey, cfg.Model.Grok.BaseURL, nil
 		}
 	case config.ProviderOpenAILive:
-		// GPT-Live uses the OpenAI API key and base URL. model.openai.model
+		// gpt-live-1 uses the OpenAI API key and base URL. model.openai.model
 		// names a Realtime model, so it is not the GPT-Live default.
 		if cfg.Model.OpenAI != nil {
 			return "", cfg.Model.OpenAI.APIKey, cfg.Model.OpenAI.BaseURL, nil

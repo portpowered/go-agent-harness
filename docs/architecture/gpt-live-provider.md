@@ -1,7 +1,7 @@
 # GPT-Live provider: protocol spec and integration design
 
 ---
-status: proposed (design only, no code)
+status: in progress (PRs 1, 2 and 9 landed; see 2.14 for where PR 9 deviates)
 component: go-llm-gateway, go-agent-runtime, agent-cli
 sources verified: 2026-10-02
 ---
@@ -1103,7 +1103,17 @@ token store, refresh and endpoint evidence are in
 - **Phasing.** PRs 1 to 8 ship `gpt-live-1` only, so until PR 9
   `openai-live` is **API-key only** and its default model stays `gpt-live-1`.
   PR 9 adds `gpt-live-1-codex`, the ChatGPT auth store and the ChatGPT-first
-  credential order above, scoped to that model.
+  credential order above, scoped to that model. **Landed:** the order lives in
+  `agent-cli/internal/config/openai_live.go` (`DefaultOpenAILiveModel`,
+  `ResolveOpenAILiveCredential`) and is shared by the live host and the device
+  probe; the runtime check is `validateChatGPTLogin` in `credentials.go`.
+  `gpt-live-1-codex` takes **only** the ChatGPT store: OpenClaw's Platform-key
+  fallback for that model (`chatgpt-oauth.md` 3.5) is not built. The
+  `model.openai.auth: auto | api_key | chatgpt` setting of `chatgpt-oauth.md`
+  4.4 is not built either; the model alone picks the credential. The API key
+  comes from `--api-key`, `model.openai.api_key` or
+  `AGENT_MODEL__OPENAI__API_KEY`; the CLI does not read a bare
+  `OPENAI_API_KEY`.
 
 ## 2.4 Delegation mode: client (decided)
 
@@ -1469,7 +1479,8 @@ PR 9 (`gpt-live-1-codex` on the ChatGPT login; `chatgpt-oauth.md` 3.2 and 3.5):
 - `go-llm-gateway/pkg/providers/openailive/quicksilver/{events,codec,session}.go` (landed in #638): the quicksilver-v2 dialect, with client `input_audio.append`, `session.update`, `session.context.append` and `delegation.context.append` (with `channel`), and server `output_audio.delta`, `input_transcript.added`, `output_transcript.added`, `turn.done`, `delegation.created`, `output_audio_buffer.cleared` and `error`, mapped onto the same session state machine and stream types as the public dialect.
 - `go-llm-gateway/pkg/providers/openailive/codexrtc/{credential,call,peer,sideband}.go` (landed in #638): call creation with JSON `{sdp, session}` at `POST https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas`, with `OpenAI-Alpha: quicksilver=v2`. The response is a raw SDP answer; the call id comes from `Location`. A provider-side pion WebRTC peer carries the audio, with Opus through `go-audio/pkg/codec`. The sideband dials `wss://api.openai.com/v1/live/{call_id}` and redials through the credential provider.
 - `go-llm-gateway/pkg/providers/openailive/codexrtc/fakecodex` (test support, landed in #638): a fake codex backend for call creation and the sideband, answered by an in-process pion peer on a pion `vnet` virtual network for media tests.
-- Still to do in PR 9: the `openailive` session state machine over the `codexrtc` transport (handshake on `session.started`, the stream-type mapping, 48 kHz to 24 kHz resampling, sideband reconnect with backoff).
+- `go-llm-gateway/pkg/providers/openailive/internal/livesession` (landed in PR 9): the session state machine factored out of the `openailive` session (speech segments, the ordered outbox, the outbound mapping, the close handshake) behind a `Dialect`, so both routes share it.
+- `go-llm-gateway/pkg/providers/openailive/codexlive` (landed in PR 9): the `gpt-live-1-codex` session over the `codexrtc` transport: the quicksilver dialect, resampling between the session rate and 48 kHz, 20 ms pacing, loss concealment, sideband reconnect with backoff, credential failures. See 2.14 for how it differs from this plan.
 - `go-agent-runtime/services/providers/internal/catalog/catalog.go`: add `gpt-live-1-codex` under `openai-live`, with admission tests.
 - `go-agent-runtime/services/providers/internal/service/{session,credentials}.go`: route `gpt-live-1-codex` to the codex transport, and accept the ChatGPT auth store as its credential.
 - `agent-cli/internal/services/livehost/events.go`: `providerConfig` resolves the ChatGPT store first and the API key second (2.3); `--model` narrows the order; the default model follows the credential.
@@ -1616,3 +1627,81 @@ service in PR 6: maximum session duration, output pacing, the full error-code
 list, the beta header requirement, an ephemeral-token flow, model behaviour
 when a client delegation is never answered, and the moderation cut-off error
 code.
+
+## 2.14 PR 9 as built: deviations from this plan
+
+`gpt-live-1-codex` runs as planned (offer, call creation, answer, sideband,
+media) on the shared state machine. These points differ from, or add to, the
+plan above:
+
+1. **No `session.started` handshake.** Neither Codex nor OpenClaw waits for
+   `session.started` on a WebRTC sideband: the call is configured at
+   creation, and Codex waits only on a plain WebSocket. `ConnectSession`
+   returns once the sideband is attached and the media connection is up
+   (bounded by 15 s, OpenClaw's connect timeout). The session id in
+   `SESSION.OPEN` is the call id; a later `session.started` maps to nothing
+   and `session.updated` to `SESSION.UPDATED`.
+2. **Media comes from the peer only.** The sideband's `output_audio.delta`
+   copies are dropped. A peer frame whose samples all stay under 64 (about
+   -54 dBFS) is silence: it never opens or extends a segment and only fills
+   an open one, because a WebRTC track may stream continuously.
+3. **Turn boundaries.** `turn.done` closes the assistant segment
+   (`completed`) or the user utterance (its transcript is the utterance's
+   final text). `output_audio_buffer.cleared` ends the open segment
+   `cancelled` with partial output and interrupts local playback; later
+   output opens a new segment without the suppression a local
+   `RESPONSE.CANCEL` applies. The quiet gap `G` still closes runs that get no
+   `turn.done`. Quicksilver transcripts carry no timing, so only the clock
+   and `turn.done` close them.
+4. **Close semantics without `session.closed`.** The dialect has no close
+   event. `Close` sends `session.close` on the sideband and the backend's
+   normal WebSocket close is the acknowledgement (`close_requested`). A normal
+   close nobody asked for is `remote_hangup`; a media connection that fails,
+   a failed input write or exhausted redials are `connection_lost`
+   (`terminal_failure`); a call the backend no longer knows (HTTP 404/410 on a
+   redial) is reported verbatim as `call_ended` (a provider close); a
+   credential failure is `authentication_failed` (`terminal_failure`, after a
+   terminal `ERROR` of class `authentication` that says to sign in again).
+5. **Reconnect parameters.** After a lost sideband (any end but a normal
+   close) the transport waits 200 ms, doubling for each rapid loss up to 5 s,
+   where a connection that stayed up 30 s resets the count (Codex
+   `sideband.rs`). It then dials up to five times, 200 ms apart and doubling
+   (OpenClaw `realtime-quicksilver-sideband.ts`, and Codex's sideband join
+   retry); the first attach uses the same five attempts. Control events
+   written while the sideband is down, or whose send failed, are held (up to
+   64) and flushed in order after the reconnect. Every dial asks the
+   credential source, so a refreshed token is used.
+6. **Credential failures.** The error codes `invalid_token`,
+   `authentication_error` and `token_expired` (and `invalid_api_key`, which
+   OpenClaw also treats as fatal), an HTTP 401 on call creation or a redial,
+   and a sign-in the token manager can no longer refresh all end the session
+   with `codexlive.ErrSignInAgain`. Before any network operation,
+   `BuildSession` and `ConnectSession` fail the same way without a sign-in.
+7. **Audio.** The session rate is 24 kHz (16 kHz is accepted too; one shared
+   PCM16 rate). Input is resampled to 48 kHz with go-audio's streaming
+   resampler, cut into 20 ms frames and paced one per 20 ms on the injected
+   clock (the first frame of a run at once, at most two seconds queued). The
+   end of a user turn (`MESSAGE.END`) sends the held partial frame padded
+   with silence (`livesession.InputEnder`); it is local and never asks for a
+   response. An inbound RTP sequence gap is concealed with Opus PLC, at most
+   100 ms per gap; late or repeated packets are dropped.
+8. **Startup history** is bounded as OpenClaw bounds it (newest 16 messages,
+   800 characters each, 8000 bytes in all) instead of being rejected over
+   128 messages.
+9. **ICE servers** default to none and are set through
+   `codexlive.Transport.ICEServers` (`providers.SessionConfig.CodexTransport`
+   in the runtime). There is no CLI flag for them yet.
+10. **No record or replay.** The route does not go through the WebSocket
+    dialer that provider capture wraps, so `BuildSession` refuses
+    `RecordPath` and `ReplayPath` for `gpt-live-1-codex`.
+11. **Delegations** are still logged and dropped on this route, as on the
+    public one, until PRs 3 and 4.
+12. **Version header.** `yui` sends its build version
+    (`agent-cli/internal/buildinfo`: the linked version, else the module
+    version, else `dev`) as `version` on call creation and the sideband.
+
+Unverified until a live run: whether the backend sends `session.started` or
+audio copies on a WebRTC sideband, whether it streams silence or uses DTX,
+whether it answers `session.close` with a normal close, which close code a
+backend hang-up uses, the real error codes and HTTP statuses for an expired
+token, and whether the `version` header is required.

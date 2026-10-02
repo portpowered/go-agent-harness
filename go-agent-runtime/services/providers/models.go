@@ -79,15 +79,22 @@ const (
 	OpenAIRealtime21Model      = "gpt-realtime-2.1"
 )
 
-// OpenAILiveProvider is the session provider for the OpenAI GPT-Live protocol
-// (/v1/live/sessions). It is separate from "openai" because the provider name
-// selects the wire protocol, and GPT-Live is not the Realtime API. Admission
-// restricts it to its catalog, and its sessions authenticate with an OpenAI
-// API key only.
+// OpenAILiveProvider is the session provider for OpenAI GPT-Live. It is
+// separate from "openai" because the provider name selects the wire
+// protocol, and GPT-Live is not the Realtime API. Admission restricts it to
+// its catalog, and the model picks the route and its credential:
+// OpenAILive1Model runs on an OpenAI API key, OpenAILiveCodexModel on the
+// ChatGPT login.
 const OpenAILiveProvider = "openai-live"
 
-// OpenAILive1Model is the only GPT-Live model.
+// OpenAILive1Model is the public GPT-Live model: the primary WebSocket
+// (/v1/live/sessions) on an OpenAI API key.
 const OpenAILive1Model = "gpt-live-1"
+
+// OpenAILiveCodexModel is the GPT-Live model a ChatGPT login opens: a WebRTC
+// call created on the ChatGPT backend plus a control sideband, in the
+// quicksilver dialect. It takes no API key.
+const OpenAILiveCodexModel = "gpt-live-1-codex"
 
 // OpenAIChatGPTProvider is the text provider for the OpenAI Responses API
 // over the ChatGPT Codex backend, signed with a ChatGPT login instead of an

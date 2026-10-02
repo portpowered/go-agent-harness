@@ -52,6 +52,10 @@ type ProviderInferenceDependencies struct {
 	Credentials     session.LiveCredentialResolver
 	Dialer          transport.Dialer
 	ToolDefinitions []messages.ToolDefinition
+	// CodexTransport optionally replaces the network edges of the ChatGPT
+	// GPT-Live route (gpt-live-1-codex): a *codexlive.Transport with a
+	// hermetic fake or ICE servers. See providers.SessionConfig.
+	CodexTransport any
 }
 
 // NewProviderInferencerFactory assembles the session-owned projection from a
@@ -61,5 +65,6 @@ func NewProviderInferencerFactory(deps ProviderInferenceDependencies) session.Li
 	return providerbuild.NewFactory(providerbuild.Dependencies{
 		Providers: deps.Providers, Credentials: deps.Credentials,
 		Dialer: deps.Dialer, ToolDefinitions: deps.ToolDefinitions,
+		CodexTransport: deps.CodexTransport,
 	})
 }

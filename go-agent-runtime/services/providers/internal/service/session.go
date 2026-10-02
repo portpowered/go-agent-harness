@@ -20,7 +20,9 @@ import (
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	grokprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	openaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexlive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -85,7 +87,7 @@ func (s *Service) resolveSessionProvider(cfg runtimeproviders.SessionConfig) (st
 	if model == "" {
 		return "", "", fmt.Errorf("realtime provider %q requires a model", providerName)
 	}
-	if err := validateSessionCredential(cfg, providerName); err != nil {
+	if err := validateSessionCredential(cfg, providerName, model); err != nil {
 		return "", "", err
 	}
 	return providerName, model, nil
@@ -157,6 +159,9 @@ func closeProviderReplay(prepared runtimeReplay.LivePrepared, err error) error {
 func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer, logger logging.Logger, source clock.TimerSource) (llmproviders.SessionProvider, error) {
 	switch providerName {
 	case runtimeproviders.OpenAILiveProvider:
+		if model == runtimeproviders.OpenAILiveCodexModel {
+			return codexSessionProvider(cfg, logger, source)
+		}
 		// GPT-Live takes its auth headers from a credential provider. The
 		// OpenAI API key is the only credential source for gpt-live-1.
 		return openailive.New(
@@ -207,6 +212,27 @@ func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, mode
 		return nil, fmt.Errorf("realtime sessions do not support provider %q", providerName)
 	}
 
+}
+
+// codexSessionProvider builds the gpt-live-1-codex route on the ChatGPT
+// login at cfg.ChatGPTAuthPath, which BuildSession already checked. The
+// token manager refreshes through its own HTTP client, never the route's.
+func codexSessionProvider(cfg runtimeproviders.SessionConfig, logger logging.Logger, source clock.TimerSource) (llmproviders.SessionProvider, error) {
+	manager := chatgptauth.NewManager(chatgptauth.NewFileStore(cfg.ChatGPTAuthPath), chatgptauth.NewClient(chatgptauth.Config{}))
+	options := []codexlive.Option{
+		codexlive.WithCredentials(codexlive.ChatGPTCredentials(manager)),
+		codexlive.WithClientVersion(cfg.ClientVersion),
+		codexlive.WithLogger(logger),
+		codexlive.WithClock(source),
+	}
+	if cfg.CodexTransport != nil {
+		transport, ok := cfg.CodexTransport.(*codexlive.Transport)
+		if !ok || transport == nil {
+			return nil, fmt.Errorf("%s %s: CodexTransport is %T, want *codexlive.Transport", runtimeproviders.OpenAILiveProvider, runtimeproviders.OpenAILiveCodexModel, cfg.CodexTransport)
+		}
+		options = append(options, codexlive.WithTransport(*transport))
+	}
+	return codexlive.New(options...), nil
 }
 
 // liveSessionsEndpoint is the GPT-Live primary WebSocket for cfg: the

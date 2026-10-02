@@ -34,12 +34,14 @@ func openAIRealtimeModels() []providers.RealtimeModel {
 	}
 }
 
-// openAILiveModels is the GPT-Live catalog. gpt-live-1 takes audio and text
-// only, never calls a tool itself, and reaches tools through client
-// delegation, so it reports no function calling of its own.
+// openAILiveModels is the GPT-Live catalog. Both models take audio and text
+// only, never call a tool themselves, and reach tools through client
+// delegation, so they report no function calling of their own.
+// gpt-live-1-codex is the same model family on the ChatGPT login.
 func openAILiveModels() []providers.RealtimeModel {
 	return []providers.RealtimeModel{
 		{ID: providers.OpenAILive1Model, SupportsAudio: true, Duplex: true, Delegation: providers.RealtimeDelegationClient},
+		{ID: providers.OpenAILiveCodexModel, SupportsAudio: true, Duplex: true, Delegation: providers.RealtimeDelegationClient},
 	}
 }
 

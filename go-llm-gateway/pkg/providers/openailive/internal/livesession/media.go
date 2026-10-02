@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"context"
@@ -18,7 +18,7 @@ var errMediaNeedsPCM = errors.New("openailive: RTC media requires an audio/pcm s
 
 // writeRTCMediaFrame feeds one captured RTC frame through the same input
 // path as AUDIO.DELTA.
-func (s *liveSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
+func (s *Session) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	if s.format.Type != AudioTypePCM {
 		return errMediaNeedsPCM
 	}
@@ -26,13 +26,13 @@ func (s *liveSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.
 	if outcome.OK() {
 		return nil
 	}
-	return errors.Join(fmt.Errorf("openai live RTC media write: %s", outcome.Status), outcome.Err)
+	return errors.Join(fmt.Errorf("%s RTC media write: %s", s.name, outcome.Status), outcome.Err)
 }
 
 // publishRTCMedia mirrors segment audio onto the RTC media path without
 // removing it from the stream: each segment's audio is one playback
 // response, flushed when the segment ends.
-func (s *liveSession) publishRTCMedia(msg messages.StreamMessage) {
+func (s *Session) publishRTCMedia(msg messages.StreamMessage) {
 	media := s.base.CurrentRTCMedia()
 	if media == nil || s.format.Type != AudioTypePCM {
 		return
@@ -48,12 +48,12 @@ func (s *liveSession) publishRTCMedia(msg messages.StreamMessage) {
 		err = media.FlushInbound()
 	}
 	if err = realtime.FailInboundOnError(media, err); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		s.base.Logger().Warn("openai live: RTC media event failed", logging.Field{Key: "error", Value: err})
+		s.logger().Warn(s.name+": RTC media event failed", logging.Field{Key: "error", Value: err})
 	}
 }
 
 // interruptRTCPlayback discards segment audio queued for local playback.
-func (s *liveSession) interruptRTCPlayback() {
+func (s *Session) interruptRTCPlayback() {
 	if media := s.base.CurrentRTCMedia(); media != nil {
 		media.InterruptInbound()
 	}

@@ -97,6 +97,22 @@ type SessionConfig struct {
 	// RecordPath selects an explicit raw capture artifact. The returned
 	// inferencer flushes the capture when its session terminates.
 	RecordPath string
+
+	// ChatGPTAuthPath is the ChatGPT auth store (`yui auth chatgpt`) that
+	// signs an OpenAILiveCodexModel session. The host resolves the path; the
+	// provider service only reads and refreshes the file it names.
+	ChatGPTAuthPath string
+	// ClientVersion is the host's build version, sent where a route asks
+	// for it (the version header of the ChatGPT route).
+	ClientVersion string
+	// CodexTransport optionally replaces the network edges of the
+	// OpenAILiveCodexModel route (backend and sideband URLs, HTTP client,
+	// sideband dialer, WebRTC settings and ICE servers). It is opaque here so
+	// the contract does not expose the WebRTC stack: the value must be a
+	// *codexlive.Transport (go-llm-gateway/pkg/providers/openailive/codexlive)
+	// and BuildSession refuses anything else. Nil is the production route with
+	// no ICE servers; a host can inject a hermetic fake or STUN/TURN servers.
+	CodexTransport any
 }
 
 // CaptureWriter is an optional request-scoped role returned by Build when

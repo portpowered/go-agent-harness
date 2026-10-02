@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -24,6 +26,10 @@ const (
 	opusSDPChannels   = 2
 	opusFmtp          = "minptime=10;useinbandfec=1"
 	inboundQueueDepth = 50 // one second of frames
+	// MaxConcealedFrames bounds the frames synthesized for one sequence gap:
+	// 100 ms. A longer gap is a stall, not packet loss; concealing all of it
+	// would replay stale history and delay live audio.
+	MaxConcealedFrames = 5
 )
 
 // Peer errors.
@@ -69,6 +75,12 @@ type Peer struct {
 	mu        sync.Mutex // guards closed and trackRead, ordering reader starts before Close waits
 	closed    bool
 	trackRead bool
+
+	// seq tracks the inbound RTP sequence for loss concealment; only the
+	// track reader touches it. concealed and late count its decisions.
+	seq       sequenceTracker
+	concealed atomic.Int64
+	late      atomic.Int64
 }
 
 func opusCapability() webrtc.RTPCodecCapability {
@@ -204,6 +216,10 @@ func (p *Peer) WaitConnected(ctx context.Context) error {
 	}
 }
 
+// Failed is closed when the connection reaches the failed state, for
+// example when ICE consent is lost after the call was up.
+func (p *Peer) Failed() <-chan struct{} { return p.failed }
+
 // WriteFrame encodes one 20 ms frame of 48 kHz mono PCM16 (FrameSamples
 // samples) and sends it. The caller paces the frames.
 func (p *Peer) WriteFrame(ctx context.Context, samples []int16) error {
@@ -292,14 +308,75 @@ func (p *Peer) readTrack(remote *webrtc.TrackRemote) {
 		if err != nil {
 			return
 		}
-		frame, err := p.decoder.Decode(packet.Payload)
-		if err != nil {
-			continue
-		}
-		select {
-		case p.inbound <- frame:
-		case <-p.done:
+		if !p.receive(packet) {
 			return
 		}
 	}
+}
+
+// receive decodes one RTP packet onto the inbound queue. A sequence gap is
+// packet loss: up to MaxConcealedFrames frames are synthesized by Opus
+// packet-loss concealment first, so playback keeps its timing. A late or
+// repeated packet is dropped, because its slot was already played or
+// concealed. It reports false once the peer is closed.
+func (p *Peer) receive(packet *rtp.Packet) bool {
+	missing, fresh := p.seq.next(packet.SequenceNumber)
+	if !fresh {
+		p.late.Add(1)
+		return true
+	}
+	for range min(missing, MaxConcealedFrames) {
+		frame, err := p.decoder.DecodePLC()
+		if err != nil {
+			break // no history yet: nothing to conceal from
+		}
+		p.concealed.Add(1)
+		if !p.enqueue(frame) {
+			return false
+		}
+	}
+	frame, err := p.decoder.Decode(packet.Payload)
+	if err != nil {
+		return true
+	}
+	return p.enqueue(frame)
+}
+
+func (p *Peer) enqueue(frame []int16) bool {
+	select {
+	case p.inbound <- frame:
+		return true
+	case <-p.done:
+		return false
+	}
+}
+
+// ConcealedFrames reports how many frames packet-loss concealment
+// synthesized for inbound sequence gaps.
+func (p *Peer) ConcealedFrames() int64 { return p.concealed.Load() }
+
+// LatePackets reports how many inbound packets arrived after their slot and
+// were dropped.
+func (p *Peer) LatePackets() int64 { return p.late.Load() }
+
+// sequenceTracker follows a 16-bit RTP sequence with wraparound.
+type sequenceTracker struct {
+	started bool
+	last    uint16
+}
+
+// next reports how many packets are missing before seq, and whether seq is
+// new: a packet at or behind the last one (within half the sequence space)
+// is late or repeated.
+func (t *sequenceTracker) next(seq uint16) (missing int, fresh bool) {
+	if !t.started {
+		t.started, t.last = true, seq
+		return 0, true
+	}
+	delta := seq - t.last
+	if delta == 0 || delta >= 1<<15 {
+		return 0, false
+	}
+	t.last = seq
+	return int(delta) - 1, true
 }

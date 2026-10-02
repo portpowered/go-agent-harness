@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/buildinfo"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -23,6 +24,9 @@ type deviceProbeProvider struct {
 	apiKey          string
 	baseURL         string
 	reasoningEffort string
+	// chatGPTAuthPath is the ChatGPT auth store of a model that runs on the
+	// ChatGPT sign-in (openai-live gpt-live-1-codex).
+	chatGPTAuthPath string
 }
 
 // NewDeviceProbeSessionFactory resolves a device probe's provider values at
@@ -50,6 +54,8 @@ func NewDeviceProbeSessionFactory(ctx context.Context, providerService runtimePr
 			InputAudioSampleRate: models.SampleRate24000, OutputAudioSampleRate: models.SampleRate24000,
 			InputTranscription: &models.InputAudioTranscriptionConfig{Enabled: transcription.Enabled, Model: transcription.Model},
 			WebSocketDialer:    request.WebSocketDialer,
+			ChatGPTAuthPath:    resolved.chatGPTAuthPath,
+			ClientVersion:      buildinfo.Version(),
 		})
 		if err != nil {
 			return nil, "", err
@@ -73,7 +79,7 @@ func resolveDeviceProbeProvider(request serviceDevices.DeviceProbeRequest) (devi
 	case config.ProviderOpenAI:
 		return openAIDeviceProbeProvider(effective, loaded, request.Model)
 	case config.ProviderOpenAILive:
-		return openAILiveDeviceProbeProvider(effective, request.Model)
+		return openAILiveDeviceProbeProvider(effective, request.Model, request.ConfigDir)
 	case config.ProviderGrok:
 		if err := effective.ValidateGrokSession(); err != nil {
 			return deviceProbeProvider{}, err
@@ -106,21 +112,27 @@ func deviceProbeProviderName(requested string, cfg *config.Config) string {
 	return config.ProviderOpenAI
 }
 
-// openAILiveDeviceProbeProvider resolves a GPT-Live probe. It uses the
-// OpenAI API key, which is its only credential, and gpt-live-1 by default.
-func openAILiveDeviceProbeProvider(effective config.Config, requestedModel string) (deviceProbeProvider, error) {
+// openAILiveDeviceProbeProvider resolves a GPT-Live probe with the session
+// credential order: an explicit model narrows to the credential it accepts,
+// and with none the ChatGPT sign-in under configDir comes first
+// (gpt-live-1-codex), then the OpenAI API key (gpt-live-1).
+func openAILiveDeviceProbeProvider(effective config.Config, requestedModel, configDir string) (deviceProbeProvider, error) {
 	var apiKey, baseURL string
 	if active := effective.Model.OpenAI; active != nil {
 		apiKey, baseURL = active.APIKey, active.BaseURL
 	}
-	if strings.TrimSpace(apiKey) == "" {
-		return deviceProbeProvider{}, fmt.Errorf("%s requires an OpenAI API key (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s); a ChatGPT sign-in is not accepted for %s", config.ProviderOpenAILive, config.ConfigFileName, runtimeProviders.OpenAILive1Model)
-	}
 	model := strings.TrimSpace(requestedModel)
 	if model == "" {
-		model = runtimeProviders.OpenAILive1Model
+		model = config.DefaultOpenAILiveModel(configDir)
 	}
-	return deviceProbeProvider{provider: config.ProviderOpenAILive, model: model, apiKey: apiKey, baseURL: baseURL}, nil
+	credential, err := config.ResolveOpenAILiveCredential(model, apiKey, configDir)
+	if err != nil {
+		return deviceProbeProvider{}, err
+	}
+	return deviceProbeProvider{
+		provider: config.ProviderOpenAILive, model: model, apiKey: credential.APIKey, baseURL: baseURL,
+		chatGPTAuthPath: credential.ChatGPTAuthPath,
+	}, nil
 }
 
 func openAIDeviceProbeProvider(effective config.Config, loaded *config.Config, requestedModel string) (deviceProbeProvider, error) {

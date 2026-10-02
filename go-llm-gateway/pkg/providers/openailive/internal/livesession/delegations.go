@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"time"
@@ -19,11 +19,12 @@ const (
 type pendingDelegation struct {
 	id       string
 	offsetMS int64
+	task     string
 	deadline time.Time
 }
 
-// delegationTracker turns session.delegation.created into DELEGATION.CREATED.
-// The event carries no task text, and it may arrive before the user's request
+// delegationTracker turns a provider's client delegation into
+// DELEGATION.CREATED. The public event carries no task text, and it may arrive before the user's request
 // is transcribed, so the tracker keeps a bounded ring of recent transcript
 // spans and reports a delegation once a user transcript fragment ending at or
 // after its offset has arrived, or once the settle window has passed on the
@@ -53,17 +54,17 @@ func newDelegationTracker(settle, gap time.Duration) *delegationTracker {
 // created maps one client delegation: reported at once when the user
 // transcript already covers its offset, otherwise held until it does or the
 // settle window passes.
-func (d *delegationTracker) created(now time.Time, event DelegationCreated) []messages.StreamMessage {
-	if d.covered(event.OffsetMS) {
-		return []messages.StreamMessage{d.report(event.Delegation.ID, event.OffsetMS)}
+func (d *delegationTracker) created(now time.Time, id string, offsetMS int64, task string) []messages.StreamMessage {
+	if d.covered(offsetMS) {
+		return []messages.StreamMessage{d.report(pendingDelegation{id: id, offsetMS: offsetMS, task: task})}
 	}
-	d.pending = append(d.pending, pendingDelegation{id: event.Delegation.ID, offsetMS: event.OffsetMS, deadline: now.Add(d.settle)})
+	d.pending = append(d.pending, pendingDelegation{id: id, offsetMS: offsetMS, task: task, deadline: now.Add(d.settle)})
 	return nil
 }
 
 // transcript records one transcript fragment. A user fragment may release
 // held delegations whose offset it covers.
-func (d *delegationTracker) transcript(speaker messages.Role, fragment TranscriptDelta) []messages.StreamMessage {
+func (d *delegationTracker) transcript(speaker messages.Role, fragment Transcript) []messages.StreamMessage {
 	d.remember(speaker, fragment)
 	if speaker != messages.RoleUser {
 		return nil
@@ -105,7 +106,7 @@ func (d *delegationTracker) release(ready func(pendingDelegation) bool) []messag
 	kept := d.pending[:0]
 	for _, p := range d.pending {
 		if ready(p) {
-			out = append(out, d.report(p.id, p.offsetMS))
+			out = append(out, d.report(p))
 			continue
 		}
 		kept = append(kept, p)
@@ -115,20 +116,19 @@ func (d *delegationTracker) release(ready func(pendingDelegation) bool) []messag
 	return out
 }
 
-func (d *delegationTracker) report(id string, offsetMS int64) messages.StreamMessage {
+func (d *delegationTracker) report(p pendingDelegation) messages.StreamMessage {
 	var transcript []messages.TranscriptFragment
 	if len(d.ring) > 0 {
 		transcript = append([]messages.TranscriptFragment(nil), d.ring...)
 	}
-	return messages.StreamMessage{
-		Type:  messages.StreamTypeDelegationCreated,
-		Value: messages.NewDelegationCreatedValue(id, messages.DelegationTargetClient, offsetMS, transcript),
-	}
+	value := messages.NewDelegationCreatedValue(p.id, messages.DelegationTargetClient, p.offsetMS, transcript)
+	value.Task = p.task
+	return messages.StreamMessage{Type: messages.StreamTypeDelegationCreated, Value: value}
 }
 
 // remember adds fragment to the ring, joining it to the last span when the
 // same speaker continues within gap on the server timeline.
-func (d *delegationTracker) remember(speaker messages.Role, fragment TranscriptDelta) {
+func (d *delegationTracker) remember(speaker messages.Role, fragment Transcript) {
 	if fragment.Delta == "" {
 		return
 	}

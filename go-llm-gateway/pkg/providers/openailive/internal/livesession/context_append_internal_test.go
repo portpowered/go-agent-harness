@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"encoding/base64"

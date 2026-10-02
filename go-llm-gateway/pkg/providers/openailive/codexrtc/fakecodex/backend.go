@@ -15,6 +15,10 @@
 //     identity headers as the call, sends the scripted server events, records
 //     every client event, and answers session.close with a normal close.
 //
+// While a sideband is connected, Send pushes more server events on it and
+// DropSideband cuts it without a close frame, so tests can script a session
+// and its reconnects; RejectSidebands answers later handshakes with a status.
+//
 // Failures are configurable (call status, Location, answer, sideband
 // status). Every request that breaks the protocol is answered 400 and
 // recorded in Errors.
@@ -112,12 +116,38 @@ type Backend struct {
 	stopOnce         sync.Once
 	upgrader         websocket.Upgrader
 
-	mu      sync.Mutex
-	call    *CallRecord
-	peer    *codexrtc.Peer
-	events  []quicksilver.Event
-	errs    []error
-	changed chan struct{}
+	mu        sync.Mutex
+	call      *CallRecord
+	peer      *codexrtc.Peer
+	events    []quicksilver.Event
+	errs      []error
+	changed   chan struct{}
+	sideband  *sidebandConn
+	sidebands int
+}
+
+// sidebandConn is the connected sideband; writeMu orders the scripted
+// events with Send.
+type sidebandConn struct {
+	conn    *websocket.Conn
+	writeMu sync.Mutex
+}
+
+// writeClose answers session.close with a normal close frame.
+func (c *sidebandConn) writeClose() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "session closed"))
+}
+
+func (c *sidebandConn) write(event quicksilver.Event) error {
+	frame, err := quicksilver.EncodeEvent(event)
+	if err != nil {
+		return err
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.conn.WriteMessage(websocket.TextMessage, frame)
 }
 
 // New returns a Backend configured by options.
@@ -187,6 +217,89 @@ func (b *Backend) WaitClientEvents(ctx context.Context, n int) ([]quicksilver.Ev
 			return events, fmt.Errorf("fakecodex: %d of %d client events: %w", len(events), n, context.Cause(ctx))
 		}
 	}
+}
+
+// ErrNoSideband reports a Send or DropSideband with no sideband connected.
+var ErrNoSideband = errors.New("fakecodex: no sideband is connected")
+
+// Send writes server events on the connected sideband, after its scripted
+// events.
+func (b *Backend) Send(events ...quicksilver.Event) error {
+	b.mu.Lock()
+	side := b.sideband
+	b.mu.Unlock()
+	if side == nil {
+		return ErrNoSideband
+	}
+	for _, event := range events {
+		if err := side.write(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DropSideband cuts the connected sideband's TCP connection without a close
+// frame, as a network failure would.
+func (b *Backend) DropSideband() error {
+	b.mu.Lock()
+	side := b.sideband
+	b.sideband = nil
+	b.mu.Unlock()
+	if side == nil {
+		return ErrNoSideband
+	}
+	return ignoreClosed(side.conn.NetConn().Close())
+}
+
+// HangUp ends the connected sideband with a normal close frame, as the
+// backend does when the call ends on its side.
+func (b *Backend) HangUp() error {
+	b.mu.Lock()
+	side := b.sideband
+	b.mu.Unlock()
+	if side == nil {
+		return ErrNoSideband
+	}
+	return side.writeClose()
+}
+
+// RejectSidebands answers every later sideband handshake with status; zero
+// accepts them again.
+func (b *Backend) RejectSidebands(status int) {
+	b.mu.Lock()
+	b.sidebandStatus = status
+	b.mu.Unlock()
+}
+
+// Sidebands reports how many sidebands have connected.
+func (b *Backend) Sidebands() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.sidebands
+}
+
+// WaitSidebands waits until at least n sidebands have connected.
+func (b *Backend) WaitSidebands(ctx context.Context, n int) error {
+	for {
+		b.mu.Lock()
+		count, changed := b.sidebands, b.changed
+		b.mu.Unlock()
+		if count >= n {
+			return nil
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return fmt.Errorf("fakecodex: %d of %d sidebands: %w", count, n, context.Cause(ctx))
+		}
+	}
+}
+
+// notifyLocked wakes the waiters. Callers hold mu.
+func (b *Backend) notifyLocked() {
+	close(b.changed)
+	b.changed = make(chan struct{})
 }
 
 // Close releases stalled sidebands and closes the answer peer.
@@ -333,10 +446,10 @@ func (b *Backend) answerOffer(ctx context.Context, offer string) (string, *codex
 
 func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 	b.mu.Lock()
-	call := b.call
+	call, status := b.call, b.sidebandStatus
 	b.mu.Unlock()
-	if b.sidebandStatus != 0 {
-		http.Error(w, "sideband rejected", b.sidebandStatus)
+	if status != 0 {
+		http.Error(w, "sideband rejected", status)
 		return
 	}
 	if call == nil || strings.TrimPrefix(r.URL.Path, sidebandPath) != DefaultCallID {
@@ -352,13 +465,29 @@ func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 		b.record(fmt.Errorf("sideband upgrade: %w", err))
 		return
 	}
-	defer func() { b.record(ignoreClosed(conn.Close())) }()
+	side := &sidebandConn{conn: conn}
+	defer func() {
+		b.mu.Lock()
+		if b.sideband == side {
+			b.sideband = nil
+		}
+		b.mu.Unlock()
+		b.record(ignoreClosed(conn.Close()))
+	}()
+	side.writeMu.Lock()
+	b.mu.Lock()
+	b.sideband = side
+	b.sidebands++
+	b.notifyLocked()
+	b.mu.Unlock()
 	for _, event := range b.script {
 		frame, err := quicksilver.EncodeEvent(event)
 		if err != nil || conn.WriteMessage(websocket.TextMessage, frame) != nil {
+			side.writeMu.Unlock()
 			return
 		}
 	}
+	side.writeMu.Unlock()
 	if b.dropSideband {
 		return
 	}
@@ -366,7 +495,7 @@ func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 		<-b.stop
 		return
 	}
-	b.readClientEvents(conn)
+	b.readClientEvents(side)
 }
 
 // sameIdentity requires the sideband to repeat the call's identity headers.
@@ -382,9 +511,9 @@ func sameIdentity(call, sideband http.Header) error {
 	return nil
 }
 
-func (b *Backend) readClientEvents(conn *websocket.Conn) {
+func (b *Backend) readClientEvents(side *sidebandConn) {
 	for {
-		_, frame, err := conn.ReadMessage()
+		_, frame, err := side.conn.ReadMessage()
 		if err != nil {
 			return
 		}
@@ -395,11 +524,10 @@ func (b *Backend) readClientEvents(conn *websocket.Conn) {
 		} else {
 			b.events = append(b.events, event)
 		}
-		close(b.changed)
-		b.changed = make(chan struct{})
+		b.notifyLocked()
 		b.mu.Unlock()
 		if _, closing := event.(quicksilver.SessionClose); closing {
-			b.record(ignoreClosed(conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "session closed"))))
+			b.record(ignoreClosed(side.writeClose()))
 			return
 		}
 	}

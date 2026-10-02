@@ -23,6 +23,7 @@ import (
 	runtimeSessionTraceWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexlive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -38,6 +39,9 @@ type testSessionDeps struct {
 	// Dialer optionally replaces the provider transport for provider-built
 	// sessions, like the application's transport-dialer port.
 	Dialer transport.Dialer
+	// CodexTransport optionally replaces the network edges of the ChatGPT
+	// GPT-Live route (openai-live gpt-live-1-codex).
+	CodexTransport *codexlive.Transport
 }
 
 // newTestSessionCommand composes the session command with the same live,
@@ -88,6 +92,7 @@ func testLiveInferencerFactory(deps testSessionDeps, providers runtimeProviders.
 	if injected == nil {
 		return runtimeSessionWire.NewProviderInferencerFactory(runtimeSessionWire.ProviderInferenceDependencies{
 			Providers: providers, Credentials: credentials.take, Dialer: deps.Dialer,
+			CodexTransport: deps.CodexTransport,
 		})
 	}
 	return func(_ context.Context, request runtimeSession.LiveRequest) (messages.SessionInferencer, error) {

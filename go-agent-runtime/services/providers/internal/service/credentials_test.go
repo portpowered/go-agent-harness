@@ -36,7 +36,7 @@ func TestProviderAdmissionAllowsExplicitAnonymousEndpoint(t *testing.T) {
 	if _, err := service.BuildSession(t.Context(), providers.SessionConfig{Provider: "local", Model: "local", RealtimeURL: "ws://localhost:8080/realtime"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateSessionCredential(providers.SessionConfig{ReplayPath: "offline-capture.json"}, "openai"); err != nil {
+	if err := validateSessionCredential(providers.SessionConfig{ReplayPath: "offline-capture.json"}, "openai", providers.OpenAIRealtimeLegacyModel); err != nil {
 		t.Fatal(err)
 	}
 }
