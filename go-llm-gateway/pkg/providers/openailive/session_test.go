@@ -225,7 +225,12 @@ func TestResponseCancelEndsTheSegmentAndDropsItsLaterOutput(t *testing.T) {
 		start := time.Now()
 		collectUntil(t, session, start, messages.StreamTypeAudioDelta)
 
-		if outcome := messages.SendSessionWithOutcome(t.Context(), session, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		// The cancel's context is short-lived: ending it must neither close
+		// the session nor lose the segment's closing messages.
+		cancelCtx, endCancel := context.WithCancel(t.Context())
+		outcome := messages.SendSessionWithOutcome(cancelCtx, session, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()})
+		endCancel()
+		if !outcome.OK() {
 			t.Fatalf("cancel: %+v", outcome)
 		}
 		cancelled := collectUntil(t, session, start, messages.StreamTypeMessageEnd)

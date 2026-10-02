@@ -10,9 +10,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
-// HandleEvent maps one server frame. It delivers the resulting messages
-// itself, under the segment lock, so they stay ordered with the messages the
-// idle watcher emits; it therefore always returns nil.
+// HandleEvent maps one server frame. It queues the resulting messages on the
+// session outbox, in order with the idle watcher's and RESPONSE.CANCEL's, and
+// therefore always returns nil. It waits while the reader of Receive is far
+// behind, until the close handshake starts.
 func (s *liveSession) HandleEvent(ctx context.Context, event models.SessionEvent) []messages.StreamMessage {
 	decoded, err := DecodeServerEvent(event.Data)
 	if err != nil {
@@ -23,13 +24,14 @@ func (s *liveSession) HandleEvent(ctx context.Context, event models.SessionEvent
 		// Mark first, so a Close waiting on the handshake is released even
 		// if delivery below waits for a slow reader.
 		s.markClosed()
-		s.handleClosed(ctx, closed)
+		s.handleClosed(closed)
 		return nil
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.deliverLocked(ctx, s.inboundLocked(decoded))
-	s.watchLocked(ctx)
+	s.emitLocked(s.inboundLocked(decoded)...)
+	s.watchLocked()
+	s.mu.Unlock()
+	s.awaitBacklog(outboxHighWater, true)
 	return nil
 }
 
@@ -84,12 +86,15 @@ func (s *liveSession) outputAudioLocked(now time.Time, delta OutputAudioDelta) [
 // handleClosed closes the open segment and utterance, then reports the
 // session end with the close reason mapped onto the existing terminal
 // vocabulary. The GPT-Live reason is kept verbatim as Reason.
-func (s *liveSession) handleClosed(ctx context.Context, closed SessionClosed) {
+func (s *liveSession) handleClosed(closed SessionClosed) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	out, segmentOpen := s.segments.finish()
-	s.deliverLocked(ctx, out)
-	s.base.WriteTerminal(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: closeValue(s.sessionID, closed.Reason, segmentOpen)})
+	s.emitLocked(out...)
+	s.emitTerminalLocked(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: closeValue(s.sessionID, closed.Reason, segmentOpen)})
+	s.mu.Unlock()
+	// Let the reader take the end of the stream before the socket closes,
+	// unless the client is closing and may have stopped reading.
+	s.awaitBacklog(0, true)
 }
 
 // closeValue maps a session.closed reason to SESSION.CLOSE.

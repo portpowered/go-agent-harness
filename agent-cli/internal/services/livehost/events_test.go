@@ -60,3 +60,21 @@ func TestProviderValuesRefuseOpenAILiveWithoutAnAPIKey(t *testing.T) {
 		t.Fatalf("ProviderValues with --api-key = %q %q %v", model, apiKey, err)
 	}
 }
+
+// A configured session.model names a Realtime model; openai-live ignores it
+// and keeps gpt-live-1, but takes a GPT-Live model from it.
+func TestOpenAILiveIgnoresARealtimeSessionModel(t *testing.T) {
+	for sessionModel, want := range map[string]string{"gpt-realtime-2.1": "gpt-live-1", "gpt-live-2": "gpt-live-2"} {
+		cfg := openAIConfig(config.ProviderOpenAILive)
+		cfg.Session = &config.SessionConfig{Model: sessionModel}
+		_, model, _, _, err := ProviderValues(cfg, serviceSession.Request{}, nil)
+		if err != nil || model != want {
+			t.Fatalf("session.model %q: model = %q, %v; want %q", sessionModel, model, err, want)
+		}
+	}
+	cfg := openAIConfig(config.ProviderOpenAI)
+	cfg.Session = &config.SessionConfig{Model: "gpt-realtime-2.1-mini"}
+	if _, model, _, _, err := ProviderValues(cfg, serviceSession.Request{}, nil); err != nil || model != "gpt-realtime-2.1-mini" {
+		t.Fatalf("openai session.model = %q, %v; want it honoured", model, err)
+	}
+}

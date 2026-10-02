@@ -21,8 +21,9 @@ import (
 // in process against the fake GPT-Live server. The session authenticates
 // with the model.openai API key, streams the file as session.input_audio.append,
 // renders the assistant's speech segment, and ends with the session.close
-// handshake. The fake ends the first segment with a server-timeline gap, so
-// no wall-clock wait is needed.
+// handshake. It runs on the host clock (the composed CLI has no virtual
+// clock), but nothing waits on a timer: the fake ends the first segment with
+// a server-timeline gap and answers session.close at once.
 func TestSessionCommandRunsOpenAILiveAgainstTheFakeServer(t *testing.T) {
 	const apiKey = "sk-live-cli"
 	root := t.TempDir()

@@ -51,7 +51,7 @@ func (s *liveSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		s.base.Logger().Debug("openai live: no wire event", logging.Field{Key: "stream_type", Value: string(msg.Type)})
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	case messages.StreamTypeResponseCancel:
-		s.cancelSegment(ctx, msg)
+		s.cancelSegment(msg)
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 	default:
 		return s.noWireEvent(msg)
@@ -88,22 +88,14 @@ func (s *liveSession) appendAudio(ctx context.Context, audio []byte) messages.Se
 
 // cancelSegment ends the open segment locally. GPT-Live keeps no response a
 // cancel could reach, so its later output for that speech is dropped here.
-//
-// The segment state changes at once, but its closing messages are delivered
-// on another goroutine: the caller may be the same goroutine that drains
-// Receive, and lossless delivery could otherwise wait on it forever.
-func (s *liveSession) cancelSegment(ctx context.Context, msg messages.StreamMessage) {
+// Its closing messages join the session outbox without waiting (the caller
+// may be the goroutine that drains Receive), in order before anything the
+// read loop emits later, SESSION.CLOSE included.
+func (s *liveSession) cancelSegment(msg messages.StreamMessage) {
 	s.mu.Lock()
-	out := s.segments.cancel(s.base.Clock().Now())
-	s.watchLocked(ctx)
+	s.emitLocked(s.segments.cancel(s.base.Clock().Now())...)
+	s.watchLocked()
 	s.mu.Unlock()
-	if len(out) > 0 {
-		go func() {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.deliverLocked(ctx, out)
-		}()
-	}
 	if messages.CancelStopsPlayback(msg) {
 		s.interruptRTCPlayback()
 	}

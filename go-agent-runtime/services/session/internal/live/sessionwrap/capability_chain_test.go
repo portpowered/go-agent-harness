@@ -52,6 +52,7 @@ func (p *chainProvider) Close() error {
 type capableChainProvider struct{ *chainProvider }
 
 func (p capableChainProvider) ProviderTurnDetection() bool { return true }
+func (p capableChainProvider) FullDuplex() bool            { return true }
 func (p capableChainProvider) InputAudioSampleRate() int   { return 24000 }
 func (p capableChainProvider) LocalPlayback() messages.LocalPlaybackState {
 	return messages.LocalPlaybackState{Active: true, Level: 900}
@@ -115,7 +116,7 @@ func TestProductionWrapperChainRelaysBargeInCapabilities(t *testing.T) {
 	provider := newChainProvider()
 	outer := connectProductionChain(t, capableChainProvider{provider})
 	capable, ok := outer.(messages.BargeInCapableSession)
-	if !ok || !capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 900 {
+	if !ok || !capable.ProviderTurnDetection() || !capable.FullDuplex() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 900 {
 		t.Fatal("barge-in answers did not cross the wrapper chain")
 	}
 	ctx := context.Background()
@@ -162,7 +163,7 @@ func TestTurnReplayWrapperChainRelaysCapabilitiesAndOwnsPlayback(t *testing.T) {
 	provider := newChainProvider()
 	outer := connectChain(t, capableChainProvider{provider}, session.LiveRequest{Replay: session.LiveReplayPolicy{Kind: session.LiveReplayKindTurn}})
 	capable, ok := outer.(messages.BargeInCapableSession)
-	if !ok || !capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 24000 {
+	if !ok || !capable.ProviderTurnDetection() || !capable.FullDuplex() || capable.InputAudioSampleRate() != 24000 {
 		t.Fatal("barge-in answers did not cross the turn replay chain")
 	}
 	if capable.LocalPlayback().Level == 900 {
@@ -194,7 +195,7 @@ func TestProductionWrapperChainDoesNotAdvertiseMissingCapabilities(t *testing.T)
 		t.Fatal("the wrapper chain does not expose the barge-in capabilities")
 	}
 	capable.SyncReceive(ctx)
-	if capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 0 || capable.LocalPlayback().Active || capable.InterruptLocalPlayback(ctx) {
+	if capable.ProviderTurnDetection() || capable.FullDuplex() || capable.InputAudioSampleRate() != 0 || capable.LocalPlayback().Active || capable.InterruptLocalPlayback(ctx) {
 		t.Fatal("a barge-in capability the provider lacks was advertised")
 	}
 	if messages.SupportsSessionResponseRequests(outer) || messages.RequestSessionResponse(ctx, outer).OK() {

@@ -72,11 +72,21 @@ type liveSession struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	// mu serializes the segmenter with the delivery of the messages it
-	// produces, so the read loop and the idle timer emit in one order.
+	// closing is done once the close handshake starts; startClosing ends it.
+	closing      <-chan struct{}
+	startClosing context.CancelFunc
+
+	// mu guards the segmenter and the outbox (outbox.go), so the read loop,
+	// the idle watcher and RESPONSE.CANCEL emit in one order. It is never
+	// held while waiting for the reader of Receive.
 	mu       sync.Mutex
 	segments *segmenter
 	watching bool
+	outbox   []outboxEntry
+	backlog  int
+	// pumpWake wakes the pump; drained reports its progress.
+	pumpWake chan struct{}
+	drained  chan struct{}
 
 	// sendMu orders audio appends and holds a trailing odd PCM byte.
 	sendMu  sync.Mutex
@@ -89,6 +99,8 @@ func newLiveSession(conn transport.Conn, logger logging.Logger, settings session
 		mediaType:    settings.format.Type,
 		closeTimeout: settings.closeTimeout,
 		closed:       make(chan struct{}),
+		pumpWake:     make(chan struct{}, 1),
+		drained:      make(chan struct{}, 1),
 		segments:     newSegmenter(settings.segmentGap, settings.format),
 	}
 	s.base = realtime.NewSession(conn, logger, realtime.Config{
@@ -115,10 +127,17 @@ func newLiveSession(conn transport.Conn, logger logging.Logger, settings session
 func (s *liveSession) open(ctx context.Context, started SessionResource) {
 	s.sessionID = started.ID
 	loopCtx := context.WithoutCancel(ctx)
+	closing, startClosing := context.WithCancel(loopCtx)
+	s.closing, s.startClosing = closing.Done(), startClosing
 	s.closeHandshake = func() error { return s.closeWith(loopCtx) }
 	s.base.PrepareRTCMedia()
-	s.base.Deliver(loopCtx, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(started.ID, sessionModeAudio)})
-	s.base.Deliver(loopCtx, messages.StreamMessage{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue(started.ID, started.Model)})
+	s.mu.Lock()
+	s.emitLocked(
+		messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue(started.ID, sessionModeAudio)},
+		messages.StreamMessage{Type: messages.StreamTypeSessionCreated, Value: messages.NewSessionCreatedValue(started.ID, started.Model)},
+	)
+	s.mu.Unlock()
+	go s.pump(closing)
 	s.base.Start(loopCtx, s)
 	go func() {
 		select {
@@ -140,6 +159,9 @@ func (s *liveSession) Close() error { return s.closeHandshake() }
 // lifetime context derives without cancellation.
 func (s *liveSession) closeWith(ctx context.Context) error {
 	s.closeOnce.Do(func() {
+		// From here the reader may have stopped: inbound delivery must not
+		// wait for it, or the read loop never reaches session.closed.
+		s.startClosing()
 		s.closeErr = s.base.CloseGracefully(ctx, models.SessionEvent{Type: TypeSessionClose}, s.closed, s.closeTimeout)
 	})
 	return s.closeErr
@@ -177,18 +199,19 @@ func (*liveSession) EventWritten(models.SessionEvent) {}
 // ReadEnded reports a socket that ended before session.closed: the open
 // segment and utterance close, then SESSION.CLOSE reports terminal_failure
 // with reason finalization_unconfirmed, because final usage never arrived.
-func (s *liveSession) ReadEnded(ctx context.Context, err error) bool {
+func (s *liveSession) ReadEnded(_ context.Context, err error) bool {
 	s.base.SetTerminalError(err)
 	s.base.Logger().Warn("openai live: socket closed before session.closed", logging.Field{Key: "error", Value: err})
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	out, segmentOpen := s.segments.finish()
-	s.deliverLocked(ctx, out)
-	s.base.WriteTerminal(messages.StreamMessage{
+	s.emitLocked(out...)
+	s.emitTerminalLocked(messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(s.sessionID, reasonFinalizationUnconfirmed, providers.ErrorClassTransport,
 			messages.TerminalReasonTerminalFailure, messages.TerminalProvenanceProvider, outputState(segmentOpen)),
 	})
+	s.mu.Unlock()
+	s.awaitBacklog(0, true)
 	return true
 }
 
@@ -203,19 +226,9 @@ func (s *liveSession) sessionClosed() bool {
 
 func (s *liveSession) markClosed() { s.closedOnce.Do(func() { close(s.closed) }) }
 
-// deliverLocked emits msgs in order, keeping RTC media in step. Callers hold mu.
-func (s *liveSession) deliverLocked(ctx context.Context, msgs []messages.StreamMessage) {
-	for _, msg := range msgs {
-		s.publishRTCMedia(msg)
-		if !s.base.Deliver(ctx, msg) {
-			return
-		}
-	}
-}
-
 // watchLocked starts the idle watcher if something can fall due and no
 // watcher runs. Callers hold mu.
-func (s *liveSession) watchLocked(ctx context.Context) {
+func (s *liveSession) watchLocked() {
 	if s.watching {
 		return
 	}
@@ -223,13 +236,12 @@ func (s *liveSession) watchLocked(ctx context.Context) {
 		return
 	}
 	s.watching = true
-	go s.watch(ctx)
+	go s.watch()
 }
 
 // watch closes segments and utterances that go quiet, on the session clock.
-// It exits when nothing is pending or the session ends. ctx is the session's
-// lifetime context, which only the session's end stops.
-func (s *liveSession) watch(ctx context.Context) {
+// It exits when nothing is pending or the session ends.
+func (s *liveSession) watch() {
 	source := s.base.Clock()
 	for {
 		s.mu.Lock()
@@ -248,7 +260,7 @@ func (s *liveSession) watch(ctx context.Context) {
 			return
 		}
 		s.mu.Lock()
-		s.deliverLocked(ctx, s.segments.due(source.Now()))
+		s.emitLocked(s.segments.due(source.Now())...)
 		s.mu.Unlock()
 	}
 }

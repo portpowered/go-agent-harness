@@ -39,7 +39,10 @@
   ends before `session.closed` reports `terminal_failure` with reason
   `finalization_unconfirmed`. `Close` (and the end of the connect context)
   runs the `session.close` handshake, bounded by `WithCloseTimeout` (default
-  15 s). The session reports `ProviderTurnDetection`, the new `FullDuplex`
+  15 s). Inbound messages go through one ordered outbox with backpressure;
+  once the handshake starts, delivery stops waiting for the reader (messages
+  that do not fit are dropped and counted, terminal ones always land), so a
+  close during streaming output reaches `session.closed` at once. The session reports `ProviderTurnDetection`, the new `FullDuplex`
   capability and no response requests; `RESPONSE.CREATE`, `TOOLCALL.END` and
   `TEXT.DELTA` fail with `openailive.ErrNoWireEvent`, `MESSAGE.END` and
   `SESSION.UPDATE` succeed with no wire event, and `RESPONSE.CANCEL` ends the

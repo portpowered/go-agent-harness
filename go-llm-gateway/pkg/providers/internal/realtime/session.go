@@ -336,12 +336,19 @@ func ParseEvent(raw []byte) (models.SessionEvent, error) {
 	return models.SessionEvent{Type: models.SessionEventType(envelope.Type), Data: raw}, nil
 }
 
-// Deliver writes one normalized message to the inbound buffer with the
-// configured inbound mode, as the read loop does, and reports whether the
-// caller should keep delivering. Providers that emit messages outside
-// HandleEvent (for example from a timer) use it.
-func (s *Session) Deliver(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.deliver(ctx, msg)
+// TryDeliver writes one normalized message to the inbound buffer if it fits;
+// a full buffer drops and counts it. Providers that deliver messages outside
+// HandleEvent use it.
+func (s *Session) TryDeliver(msg messages.StreamMessage) bool {
+	return s.recvBuf.TryWrite(msg).OK()
+}
+
+// DeliverWait writes one normalized message to the inbound buffer, waiting
+// for space until ctx ends or the session terminates. Unlike the read loop's
+// delivery, an ended ctx does not close the session: the caller decides what
+// a stopped write means.
+func (s *Session) DeliverWait(ctx context.Context, msg messages.StreamMessage) messages.BufferWriteOutcome {
+	return s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg)
 }
 
 // WriteTerminal delivers a terminal record to the normalized inbound buffer,

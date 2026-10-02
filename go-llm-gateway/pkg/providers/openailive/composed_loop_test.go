@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
@@ -103,5 +104,63 @@ func readSegmentWithBargeIn(t *testing.T, ctx context.Context, loop *agentloop.A
 		case *messages.MessageEndValue:
 			return audio, value
 		}
+	}
+}
+
+// TestStoppingTheLoopMidStreamClosesWithoutWaitingForTheReader stops the
+// agent loop while the assistant is streaming far more audio than the receive
+// buffer holds. The runner closes the session and stops reading Receive; the
+// close handshake must still reach session.closed at once instead of waiting
+// out the close timeout. It runs on the host clock, so a regression fails on
+// the elapsed-time bound rather than hanging a synctest bubble.
+func TestStoppingTheLoopMidStreamClosesWithoutWaitingForTheReader(t *testing.T) {
+	const closeTimeout = 10 * time.Second
+	burst := make([]live.Event, 3000)
+	for i := range burst {
+		burst[i] = audioDelta(make([]byte, 480))
+	}
+	server := newFake(fakelive.AwaitStarted(), fakelive.Send(burst...))
+	provider := live.New(
+		live.WithCredentialProvider(live.APIKeyCredentials(sessionKey)),
+		live.WithWebSocketDialer(server.Dialer()),
+		live.WithCloseTimeout(closeTimeout),
+	)
+	loop, err := agentloop.New(
+		agentloop.WithMode(engine.DuplexSession),
+		agentloop.WithSessionInferencer(liveInferencer{provider: provider, cfg: pcmConfig()}),
+		agentloop.WithToolExecutionDisabled(),
+	)
+	if err != nil {
+		t.Fatalf("agentloop.New: %v", err)
+	}
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- loop.Run(ctx) }()
+	for msg := range loop.Deltas().Chan() {
+		if msg.Type == messages.StreamTypeAudioDelta {
+			break
+		}
+	}
+	stopped := time.Now()
+	stop()
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(closeTimeout + 5*time.Second):
+		t.Fatal("Run did not return after the close timeout")
+	}
+	if elapsed := time.Since(stopped); elapsed > closeTimeout/2 {
+		t.Fatalf("Run returned %v after the stop, want well under the %v close timeout", elapsed, closeTimeout)
+	}
+	sawClose := false
+	for _, event := range server.ClientEvents() {
+		if _, ok := event.(live.SessionClose); ok {
+			sawClose = true
+		}
+	}
+	if !sawClose {
+		t.Fatal("the fake never received session.close")
 	}
 }

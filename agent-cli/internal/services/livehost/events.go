@@ -21,6 +21,8 @@ const (
 	cliLiveDefaultRate   = 24000
 	// liveSessionsPath is the GPT-Live primary WebSocket path under /v1.
 	liveSessionsPath = "/live/sessions"
+	// liveModelPrefix starts every GPT-Live model id (gpt-live-1).
+	liveModelPrefix = "gpt-live"
 )
 
 // ProviderValues resolves provider selection using only the host's already
@@ -85,7 +87,7 @@ func defaultModel(provider string) string {
 }
 
 func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel, fallback string) string {
-	if cfg.Session != nil && cfg.Session.Model != "" && request.Model == "" {
+	if cfg.Session != nil && cfg.Session.Model != "" && request.Model == "" && sessionModelApplies(fallback, cfg.Session.Model) {
 		model = cfg.Session.Model
 	}
 	if model == "" {
@@ -95,6 +97,17 @@ func resolveModel(cfg config.Config, request serviceSession.Request, model, repl
 		model = replayModel
 	}
 	return model
+}
+
+// sessionModelApplies reports whether a configured session.model belongs to
+// the provider whose default is fallback. session.model usually names a
+// Realtime model, which GPT-Live admission would reject, so openai-live takes
+// only a GPT-Live model from it and otherwise keeps gpt-live-1.
+func sessionModelApplies(fallback, sessionModel string) bool {
+	if fallback != runtimeProviders.OpenAILive1Model {
+		return true
+	}
+	return strings.HasPrefix(strings.TrimSpace(sessionModel), liveModelPrefix)
 }
 
 func applyProviderOverrides(request serviceSession.Request, apiKey, model, baseURL string) (string, string, string) {
