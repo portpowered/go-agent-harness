@@ -202,6 +202,12 @@ func (r *Router) BuildRoot() *cobra.Command {
 	}
 	root.AddCommand(NewPath("webmcp", webmcpCommand.Generate()))
 
+	authGroup := NewPath("auth", NewAuthCommand().Generate())
+	authGroup.AddCommand(NewPath("chatgpt", NewAuthChatGPTCommand(r.Flags).Generate()))
+	authGroup.AddCommand(NewPath("status", NewAuthStatusCommand(r.Flags).Generate()))
+	authGroup.AddCommand(NewPath("logout", NewAuthLogoutCommand(r.Flags).Generate()))
+	root.AddCommand(authGroup)
+
 	devicesGroup := NewPath("devices", NewDevicesCommand().Generate())
 	devicesGroup.AddCommand(NewPath("list", NewDevicesListCommand(r.deviceService).Generate()))
 	root.AddCommand(devicesGroup)
