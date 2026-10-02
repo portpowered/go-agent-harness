@@ -13,7 +13,7 @@ import (
 func writeScenario(t *testing.T, dir, id string) string {
 	t.Helper()
 	path := filepath.Join(dir, id+".scenario.json")
-	body := `{"id":"` + id + `","name":"` + id + `","steps":[],"expectations":[]}`
+	body := `{"schema_version":"probe.scenario.v2","id":"` + id + `","name":"` + id + `","steps":[],"expectations":[]}`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write scenario: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestManifestRejectsRaisedEntryLimitWithoutOverride(t *testing.T) {
 func TestComposeRejectsMalformedScenarioIdentity(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.scenario.json")
-	if err := os.WriteFile(path, []byte(`{"steps":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"schema_version":"probe.scenario.v2","steps":[]}`), 0o644); err != nil {
 		t.Fatalf("write scenario: %v", err)
 	}
 	_, err := Compose(ComposeInput{ScenarioFiles: []string{path}, Transports: []Transport{TransportReplay}, RepeatCount: 1, Concurrency: 1})

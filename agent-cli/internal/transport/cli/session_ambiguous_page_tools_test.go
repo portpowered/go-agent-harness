@@ -16,7 +16,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -52,7 +53,7 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	if listed[fixture.cubeTarget.Title] == "" || listed[fixture.marginTarget.Title] == "" {
 		t.Fatalf("listed ambiguous target identities = %#v, want Cubecade and Margin", listed)
 	}
-	assertRuntimeHasNoOperation(t, fixture.runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
+	assertRuntimeHasNoOperation(t, fixture.runtime, webmcptest.OperationAttach, hermetic.OperationEnableWebMCP, webmcptest.OperationInvoke)
 
 	selectEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, webmcp.SelectTabToolName, `{"browser_id":"`+string(fixture.candidate.ID)+`","target_id":"`+listed[fixture.cubeTarget.Title]+`"}`)
 	if !selectEnvelope.OK {
@@ -103,7 +104,7 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 	if len(toolResults) == 0 || !strings.Contains(toolResults[0].Arguments, "tab-cube") || !strings.Contains(toolResults[0].Arguments, "tab-margin") {
 		t.Fatalf("list-tabs result = %#v, want both exact tab identities", toolResults)
 	}
-	assertRuntimeHasNoOperation(t, fixture.runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
+	assertRuntimeHasNoOperation(t, fixture.runtime, webmcptest.OperationAttach, hermetic.OperationEnableWebMCP, webmcptest.OperationInvoke)
 
 	conversation.commitCustomerTurn(t, ctx)
 	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.selectionCallSent, "exact tab selection call")
@@ -148,7 +149,7 @@ type ambiguousBrowserFixture struct {
 	candidate                webmcp.BrowserCandidate
 	cubeTarget, marginTarget webmcp.Target
 	marginTool               webmcp.ToolDescriptor
-	runtime                  *testkit.ScriptedBrowserRuntime
+	runtime                  *webmcptest.ScriptedBrowserRuntime
 	cfg                      *config.Config
 	capabilities             SessionToolCapabilities
 	surface                  resolvedSessionToolSurface
@@ -163,9 +164,9 @@ func newAmbiguousBrowserFixture(t *testing.T, ctx context.Context, cubeTools ...
 		marginTarget: ambiguousFixtureTarget(candidate.ID, "tab-margin", "Margin", "margin"),
 		marginTool:   ambiguousFixtureTool("get_margin_state", "Read the Margin state.", "margin-frame"),
 	}
-	f.runtime = testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(f.cubeTarget, testkit.WithInitialCatalog(cubeTools...), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
-		testkit.NewTargetConfig(f.marginTarget, testkit.WithInitialCatalog(f.marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
+	f.runtime = webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(f.cubeTarget, webmcptest.WithInitialCatalog(cubeTools...), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		webmcptest.NewTargetConfig(f.marginTarget, webmcptest.WithInitialCatalog(f.marginTool), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
 	))
 	discoveryService := &ambiguousSessionDiscovery{
 		candidate: discovery.BrowserCandidate{ID: string(candidate.ID), Source: discovery.SourceExplicitCDPHTTP, Product: candidate.Product, Protocol: candidate.Protocol, Loopback: true},
@@ -329,14 +330,14 @@ func assertAmbiguousConversationOutput(t *testing.T, outputText string) {
 // page-tool invoke, all on the selected Cubecade tab and none on Margin.
 func (f *ambiguousBrowserFixture) assertOnlySelectedCubeOperations(t *testing.T, toolName string) {
 	t.Helper()
-	var attaches, enables, invokes []testkit.Operation
+	var attaches, enables, invokes []webmcptest.Operation
 	for _, operation := range f.runtime.Operations() {
 		switch operation.Kind {
-		case testkit.OperationAttach:
+		case webmcptest.OperationAttach:
 			attaches = append(attaches, operation)
-		case testkit.OperationEnableWebMCP:
+		case hermetic.OperationEnableWebMCP:
 			enables = append(enables, operation)
-		case testkit.OperationInvoke:
+		case webmcptest.OperationInvoke:
 			invokes = append(invokes, operation)
 		}
 	}
@@ -739,7 +740,7 @@ func executeAmbiguousPageToolsCall(t *testing.T, ctx context.Context, executor m
 	return envelope
 }
 
-func assertRuntimeHasNoOperation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, kinds ...testkit.OperationKind) {
+func assertRuntimeHasNoOperation(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, kinds ...webmcptest.OperationKind) {
 	t.Helper()
 	for _, operation := range runtime.Operations() {
 		for _, kind := range kinds {

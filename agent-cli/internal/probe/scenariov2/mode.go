@@ -61,7 +61,7 @@ type RealRuntimeFactory func(config.BrowserConfig) (RealRuntime, error)
 
 // BrowserExecutorOptions is the typed composition boundary for the browser
 // executor. Factory is used only for real mode; hermetic mode always
-// constructs the transport-free testkit runtime in this package.
+// constructs the transport-free hermetic runtime in this package.
 type BrowserExecutorOptions struct {
 	Mode        BrowserExecutorMode
 	Factory     RealRuntimeFactory

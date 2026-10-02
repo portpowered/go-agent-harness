@@ -402,7 +402,7 @@ it, or reimplementing `MockSessionInferencer` / `SessionScenario`, fails the lan
 | `agent-cli/test/functional/parity/transport_parity*.go` | `s2s-b4-rtc-transport-parity` |
 | `agent-cli/internal/probe/scenarios/<one file>` + one named test file | each `s2s-v*` lane, one file each |
 | `agent-cli/internal/probe/fleet/**` | `s2s-b4-fleet-composer` |
-| `agent-cli/internal/probe/fault/**` | `s2s-b4-fault-injection` |
+| `agent-cli/internal/probe/faulttest/**` | `s2s-b4-fault-injection` |
 | `agent-cli/internal/probe/report/**` | `s2s-b4-fleet-summary-artifact` |
 
 Vertical lanes are file-disjoint by construction: **one scenario file, one test

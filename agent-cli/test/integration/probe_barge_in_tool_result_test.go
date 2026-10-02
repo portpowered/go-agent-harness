@@ -221,6 +221,7 @@ func writeV3BScenario(t *testing.T, id string, expectNoOrphan bool) string {
 		expectations = `[{"type": "no_orphaned_tool_result"}]`
 	}
 	document := `{
+		"schema_version": "probe.scenario.v2",
 		"id": "` + id + `",
 		"name": "` + id + `",
 		"description": "v3b barge-in during tool call",

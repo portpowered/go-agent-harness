@@ -26,6 +26,13 @@ events, independent page-state snapshot, workspace snapshot, and objective
 evidence. The recovery browser event stream makes the generation change,
 stale rejection, rediscovery, and successful retry observable in order.
 
+`probe.scenario.v2` is the only scenario format `probe run` accepts. A
+provider-only document (no fixtures, only `send_text`, `send_audio`,
+`sleep_fake` and `close` steps, and provider-measurable expectations such as
+`transcript_contains`, `frame_count` or `terminal_reason`) runs on the JSONL
+probe runner against `--replay` captures or `--devices real`. Any other
+document runs on the browser executor described here.
+
 Real browser execution is an explicit opt-in:
 
 ```sh

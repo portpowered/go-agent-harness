@@ -11,7 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 // TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale is the customer
@@ -36,8 +36,8 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	getCubeState, queueCubeMoves := wireCubeTools()
 	marginTool := ambiguousFixtureTool("get_document", "Read the Margin document.", "margin-frame")
 	runtime := newWireScriptedRuntime(t, candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
-		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
+		webmcptest.NewTargetConfig(cubeTarget, webmcptest.WithInitialCatalog(getCubeState, queueCubeMoves), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		webmcptest.NewTargetConfig(marginTarget, webmcptest.WithInitialCatalog(marginTool), webmcptest.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
 	)
 	discoveryService := &stalePersistedSelectionDiscovery{
 		candidate:         wireLaneCandidate(candidate),

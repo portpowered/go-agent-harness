@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -24,20 +25,20 @@ func TestWebMCPCastFunctionRoutesMediaAndTabModes(t *testing.T) {
 		URL:       "https://www.youtube.com/watch?v=fixture",
 		Origin:    "https://www.youtube.com",
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(target,
-			testkit.WithInitialCatalog(webmcp.ToolDescriptor{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(target,
+			webmcptest.WithInitialCatalog(webmcp.ToolDescriptor{
 				Name: "youtube_get_player_state", FrameID: "youtube-frame",
 				InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
 			}),
-			testkit.WithCastDevices(webmcp.CastDevice{Name: "Office TV", ID: "sink-office"}),
+			webmcptest.WithCastDevices(webmcp.CastDevice{Name: "Office TV", ID: "sink-office"}),
 		),
 	))
 	t.Cleanup(func() { closeForTest(t, runtime) })
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: webMCPDeviceDiscoverer{candidate: candidate},
-		IDs:        testkit.NewDeterministicIDs(),
+		IDs:        hermetic.NewDeterministicIDs(),
 	})
 	t.Cleanup(func() { closeForTest(t, broker) })
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
@@ -78,16 +79,16 @@ func TestWebMCPCastFunctionRoutesMediaAndTabModes(t *testing.T) {
 		}
 	}
 
-	var castOperations []testkit.Operation
+	var castOperations []webmcptest.Operation
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationCastTab || operation.Kind == testkit.OperationCastMedia {
+		if operation.Kind == webmcptest.OperationCastTab || operation.Kind == webmcptest.OperationCastMedia {
 			castOperations = append(castOperations, operation)
 		}
 	}
 	if len(castOperations) != 3 ||
-		castOperations[0].Kind != testkit.OperationCastTab ||
-		castOperations[1].Kind != testkit.OperationCastMedia ||
-		castOperations[2].Kind != testkit.OperationCastTab {
+		castOperations[0].Kind != webmcptest.OperationCastTab ||
+		castOperations[1].Kind != webmcptest.OperationCastMedia ||
+		castOperations[2].Kind != webmcptest.OperationCastTab {
 		t.Fatalf("Cast mode target operations = %+v", castOperations)
 	}
 	for _, operation := range castOperations {

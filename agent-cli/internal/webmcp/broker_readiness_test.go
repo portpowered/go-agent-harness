@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true}),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true}),
 	))
 	// The catalog wait expiring without evidence is the behavior under test;
 	// its length is irrelevant, so keep it short.
@@ -47,9 +47,9 @@ func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *
 
 func TestStatefulBrokerAcceptsExplicitEmptyCatalogEvidence(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true},
-			testkit.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady, CatalogReady: true, ToolCountKnown: true}),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true},
+			webmcptest.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady, CatalogReady: true, ToolCountKnown: true}),
 		),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{

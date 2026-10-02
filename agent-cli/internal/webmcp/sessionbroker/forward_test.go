@@ -9,7 +9,7 @@ import (
 )
 
 func TestBrokerPreservesModelFacingTabOperations(t *testing.T) {
-	delegate := &capabilityBroker{baseBroker: baseBroker{selected: webmcp.PageContext{
+	delegate := &capabilityBroker{baseBroker: baseBroker{Page: webmcp.PageContext{
 		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
 		Connected: true,
 	}}}
@@ -48,9 +48,9 @@ func TestBrokerInitializesBeforeFirstCastCall(t *testing.T) {
 	if err := broker.StopCasting(context.Background(), "Office TV"); err != nil {
 		t.Fatalf("stop Cast: %v", err)
 	}
-	calls := delegate.calls
-	if bootstrapCalls != 1 || calls["cast_tab"] != 1 || calls["cast_media"] != 1 || calls["list_cast_devices"] != 1 || calls["stop_casting"] != 1 || delegate.castDeviceName != "Office TV" {
-		t.Fatalf("bootstrap=%d calls=%v device=%q, want one bootstrap and one of each Cast call", bootstrapCalls, calls, delegate.castDeviceName)
+	calls := delegate.CallCount
+	if bootstrapCalls != 1 || calls("cast_tab") != 1 || calls("cast_media") != 1 || calls("list_cast_devices") != 1 || calls("stop_casting") != 1 || delegate.castDeviceName != "Office TV" {
+		t.Fatalf("bootstrap=%d calls=%v device=%q, want one bootstrap and one of each Cast call", bootstrapCalls, delegate.Calls, delegate.castDeviceName)
 	}
 }
 
@@ -84,8 +84,8 @@ func TestBrokerForwardsEveryOperationAfterBootstrap(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"discover", "list_targets", "select", "selected", "list_tools", "invoke", "cancel", "watch", "wait_invocation", "screenshot", "selected_with_refresh", "select_with_options", "cancel_direct"} {
-		if delegate.calls[name] != 1 {
-			t.Fatalf("delegate %s calls = %d, want 1 (all calls: %v)", name, delegate.calls[name], delegate.calls)
+		if delegate.CallCount(name) != 1 {
+			t.Fatalf("delegate %s calls = %d, want 1 (all calls: %v)", name, delegate.CallCount(name), delegate.Calls)
 		}
 	}
 	if broker.WatchBrowserEvents(ctx) != (<-chan webmcp.BrowserEvent)(delegate.events) {
@@ -125,11 +125,11 @@ func TestBrokerReportsUnsupportedExtensions(t *testing.T) {
 			t.Fatalf("%s on a base broker must fail", name)
 		}
 	}
-	if _, err := broker.SelectedWithRefresh(ctx, false); err != nil || delegate.calls["selected"] != 1 {
-		t.Fatalf("refresh fallback = %v calls=%v", err, delegate.calls)
+	if _, err := broker.SelectedWithRefresh(ctx, false); err != nil || delegate.CallCount("selected") != 1 {
+		t.Fatalf("refresh fallback = %v calls=%v", err, delegate.Calls)
 	}
-	if _, err := broker.SelectWithOptions(ctx, webmcp.TargetSelector{}, webmcp.SelectOptions{}); err != nil || delegate.calls["select"] != 1 {
-		t.Fatalf("select fallback = %v calls=%v", err, delegate.calls)
+	if _, err := broker.SelectWithOptions(ctx, webmcp.TargetSelector{}, webmcp.SelectOptions{}); err != nil || delegate.CallCount("select") != 1 {
+		t.Fatalf("select fallback = %v calls=%v", err, delegate.Calls)
 	}
 	if broker.WatchBrowserEvents(ctx) != nil {
 		t.Fatal("a delegate without semantic events must yield no stream")
@@ -158,7 +158,7 @@ func initializeAndResetCalls(t *testing.T, broker *Broker, delegate *baseBroker)
 	if err := broker.InitializeSession(context.Background()); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	delegate.calls = nil
+	delegate.Calls = nil
 }
 
 func TestBrokerFailedBootstrapBlocksEveryOperation(t *testing.T) {
@@ -196,8 +196,8 @@ func TestBrokerFailedBootstrapBlocksEveryOperation(t *testing.T) {
 			t.Fatalf("operation %d error = %v, want the retained bootstrap failure", index, err)
 		}
 	}
-	if len(delegate.calls) != 0 {
-		t.Fatalf("delegate received calls after a failed bootstrap: %v", delegate.calls)
+	if len(delegate.Calls) != 0 {
+		t.Fatalf("delegate received calls after a failed bootstrap: %v", delegate.Calls)
 	}
 	if status := broker.SessionCapabilityStatus(); status.BrowserCapabilityState != webmcp.BrowserCapabilityUnavailable {
 		t.Fatalf("failed browser state = %q, want unavailable", status.BrowserCapabilityState)

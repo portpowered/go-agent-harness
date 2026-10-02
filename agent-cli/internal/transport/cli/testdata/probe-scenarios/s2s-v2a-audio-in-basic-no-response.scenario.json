@@ -1,4 +1,5 @@
 {
+  "schema_version": "probe.scenario.v2",
   "id": "s2s-v2a-audio-in-basic-no-response",
   "name": "s2s-v2a-audio-in-basic-no-response",
   "description": "Negative case for the basic audio-in vertical: the utterance elicits no response, so the response expectation must fail.",

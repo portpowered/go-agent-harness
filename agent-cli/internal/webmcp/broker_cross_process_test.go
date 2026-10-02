@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 // Fixture identities shared by the broker tests: primaryTargetID is the
@@ -22,7 +22,7 @@ const (
 // crossProcessWatch is the watched broker state shared by the independent
 // client phases of the cross-process observation test.
 type crossProcessWatch struct {
-	runtime   *testkit.ScriptedBrowserRuntime
+	runtime   *webmcptest.ScriptedBrowserRuntime
 	broker    *webmcp.StatefulBroker
 	events    <-chan webmcp.BrokerEvent
 	candidate webmcp.BrowserCandidate
@@ -31,20 +31,20 @@ type crossProcessWatch struct {
 func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
 	otherCandidate := webmcp.BrowserCandidate{ID: "browser-b", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+					webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 				),
-				testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
+				webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
 			},
 		},
-		testkit.BrowserConfig{
+		webmcptest.BrowserConfig{
 			Candidate: otherCandidate,
-			Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(webmcp.Target{BrowserID: otherCandidate.ID, ID: "tab-other", Type: "page"})},
+			Targets:   []webmcptest.TargetConfig{webmcptest.NewTargetConfig(webmcp.Target{BrowserID: otherCandidate.ID, ID: "tab-other", Type: "page"})},
 		},
 	)
 	defer func() {
@@ -122,13 +122,13 @@ func selectCrossProcessWatchedTarget(t *testing.T, watch crossProcessWatch) webm
 	return snapshot.Tools[0].Ref
 }
 
-func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (webmcp.BrowserHandle, *testkit.ScriptedTargetSession) {
+func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (webmcp.BrowserHandle, *webmcptest.ScriptedTargetSession) {
 	t.Helper()
 	externalHandleValue, err := watch.runtime.Open(context.Background(), watch.candidate)
 	requireBrokerStep(t, err, "open external client")
 	externalSessionValue, err := externalHandleValue.Attach(context.Background(), primaryTargetID, webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach external client")
-	externalSession := mustAs[*testkit.ScriptedTargetSession](t, externalSessionValue)
+	externalSession := mustAs[*webmcptest.ScriptedTargetSession](t, externalSessionValue)
 	if externalSession == nil {
 		t.Fatal("external session is nil")
 	}
@@ -148,7 +148,7 @@ func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (we
 	return externalHandleValue, externalSession
 }
 
-func assertCrossProcessEarlyResponseBuffered(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, readRef webmcp.ToolRef) {
+func assertCrossProcessEarlyResponseBuffered(t *testing.T, watch crossProcessWatch, externalSession *webmcptest.ScriptedTargetSession, readRef webmcp.ToolRef) {
 	t.Helper()
 	earlyInvocationID := webmcp.InvocationID("external-early")
 	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
@@ -176,7 +176,7 @@ func assertCrossProcessEarlyResponseBuffered(t *testing.T, watch crossProcessWat
 	}
 }
 
-func addCrossProcessExternalTool(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) webmcp.ToolRef {
+func addCrossProcessExternalTool(t *testing.T, watch crossProcessWatch, externalSession *webmcptest.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) webmcp.ToolRef {
 	t.Helper()
 	requireBrokerStep(t, externalSession.EmitToolsAdded(writeTool), "emit external catalog change")
 	requireWatchedCatalogEvent(t, watch, "tools_added", "catalog event")
@@ -194,7 +194,7 @@ func addCrossProcessExternalTool(t *testing.T, watch crossProcessWatch, external
 	return writeRef
 }
 
-func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor, writeRef webmcp.ToolRef) {
+func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch, externalSession *webmcptest.ScriptedTargetSession, writeTool webmcp.ToolDescriptor, writeRef webmcp.ToolRef) {
 	t.Helper()
 	externalInvocationID, err := externalSession.InvokeWebMCP(context.Background(), writeTool.FrameID, writeTool.Name, []byte(`{"step":1}`))
 	requireBrokerStep(t, err, "invoke from external client")
@@ -215,7 +215,7 @@ func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch,
 // assertCrossProcessUnresolvedInvocation covers a protocol invocation that
 // is observed after its catalog descriptor has disappeared. The watcher
 // preserves the lifecycle and ID without guessing a stale reference.
-func assertCrossProcessUnresolvedInvocation(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) {
+func assertCrossProcessUnresolvedInvocation(t *testing.T, watch crossProcessWatch, externalSession *webmcptest.ScriptedTargetSession, writeTool webmcp.ToolDescriptor) {
 	t.Helper()
 	requireBrokerStep(t, externalSession.EmitToolsRemoved("frame-1", writeTool.Name), "emit external catalog removal")
 	requireWatchedCatalogEvent(t, watch, "tools_removed", "catalog removal event")
@@ -250,7 +250,7 @@ func assertCrossProcessUnresolvedInvocation(t *testing.T, watch crossProcessWatc
 	requireWatchedCatalogEvent(t, watch, "tools_removed", "catalog removal event")
 }
 
-func assertCrossProcessStaleGenerationIgnored(t *testing.T, watch crossProcessWatch, externalSession *testkit.ScriptedTargetSession) {
+func assertCrossProcessStaleGenerationIgnored(t *testing.T, watch crossProcessWatch, externalSession *webmcptest.ScriptedTargetSession) {
 	t.Helper()
 	requireBrokerStep(t, externalSession.Navigate("https://fixture.test/next", "https://fixture.test"), "navigate watched target")
 	generationEvent := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventGenerationChanged)
@@ -274,7 +274,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	t.Helper()
 	otherTargetValue, err := externalHandle.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach other target")
-	otherTarget := mustAs[*testkit.ScriptedTargetSession](t, otherTargetValue)
+	otherTarget := mustAs[*webmcptest.ScriptedTargetSession](t, otherTargetValue)
 	requireBrokerStep(t, otherTarget.EmitToolsAdded(pageTool("other_target_tool", "frame-1", `{}`)), "emit other-target catalog event")
 	assertNoBrokerEvent(t, watch, "other-target catalog event")
 
@@ -282,7 +282,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	requireBrokerStep(t, err, "open other browser client")
 	otherBrowserSessionValue, err := otherBrowserHandle.Attach(context.Background(), "tab-other", webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach other browser target")
-	otherBrowserSession := mustAs[*testkit.ScriptedTargetSession](t, otherBrowserSessionValue)
+	otherBrowserSession := mustAs[*webmcptest.ScriptedTargetSession](t, otherBrowserSessionValue)
 	requireBrokerStep(t, otherBrowserSession.EmitToolsAdded(pageTool("other_browser_tool", "frame-1", `{}`)), "emit other-browser catalog event")
 	assertNoBrokerEvent(t, watch, "other-browser catalog event")
 }
@@ -327,19 +327,19 @@ func waitForTestkitEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp
 	case event := <-events:
 		return event
 	case <-timer.C:
-		t.Fatal("timed out waiting for testkit browser event")
+		t.Fatal("timed out waiting for scripted browser event")
 		return webmcp.BrowserEvent{}
 	}
 }
 
 // scriptedTargetSession returns the scripted session for targetID behind a
-// handle opened from a testkit runtime, failing the test when the handle is
+// handle opened from a scripted runtime, failing the test when the handle is
 // not a scripted one.
-func scriptedPrimaryTargetSession(t *testing.T, handle webmcp.BrowserHandle) *testkit.ScriptedTargetSession {
+func scriptedPrimaryTargetSession(t *testing.T, handle webmcp.BrowserHandle) *webmcptest.ScriptedTargetSession {
 	t.Helper()
-	scripted, ok := handle.(*testkit.ScriptedBrowserHandle)
+	scripted, ok := handle.(*webmcptest.ScriptedBrowserHandle)
 	if !ok {
-		t.Fatalf("fixture handle is %T, want *testkit.ScriptedBrowserHandle", handle)
+		t.Fatalf("fixture handle is %T, want *webmcptest.ScriptedBrowserHandle", handle)
 	}
 	return scripted.TargetSession(primaryTargetID)
 }

@@ -6,17 +6,17 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerWatchOverflowReportsBoundedFailure(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-watch", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-watch", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -53,12 +53,12 @@ func TestStatefulBrokerWatchOverflowReportsBoundedFailure(t *testing.T) {
 
 func TestStatefulBrokerBrowserEventWatchFansOutIndependentCopies(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-browser-events", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-browser-events", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object"}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object"}`)),
 			)},
 		},
 	)

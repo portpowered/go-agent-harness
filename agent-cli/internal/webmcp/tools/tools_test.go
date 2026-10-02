@@ -16,7 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/sight"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
@@ -591,11 +591,11 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 		FrameID:     "frame-1",
 		Origin:      target.Origin,
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate:     candidate,
 		ActivateError: errors.New("foreground activation rejected by headless Chrome"),
-		Targets: []testkit.TargetConfig{
-			testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
+		Targets: []webmcptest.TargetConfig{
+			webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(tool)),
 		},
 	})
 	defer closeAtTestEnd(t, runtime)

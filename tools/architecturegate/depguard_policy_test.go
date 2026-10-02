@@ -115,7 +115,7 @@ func depguardCases() []depguardCase {
 		{"agent-cli/internal/room/room.go", cli + "/internal/audiocapture", "agent-cli-production"},
 		{"agent-cli/internal/room/room.go", loop + "/pkg/platform/clock", "agent-cli-production"},
 		{"agent-cli/internal/webmcp/frames.go", "encoding/binary", "agent-cli-binary"},
-		{"agent-cli/internal/webmcp/testkit/ids.go", "encoding/binary", ""},
+		{"agent-cli/internal/webmcp/hermetic/ids.go", "encoding/binary", ""},
 		{"agent-cli/internal/room/room_test.go", "encoding/binary", ""},
 		{"agent-cli/cmd/agent/main.go", "encoding/binary", ""},
 	}

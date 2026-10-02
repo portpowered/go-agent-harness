@@ -67,39 +67,39 @@ func TestLoadV2FileUsesOfflineCorpusLookup(t *testing.T) {
 
 func TestResolveDispatchesVersionedScenarioLoader(t *testing.T) {
 	dir := t.TempDir()
-	path := writeFile(t, dir, "versioned.scenario.json", []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2-selection","steps":[{"type":"send_text","text":"hello"},{"type":"close"}],"expectations":[{"type":"transcript_contains","text":"hello"}]}`))
+	path := writeFile(t, dir, "versioned.scenario.json", []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2-selection","steps":[{"type":"send_text","text":"hello"},{"type":"close"}],"expectations":[{"type":"transcript_contains","text":"hello"},{"type":"frame_count","equals":2}]}`))
 	scenarios, err := Resolve(path)
-	if err != nil || len(scenarios) != 1 || scenarios[0].ID != "cli-v2-selection" || scenarios[0].Steps[0].Type != probe.StepSendText {
-		t.Fatalf("resolved scenarios = %#v, %v; want projected v2 session scenario", scenarios, err)
+	if err != nil || len(scenarios) != 1 || scenarios[0].ID != "cli-v2-selection" || scenarios[0].Steps[0].Type != probe.StepSendText ||
+		scenarios[0].Expectations[1].Kind != probe.ExpectFrameCount || scenarios[0].Expectations[1].Count != 2 {
+		t.Fatalf("resolved scenarios = %#v, %v; want the provider plan", scenarios, err)
 	}
 	unsafePath := writeFile(t, dir, "unsafe.scenario.json", []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2-unsafe","browser_fixture":"../outside.json","steps":[{"type":"close"}],"expectations":[{"type":"no_pending_invocations"}]}`))
 	if _, err := Resolve(unsafePath); !errors.Is(err, probe.ErrScenarioV2FixturePath) {
 		t.Fatalf("unsafe v2 selection error = %v, want contained-path error", err)
 	}
-	if hasV2, err := ContainsV2([]string{"s2s-v6a-error-auth", path}); err != nil || !hasV2 {
-		t.Fatalf("ContainsV2 = %t, %v; want v2 detected", hasV2, err)
+	browserPath := writeFile(t, dir, "browser.scenario.json", []byte(`{"schema_version":"probe.scenario.v2","id":"cli-v2-browser","steps":[{"type":"webmcp_wait_ready"},{"type":"close"}],"expectations":[{"type":"no_pending_invocations"}]}`))
+	if _, err := Resolve(browserPath); !errors.Is(err, probe.ErrInvalidScenarioV2) || !strings.Contains(err.Error(), "browser-aware executor") {
+		t.Fatalf("browser v2 selection error = %v, want browser-aware executor error", err)
 	}
-}
-
-func TestParseAcceptsAliasSpellingsAndRejectsUnknownVariants(t *testing.T) {
-	scenario, err := Parse([]byte(`{"id":"alias","steps":[{"type":"send_text","text":"hi"},{"type":"close"}],
-		"expected_behavior":[{"type":"terminal_output_state","value":"complete"},{"type":"latency_within_ticks","count":2,"at":3}]}`))
-	if err != nil {
-		t.Fatalf("parse aliases: %v", err)
+	unversioned := writeFile(t, dir, "unversioned.scenario.json", []byte(`{"id":"x","steps":[{"type":"close"}],"expectations":[{"type":"frame_count","count":1}]}`))
+	if _, err := Resolve(unversioned); err == nil || !strings.Contains(err.Error(), "is not a probe.scenario.v2 document") {
+		t.Fatalf("unversioned selection error = %v", err)
 	}
-	if scenario.Expectations[0].Kind != probe.ExpectOutputState || scenario.Expectations[1].Kind != probe.ExpectLatencyWithinTicks || !scenario.Expectations[1].HasAt {
-		t.Fatalf("parsed expectations = %+v", scenario.Expectations)
-	}
-	for _, test := range []struct{ document, want string }{
-		{`{`, "malformed scenario JSON"},
-		{`{"id":"x","steps":[]}`, "at least one step"},
-		{`{"id":"x","steps":[{"type":"fly"}]}`, `unknown step variant "fly"`},
-		{`{"id":"x","steps":[{"type":"close"}]}`, "at least one expected behavior"},
-		{`{"id":"x","steps":[{"type":"close"}],"expected":[{"type":"vibes"}]}`, `unknown expectation variant "vibes"`},
+	for _, test := range []struct {
+		selections []string
+		want       bool
+	}{
+		{[]string{"s2s-v6a-error-auth", path}, false},
+		{[]string{path, browserPath}, true},
+		{[]string{unsafePath}, true},
+		{[]string{unversioned}, false},
 	} {
-		if _, err := Parse([]byte(test.document)); err == nil || !strings.Contains(err.Error(), test.want) {
-			t.Fatalf("Parse(%s) error = %v, want %q", test.document, err, test.want)
+		if got, err := NeedsBrowserExecutor(test.selections); err != nil || got != test.want {
+			t.Fatalf("NeedsBrowserExecutor(%v) = %t, %v; want %t", test.selections, got, err, test.want)
 		}
+	}
+	if _, err := NeedsBrowserExecutor([]string{dir}); err == nil {
+		t.Fatal("directory selection was accepted")
 	}
 }
 
@@ -114,7 +114,7 @@ func TestResolveAllExpandsSuitesDeduplicatesAndNamesUnknownSelections(t *testing
 	if _, err := ResolveAll([]string{"no-such-scenario"}); err == nil || !strings.Contains(err.Error(), `unknown probe scenario "no-such-scenario"`) {
 		t.Fatalf("unknown selection error = %v", err)
 	}
-	bad := writeFile(t, t.TempDir(), "bad.json", []byte(`{`))
+	bad := writeFile(t, t.TempDir(), "bad.json", []byte(`{"schema_version":"probe.scenario.v2"`))
 	if _, err := Resolve(bad); err == nil || !strings.Contains(err.Error(), "load probe scenario") {
 		t.Fatalf("malformed file error = %v", err)
 	}

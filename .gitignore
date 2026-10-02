@@ -20,8 +20,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
-factory/scripts/__pycache__/
+__pycache__/
 .cache/go-tools/
+.cache/deadcode/
 # make prepush phase result cache and coverage profiles/scope files
 .cache/prepush/
 /coverage/

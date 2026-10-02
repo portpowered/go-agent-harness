@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 // TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections proves the
@@ -26,13 +27,13 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	finalCandidate := reconnectCandidate("browser-final", endpoint, "final")
 
 	discoverer := &replacementDiscoverer{candidates: []webmcp.BrowserCandidate{oldCandidate}}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: oldCandidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: oldCandidate.ID, ID: targetID, Type: "page", Title: "same tab", URL: "https://recover.test/old", Origin: "https://recover.test", Eligible: true},
-					testkit.WithInitialCatalog(pageTool("old_tool", "frame-old", `{}`)),
+					webmcptest.WithInitialCatalog(pageTool("old_tool", "frame-old", `{}`)),
 				),
 			},
 		},
@@ -42,7 +43,7 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: discoverer,
-		IDs:        testkit.NewDeterministicIDs(),
+		IDs:        hermetic.NewDeterministicIDs(),
 	})
 	defer closeAtTestEnd(t, broker)
 
@@ -88,7 +89,7 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	}
 }
 
-func initialReconnectSelection(t *testing.T, broker *webmcp.StatefulBroker, runtime *testkit.ScriptedBrowserRuntime, browserID webmcp.BrowserID, targetID webmcp.TargetID) (webmcp.ToolRef, *testkit.ScriptedBrowserHandle, *testkit.ScriptedTargetSession) {
+func initialReconnectSelection(t *testing.T, broker *webmcp.StatefulBroker, runtime *webmcptest.ScriptedBrowserRuntime, browserID webmcp.BrowserID, targetID webmcp.TargetID) (webmcp.ToolRef, *webmcptest.ScriptedBrowserHandle, *webmcptest.ScriptedTargetSession) {
 	t.Helper()
 	oldCatalog, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
@@ -111,7 +112,7 @@ func initialReconnectSelection(t *testing.T, broker *webmcp.StatefulBroker, runt
 // disconnectInitialReconnectBrowser leaves an invocation admitted on the
 // retired session so disconnect reconciliation is exercised before the first
 // replacement.
-func disconnectInitialReconnectBrowser(t *testing.T, broker *webmcp.StatefulBroker, oldHandle *testkit.ScriptedBrowserHandle, oldSession *testkit.ScriptedTargetSession, oldRef webmcp.ToolRef) webmcp.InvokeResult {
+func disconnectInitialReconnectBrowser(t *testing.T, broker *webmcp.StatefulBroker, oldHandle *webmcptest.ScriptedBrowserHandle, oldSession *webmcptest.ScriptedTargetSession, oldRef webmcp.ToolRef) webmcp.InvokeResult {
 	t.Helper()
 	oldSession.BlockInvocations()
 	first, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: oldRef, Input: json.RawMessage(`{}`)})
@@ -142,7 +143,7 @@ func disconnectInitialReconnectBrowser(t *testing.T, broker *webmcp.StatefulBrok
 // assertFirstReplacementIsolated injects a late event from the retired
 // session. The browser/target identity fence must prevent it from changing
 // the replacement catalog, and the replacement must mint fresh invocations.
-func assertFirstReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, oldSession, newSession *testkit.ScriptedTargetSession, newBrowserID webmcp.BrowserID, newRef webmcp.ToolRef, firstID webmcp.InvocationID) {
+func assertFirstReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, oldSession, newSession *webmcptest.ScriptedTargetSession, newBrowserID webmcp.BrowserID, newRef webmcp.ToolRef, firstID webmcp.InvocationID) {
 	t.Helper()
 	if err := oldSession.InjectLateEventInto(newSession, webmcp.BrowserEvent{
 		Type:       webmcp.EventToolsAdded,
@@ -179,7 +180,7 @@ func assertFirstReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker,
 // replacement. This catches accidental reuse of the first replacement's
 // selected session, catalog, terminal cache, or persistence-like browser
 // lookup state.
-func disconnectFirstReplacementBrowser(t *testing.T, broker *webmcp.StatefulBroker, newHandle *testkit.ScriptedBrowserHandle, newSession *testkit.ScriptedTargetSession, newRef webmcp.ToolRef, firstID webmcp.InvocationID) webmcp.InvokeResult {
+func disconnectFirstReplacementBrowser(t *testing.T, broker *webmcp.StatefulBroker, newHandle *webmcptest.ScriptedBrowserHandle, newSession *webmcptest.ScriptedTargetSession, newRef webmcp.ToolRef, firstID webmcp.InvocationID) webmcp.InvokeResult {
 	t.Helper()
 	newSession.BlockInvocations()
 	second, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: newRef, Input: json.RawMessage(`{}`)})
@@ -204,7 +205,7 @@ func disconnectFirstReplacementBrowser(t *testing.T, broker *webmcp.StatefulBrok
 	return second
 }
 
-func assertFinalReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, newSession, finalSession *testkit.ScriptedTargetSession, finalRef webmcp.ToolRef, firstID, secondID webmcp.InvocationID) {
+func assertFinalReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, newSession, finalSession *webmcptest.ScriptedTargetSession, finalRef webmcp.ToolRef, firstID, secondID webmcp.InvocationID) {
 	t.Helper()
 	if err := newSession.InjectLateEventInto(finalSession, webmcp.BrowserEvent{
 		Type:         webmcp.EventToolResponded,
@@ -236,23 +237,23 @@ func assertFinalReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker,
 	}
 }
 
-func assertReconnectOperationCounts(t *testing.T, runtime *testkit.ScriptedBrowserRuntime) {
+func assertReconnectOperationCounts(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime) {
 	t.Helper()
-	if got := countReconnectOperations(runtime.Operations(), testkit.OperationAttach); got != 3 {
+	if got := countReconnectOperations(runtime.Operations(), webmcptest.OperationAttach); got != 3 {
 		t.Fatalf("attach operations = %d, want one per fresh selection", got)
 	}
-	if got := countReconnectOperations(runtime.Operations(), testkit.OperationInvoke); got != 4 {
+	if got := countReconnectOperations(runtime.Operations(), webmcptest.OperationInvoke); got != 4 {
 		t.Fatalf("invoke operations = %d, want initial plus one per fresh session", got)
 	}
-	if got := countReconnectOperations(runtime.Operations(), testkit.OperationCancel); got != 0 {
+	if got := countReconnectOperations(runtime.Operations(), webmcptest.OperationCancel); got != 0 {
 		t.Fatalf("cancel operations = %d, want no cancellation routed to a replacement", got)
 	}
 }
 
-func replaceAndSelect(t *testing.T, broker *webmcp.StatefulBroker, runtime *testkit.ScriptedBrowserRuntime, discoverer *replacementDiscoverer, previous, replacement webmcp.BrowserCandidate, targetID webmcp.TargetID, toolName string, frame webmcp.FrameID, output string) (*testkit.ScriptedBrowserHandle, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func replaceAndSelect(t *testing.T, broker *webmcp.StatefulBroker, runtime *webmcptest.ScriptedBrowserRuntime, discoverer *replacementDiscoverer, previous, replacement webmcp.BrowserCandidate, targetID webmcp.TargetID, toolName string, frame webmcp.FrameID, output string) (*webmcptest.ScriptedBrowserHandle, *webmcptest.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
 	target := webmcp.Target{BrowserID: replacement.ID, ID: targetID, Type: "page", Title: "same tab", URL: "https://recover.test/" + strings.TrimPrefix(string(replacement.ID), "browser-"), Origin: "https://recover.test", Eligible: true}
-	handle, err := runtime.ReplaceEndpoint(previous, replacement, testkit.NewTargetConfig(target, testkit.WithInitialCatalog(pageTool(toolName, frame, `{}`)), testkit.WithAutoResponse(json.RawMessage(output))))
+	handle, err := runtime.ReplaceEndpoint(previous, replacement, webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(pageTool(toolName, frame, `{}`)), webmcptest.WithAutoResponse(json.RawMessage(output))))
 	if err != nil {
 		t.Fatalf("replace %s with %s: %v", previous.ID, replacement.ID, err)
 	}
@@ -301,16 +302,16 @@ func assertStaleToolRef(t *testing.T, broker *webmcp.StatefulBroker, ref webmcp.
 	}
 }
 
-func assertNoCancelForInvocation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, id webmcp.InvocationID, label string) {
+func assertNoCancelForInvocation(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, id webmcp.InvocationID, label string) {
 	t.Helper()
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationCancel && operation.InvocationID == id {
+		if operation.Kind == webmcptest.OperationCancel && operation.InvocationID == id {
 			t.Fatalf("%s: found cancellation routed to replacement: %#v", label, operation)
 		}
 	}
 }
 
-func countReconnectOperations(operations []testkit.Operation, kind testkit.OperationKind) int {
+func countReconnectOperations(operations []webmcptest.Operation, kind webmcptest.OperationKind) int {
 	count := 0
 	for _, operation := range operations {
 		if operation.Kind == kind {
@@ -320,7 +321,7 @@ func countReconnectOperations(operations []testkit.Operation, kind testkit.Opera
 	return count
 }
 
-func assertReconnectOperationOrder(t *testing.T, operations []testkit.Operation, wantInvocations []webmcp.BrowserID) {
+func assertReconnectOperationOrder(t *testing.T, operations []webmcptest.Operation, wantInvocations []webmcp.BrowserID) {
 	t.Helper()
 	var attaches []webmcp.BrowserID
 	var invokes []webmcp.BrowserID
@@ -328,13 +329,13 @@ func assertReconnectOperationOrder(t *testing.T, operations []testkit.Operation,
 	var replacements []webmcp.BrowserID
 	for _, operation := range operations {
 		switch operation.Kind {
-		case testkit.OperationAttach:
+		case webmcptest.OperationAttach:
 			attaches = append(attaches, operation.BrowserID)
-		case testkit.OperationInvoke:
+		case webmcptest.OperationInvoke:
 			invokes = append(invokes, operation.BrowserID)
-		case testkit.OperationDisconnect:
+		case webmcptest.OperationDisconnect:
 			disconnects = append(disconnects, operation.BrowserID)
-		case testkit.OperationReplace:
+		case webmcptest.OperationReplace:
 			replacements = append(replacements, operation.BrowserID)
 		}
 	}

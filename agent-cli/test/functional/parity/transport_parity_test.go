@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/parity"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -46,25 +46,6 @@ const (
 	transportWebSocket parityTransport = "websocket"
 	transportRTC       parityTransport = "webrtc"
 )
-
-type committedScenario struct {
-	ID           string              `json:"id"`
-	Name         string              `json:"name"`
-	Description  string              `json:"description"`
-	Steps        []committedStep     `json:"steps"`
-	Expectations []committedExpected `json:"expectations"`
-}
-
-type committedStep struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type committedExpected struct {
-	Type  string `json:"type"`
-	Count int    `json:"count"`
-	Value string `json:"value"`
-}
 
 type transportRun struct {
 	Projection parity.Projection
@@ -176,18 +157,14 @@ func TestTransportProjectionDivergenceNamesEveryFactCategory(t *testing.T) {
 	}
 }
 
-func loadParityScenario(t *testing.T) committedScenario {
+func loadParityScenario(t *testing.T) probe.ScenarioV2 {
 	t.Helper()
-	data, err := os.ReadFile(parityScenarioPath(t))
+	scenario, err := probe.LoadScenarioV2File(parityScenarioPath(t))
 	if err != nil {
-		t.Fatalf("read committed parity scenario: %v", err)
+		t.Fatalf("load committed parity scenario: %v", err)
 	}
-	var scenario committedScenario
-	if err := json.Unmarshal(data, &scenario); err != nil {
-		t.Fatalf("decode committed parity scenario: %v", err)
-	}
-	if scenario.ID == "" || scenario.Name == "" || len(scenario.Steps) == 0 || len(scenario.Expectations) == 0 {
-		t.Fatalf("committed parity scenario is incomplete: %+v", scenario)
+	if scenario.Name == "" || !scenario.ProviderOnly() {
+		t.Fatalf("committed parity scenario is not a named provider-only document: %+v", scenario)
 	}
 	return scenario
 }
@@ -210,14 +187,14 @@ func parityScenarioPath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..", "go-agent-loop", "pkg", "probe", "testdata", "scenarios", parityScenarioFile)
 }
 
-func scenarioName(scenario committedScenario) string {
+func scenarioName(scenario probe.ScenarioV2) string {
 	if scenario.Name != "" {
 		return scenario.Name
 	}
 	return scenario.ID
 }
 
-func runParityScenario(t *testing.T, scenario committedScenario, capture gatewaytesting.SessionCapture, kind parityTransport) transportRun {
+func runParityScenario(t *testing.T, scenario probe.ScenarioV2, capture gatewaytesting.SessionCapture, kind parityTransport) transportRun {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), parityScenarioBudget)
 	defer cancel()
@@ -277,7 +254,7 @@ func runParityScenario(t *testing.T, scenario committedScenario, capture gateway
 	return transportRun{Projection: clientProjection, Client: clientProjection, Agent: agentProjection}
 }
 
-func driveScenario(ctx context.Context, t *testing.T, scenario committedScenario, capture gatewaytesting.SessionCapture, conn transport.Conn, logicalClock *clock.Deterministic) scenarioCapture {
+func driveScenario(ctx context.Context, t *testing.T, scenario probe.ScenarioV2, capture gatewaytesting.SessionCapture, conn transport.Conn, logicalClock *clock.Deterministic) scenarioCapture {
 	t.Helper()
 	if len(scenario.Steps) != 2 || scenario.Steps[0].Type != "send_text" || scenario.Steps[1].Type != "close" {
 		t.Fatalf("parity test expects the committed text-then-close scenario, got %+v", scenario.Steps)

@@ -272,6 +272,7 @@ func TestV6CControlsReplayCleanlyUnderOwnClassification(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			fixture := v6cSharedFixture(t, testCase.fixtureName)
 			document := fmt.Sprintf(`{
+				"schema_version": "probe.scenario.v2",
 				"id": "v6c-control-%s",
 				"name": "v6c-control-%s",
 				"steps": [

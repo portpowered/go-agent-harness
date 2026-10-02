@@ -1,4 +1,5 @@
 {
+  "schema_version": "probe.scenario.v2",
   "id": "s2s-v2e-audio-in-truncated-16k",
   "name": "s2s-v2e-audio-in-truncated-16k",
   "description": "Truncated 16 kHz source audio cut mid-word: the buffered partial utterance must be committed and acknowledged before a clean session close.",
@@ -7,7 +8,7 @@
     {"type": "close"}
   ],
   "expectations": [
-    {"type": "transcript-contains", "text": "partial utterance"},
-    {"type": "buffer-disposition", "value": "committed"}
+    {"type": "transcript_contains", "text": "partial utterance"},
+    {"type": "buffer_disposition", "value": "committed"}
   ]
 }

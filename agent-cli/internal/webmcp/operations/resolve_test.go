@@ -13,7 +13,7 @@ import (
 
 func TestResolveTargetUsesPersistedSelectionAsExactIdentity(t *testing.T) {
 	broker := newFakeBroker()
-	broker.targets = append(broker.targets, pageTarget(testSecondID, testOrigin))
+	broker.Targets = append(broker.Targets, pageTarget(testSecondID, testOrigin))
 	selector := Selector{LoadSelection: selectionLoader(storedSelection(), nil)}
 	resolution, err := ResolveTarget(context.Background(), broker, selector)
 	if err != nil {
@@ -54,11 +54,11 @@ func TestResolveTargetRejectsStalePersistedSelection(t *testing.T) {
 		reason string
 	}{
 		{name: "endpoint", mutate: func(_ *fakeBroker, s *selectionstore.Selection) { s.EndpointID = testOtherID }, reason: reasonEndpointChanged},
-		{name: "instance", mutate: func(b *fakeBroker, _ *selectionstore.Selection) { b.candidates[0].BrowserInstanceID = "instance-2" }, reason: reasonInstanceChanged},
+		{name: "instance", mutate: func(b *fakeBroker, _ *selectionstore.Selection) { b.Candidates[0].BrowserInstanceID = "instance-2" }, reason: reasonInstanceChanged},
 		{name: "origin", mutate: func(_ *fakeBroker, s *selectionstore.Selection) { s.Origin = testOtherSite }, reason: reasonOriginChanged},
 		{name: "continuity", mutate: func(b *fakeBroker, s *selectionstore.Selection) {
 			s.ContinuityMarker = "marker-1"
-			b.targets[0].ContinuityMarker = "marker-2"
+			b.Targets[0].ContinuityMarker = "marker-2"
 		}, reason: reasonContinuityChanged},
 		{name: "generation", mutate: func(_ *fakeBroker, s *selectionstore.Selection) { s.Generation = testGeneration + 1 }, reason: reasonGenerationChanged},
 		{name: "target", mutate: func(_ *fakeBroker, s *selectionstore.Selection) { s.TargetID = "gone" }, reason: reasonTargetNotFound},
@@ -82,7 +82,7 @@ func TestResolveTargetRejectsStalePersistedSelection(t *testing.T) {
 
 func TestResolveTargetRecognizesReplacementBrowserAtRememberedEndpoint(t *testing.T) {
 	broker := newFakeBroker()
-	broker.candidates = []webmcp.BrowserCandidate{{ID: testOtherID, BrowserInstanceID: "instance-2", HTTPURL: "http://127.0.0.1:9222"}}
+	broker.Candidates = []webmcp.BrowserCandidate{{ID: testOtherID, BrowserInstanceID: "instance-2", HTTPURL: "http://127.0.0.1:9222"}}
 	selector := Selector{
 		Browser:       config.BrowserConfig{Connection: config.BrowserConnectionConfig{CDPURL: "http://127.0.0.1:9222"}},
 		LoadSelection: selectionLoader(storedSelection(), nil),
@@ -99,13 +99,13 @@ func TestResolveTargetClassifiesPersistedBrowserLossAsDisconnected(t *testing.T)
 		setup func(*fakeBroker)
 		phase string
 	}{
-		{name: "discovery", setup: func(b *fakeBroker) { b.discoverErr = errors.New("dial tcp: connection refused") }, phase: phaseDiscovery},
-		{name: "browser gone", setup: func(b *fakeBroker) { b.candidates[0].ID = testOtherID }, phase: phaseDiscovery},
+		{name: "discovery", setup: func(b *fakeBroker) { b.DiscoverErr = errors.New("dial tcp: connection refused") }, phase: phaseDiscovery},
+		{name: "browser gone", setup: func(b *fakeBroker) { b.Candidates[0].ID = testOtherID }, phase: phaseDiscovery},
 		{name: "targets", setup: func(b *fakeBroker) {
-			b.listTargetsErr = errors.Join(errTestBroker, webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "gone", map[string]any{detailPhase: "list_targets"}))
+			b.ListTargetsErr = errors.Join(errTestBroker, webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "gone", map[string]any{detailPhase: "list_targets"}))
 		}, phase: "list_targets"},
 		{name: "wrapped", setup: func(b *fakeBroker) {
-			b.listTargetsErr = fmt.Errorf("wrapped: %w", webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, "gone", map[string]any{detailPhase: "bad phase!"}))
+			b.ListTargetsErr = fmt.Errorf("wrapped: %w", webmcp.NewClassifiedError(webmcp.ErrorBrowserDisconnected, "gone", map[string]any{detailPhase: "bad phase!"}))
 		}, phase: phaseTargets},
 	}
 	for _, testCase := range cases {
@@ -123,12 +123,12 @@ func TestResolveTargetClassifiesPersistedBrowserLossAsDisconnected(t *testing.T)
 
 func TestResolveTargetWithoutPersistenceReturnsDiscoveryErrorsUnchanged(t *testing.T) {
 	broker := newFakeBroker()
-	broker.listTargetsErr = errTestBroker
+	broker.ListTargetsErr = errTestBroker
 	if _, err := ResolveTarget(context.Background(), broker, singleSelector()); !errors.Is(err, errTestBroker) {
 		t.Fatalf("target list error = %v, want the broker error", err)
 	}
 	broker = newFakeBroker()
-	broker.discoverErr = errTestBroker
+	broker.DiscoverErr = errTestBroker
 	if _, err := ResolveTarget(context.Background(), broker, singleSelector()); !errors.Is(err, errTestBroker) {
 		t.Fatalf("discovery error = %v, want the broker error", err)
 	}
@@ -170,7 +170,7 @@ func TestResolveTargetAutoSelectionPolicy(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			broker := newFakeBroker()
-			broker.targets = testCase.targets
+			broker.Targets = testCase.targets
 			selector := Selector{Browser: config.BrowserConfig{Selection: config.BrowserSelectionConfig{AutoSelect: testCase.autoSelect}}, LoadSelection: selectionLoader(selectionstore.Selection{}, nil)}
 			resolution, err := ResolveTarget(context.Background(), broker, selector)
 			code, details := classifiedCode(err)
@@ -189,10 +189,10 @@ func TestResolveTargetAutoSelectionPolicy(t *testing.T) {
 
 func TestResolveTargetRequiresExactBrowserWhenSeveralMatch(t *testing.T) {
 	broker := newFakeBroker()
-	broker.candidates = append(broker.candidates, webmcp.BrowserCandidate{ID: testOtherID})
+	broker.Candidates = append(broker.Candidates, webmcp.BrowserCandidate{ID: testOtherID})
 	_, err := ResolveTarget(context.Background(), broker, singleSelector())
 	code, details := classifiedCode(err)
-	if ids, ok := details["candidate_browser_ids"].([]string); code != webmcp.ErrorAmbiguousBrowser || !ok || len(ids) != len(broker.candidates) {
+	if ids, ok := details["candidate_browser_ids"].([]string); code != webmcp.ErrorAmbiguousBrowser || !ok || len(ids) != len(broker.Candidates) {
 		t.Fatalf("error = %v, want ambiguous browser listing both IDs", err)
 	}
 }
@@ -213,7 +213,7 @@ func TestResolveTargetValidatesTheChosenTarget(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			broker := newFakeBroker()
-			broker.targets = []webmcp.Target{testCase.target}
+			broker.Targets = []webmcp.Target{testCase.target}
 			browser := config.BrowserConfig{Selection: config.BrowserSelectionConfig{Tab: testTargetID, Origin: testCase.origin}}
 			browser.Policy.DeniedOrigins = []string{testOtherSite}
 			_, err := ResolveTarget(context.Background(), broker, Selector{Browser: browser})
@@ -227,7 +227,7 @@ func TestResolveTargetValidatesTheChosenTarget(t *testing.T) {
 
 func TestResolveTargetHonorsCompositeTargetReference(t *testing.T) {
 	broker := newFakeBroker()
-	broker.candidates = append(broker.candidates, webmcp.BrowserCandidate{ID: testOtherID})
+	broker.Candidates = append(broker.Candidates, webmcp.BrowserCandidate{ID: testOtherID})
 	composite := testBrowserID + "/" + testTargetID
 	selector := Selector{Browser: config.BrowserConfig{Selection: config.BrowserSelectionConfig{Tab: composite}}}
 	resolution, err := ResolveTarget(context.Background(), broker, selector)

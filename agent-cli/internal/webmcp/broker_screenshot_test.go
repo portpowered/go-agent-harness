@@ -11,24 +11,24 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-capture", Product: "fixture", Loopback: true}
 	firstImage := screenshotPNG(t, color.RGBA{R: 0xff, A: 0xff})
 	secondImage := screenshotPNG(t, color.RGBA{G: 0xff, A: 0xff})
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.NewBrowserConfig(candidate,
-			testkit.NewTargetConfig(
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.NewBrowserConfig(candidate,
+			webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-first", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_first", "frame-1", `{"type":"object","additionalProperties":false}`)),
-				testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage}),
+				webmcptest.WithInitialCatalog(pageTool("read_first", "frame-1", `{"type":"object","additionalProperties":false}`)),
+				webmcptest.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage}),
 			),
-			testkit.NewTargetConfig(
+			webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: secondaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
-				testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage}),
+				webmcptest.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
+				webmcptest.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage}),
 			),
 		),
 	)
@@ -47,12 +47,12 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 		t.Fatalf("capture = %+v, want second target and its image", got)
 	}
 
-	var captures []testkit.Operation
+	var captures []webmcptest.Operation
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationCapturePageScreenshot {
+		if operation.Kind == webmcptest.OperationCapturePageScreenshot {
 			captures = append(captures, operation)
 		}
-		if operation.Kind == testkit.OperationActivate {
+		if operation.Kind == webmcptest.OperationActivate {
 			t.Fatalf("capture unexpectedly activated a target: %+v", operation)
 		}
 	}
@@ -64,22 +64,22 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 func TestStatefulBrokerCaptureClassifiesSelectionLifecycleFailures(t *testing.T) {
 	cases := []struct {
 		name string
-		end  func(*testkit.ScriptedTargetSession) error
+		end  func(*webmcptest.ScriptedTargetSession) error
 		code webmcp.ErrorCode
 	}{
-		{name: "detached", end: func(session *testkit.ScriptedTargetSession) error { return session.Detach("capture_target_closed") }, code: webmcp.ErrorTargetDetached},
-		{name: "disconnected", end: func(session *testkit.ScriptedTargetSession) error {
+		{name: "detached", end: func(session *webmcptest.ScriptedTargetSession) error { return session.Detach("capture_target_closed") }, code: webmcp.ErrorTargetDetached},
+		{name: "disconnected", end: func(session *webmcptest.ScriptedTargetSession) error {
 			return session.Disconnect("capture_transport_lost")
 		}, code: webmcp.ErrorBrowserDisconnected},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			candidate := webmcp.BrowserCandidate{ID: webmcp.BrowserID("browser-lifecycle-" + testCase.name), Product: "fixture", Loopback: true}
-			runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-				testkit.NewTargetConfig(
+			runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
-					testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: screenshotPNG(t, color.RGBA{B: 0xff, A: 0xff})}),
+					webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
+					webmcptest.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: screenshotPNG(t, color.RGBA{B: 0xff, A: 0xff})}),
 				),
 			))
 			defer closeAtTestEnd(t, runtime)
@@ -108,13 +108,13 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-concurrent", Product: "fixture", Loopback: true}
 	firstImage := screenshotPNG(t, color.RGBA{R: 0xff, A: 0xff})
 	secondImage := screenshotPNG(t, color.RGBA{G: 0xff, A: 0xff})
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-			testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{"type":"object","additionalProperties":false}`)),
-			testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage})),
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"},
-			testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{"type":"object","additionalProperties":false}`)),
-			testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage})),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
+			webmcptest.WithInitialCatalog(pageTool("read_a", "frame-a", `{"type":"object","additionalProperties":false}`)),
+			webmcptest.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage})),
+		webmcptest.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"},
+			webmcptest.WithInitialCatalog(pageTool("read_b", "frame-b", `{"type":"object","additionalProperties":false}`)),
+			webmcptest.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage})),
 	))
 	defer closeAtTestEnd(t, runtime)
 	newBroker := func() *webmcp.StatefulBroker {

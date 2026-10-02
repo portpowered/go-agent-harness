@@ -16,8 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/sessionbroker/bootstrap"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -814,10 +814,10 @@ func executeSessionTool(t *testing.T, toolSet *webmcpTools.BrokerToolSet, call m
 	return response, envelope
 }
 
-func invokeOperations(operations []testkit.Operation) []testkit.Operation {
-	var invocations []testkit.Operation
+func invokeOperations(operations []webmcptest.Operation) []webmcptest.Operation {
+	var invocations []webmcptest.Operation
 	for _, operation := range operations {
-		if operation.Kind == testkit.OperationInvoke {
+		if operation.Kind == webmcptest.OperationInvoke {
 			invocations = append(invocations, operation)
 		}
 	}
@@ -826,7 +826,7 @@ func invokeOperations(operations []testkit.Operation) []testkit.Operation {
 
 // newScriptedSessionBroker composes a session broker over one scripted
 // WebMCP page through the CLI production factory.
-func newScriptedSessionBroker(t *testing.T) (webmcp.Broker, *testkit.ScriptedBrowserRuntime, webmcp.BrowserCandidate, webmcp.Target, webmcp.ToolDescriptor) {
+func newScriptedSessionBroker(t *testing.T) (webmcp.Broker, *webmcptest.ScriptedBrowserRuntime, webmcp.BrowserCandidate, webmcp.Target, webmcp.ToolDescriptor) {
 	t.Helper()
 	candidate := webmcp.BrowserCandidate{ID: "browser-session", Product: "scripted", Loopback: true}
 	target := webmcp.Target{
@@ -843,11 +843,11 @@ func newScriptedSessionBroker(t *testing.T) (webmcp.Broker, *testkit.ScriptedBro
 		FrameID:     "frame-1",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"value":{"type":"number"}},"required":["value"],"additionalProperties":false}`),
 	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(target,
-			testkit.WithInitialCatalog(pageTool),
-			testkit.WithAutoResponse(json.RawMessage(`{"mutated":true}`)),
-			testkit.WithCastDevices(webmcp.CastDevice{Name: "Session TV", ID: "sink-session"}),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(target,
+			webmcptest.WithInitialCatalog(pageTool),
+			webmcptest.WithAutoResponse(json.RawMessage(`{"mutated":true}`)),
+			webmcptest.WithCastDevices(webmcp.CastDevice{Name: "Session TV", ID: "sink-session"}),
 		),
 	))
 	laneCandidate := discovery.BrowserCandidate{

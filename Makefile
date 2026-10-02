@@ -139,7 +139,7 @@ TEST_TOOLS_ARCHITECTURE_GATE ?= 1
 # test-tools runs these independent suites concurrently (scripts/run-bounded.sh
 # prints each one's output as a block); the Python modules themselves run
 # test-by-test across processes (scripts/unittest-parallel.py).
-TOOLS_PYTHON_TEST_MODULES := scripts.test_go_test_input_guard scripts.test_deadcode_check scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_module
+TOOLS_PYTHON_TEST_MODULES := scripts.test_go_test_input_guard scripts.test_deadcode_check scripts.test_prod_deps_check scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_module
 TOOLS_GO_TEST_MODULES := tools/analyzergate tools/racegate
 # Tool modules whose tests always run fresh (-count=1): coveragegate runs `go
 # list` over the workspace and reads the repository's coverage-manifest,
@@ -203,7 +203,7 @@ define agent_cli_split_tests
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-check deadcode-check deadcode-write test-architecture-gate verify-architecture embed-check
+.PHONY: architecture-check prod-deps-check deadcode-check deadcode-write test-architecture-gate verify-architecture embed-check
 .PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-other-os lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
@@ -402,8 +402,11 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 # Size, complexity, package-global and init limits are golangci-lint's (make
 # lint); the gate checks service shape and the boundaries depguard cannot
 # express. See docs/architecture/lint-policy.md.
-architecture-check: ## Enforce service shape, public-surface and boundary rules (tools/architecturegate).
+architecture-check: prod-deps-check ## Enforce service shape, public-surface and boundary rules (tools/architecturegate).
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY)
+
+prod-deps-check: ## Fail when a production main links a test-support package (scripts/prod-deps-check.py).
+	@GO="$(GO)" python3 scripts/prod-deps-check.py
 
 deadcode-check: ## Fail on Go functions unreachable from every main and test (the allowlist may only shrink).
 	@GO="$(GO)" python3 scripts/deadcode-check.py --allowlist $(DEADCODE_ALLOWLIST) --base "$(DEADCODE_BASE)"

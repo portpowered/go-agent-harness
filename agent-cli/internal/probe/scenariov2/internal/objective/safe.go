@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 )
 
 // Text presence labels used instead of transcript content.
@@ -88,12 +88,12 @@ type errorLabel struct {
 func errorLabels() []errorLabel {
 	return []errorLabel{
 		{webmcp.ErrStaleToolRef, string(webmcp.ErrorStaleToolRef)},
-		{testkit.ErrFixtureOperationMismatch, "fixture_operation_mismatch"},
-		{testkit.ErrFixtureIncomplete, "fixture_incomplete"},
-		{testkit.ErrFixturePendingInvocations, "fixture_pending_invocations"},
-		{testkit.ErrFixtureClosed, "fixture_closed"},
-		{testkit.ErrFixtureCanceled, "fixture_canceled"},
-		{testkit.ErrInvalidBrowserScript, "invalid_browser_script"},
+		{hermetic.ErrFixtureOperationMismatch, "fixture_operation_mismatch"},
+		{hermetic.ErrFixtureIncomplete, "fixture_incomplete"},
+		{hermetic.ErrFixturePendingInvocations, "fixture_pending_invocations"},
+		{hermetic.ErrFixtureClosed, "fixture_closed"},
+		{hermetic.ErrFixtureCanceled, "fixture_canceled"},
+		{hermetic.ErrInvalidBrowserScript, "invalid_browser_script"},
 		{webmcp.ErrBrowserNotFound, "no_browser"},
 		{webmcp.ErrTargetNotFound, "no_page"},
 		{webmcp.ErrInvalidToolInput, string(webmcp.ErrorInvalidToolInput)},

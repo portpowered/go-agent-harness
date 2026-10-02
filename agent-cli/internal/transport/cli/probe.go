@@ -183,7 +183,7 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return c.runDevices(cmd, positional)
 	}
 	selections := probescenario.Selections(positional, c.Scenarios)
-	if hasV2, err := probescenario.ContainsV2(selections); err != nil {
+	if hasV2, err := probescenario.NeedsBrowserExecutor(selections); err != nil {
 		return err
 	} else if hasV2 {
 		return c.runScenarioV2(cmd, selections)

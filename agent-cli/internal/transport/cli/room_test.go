@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/roomtest"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
@@ -178,7 +178,7 @@ func TestWriteRoomResultIncludesLivenessClassification(t *testing.T) {
 // regression guard for the "no schema reference or example" defect: a
 // first-time user should not have to reverse-engineer the manifest shape one
 // validation error at a time. `--example` must print a real manifest that
-// room.ParseManifest accepts unmodified, and must never touch the runner or
+// roomtest.ParseManifest accepts unmodified, and must never touch the runner or
 // require any of the command's other flags.
 func TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero(t *testing.T) {
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
@@ -197,7 +197,7 @@ func TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero(t *testing.T) 
 	if calls.Load() != 0 {
 		t.Fatalf("runner calls = %d, want zero: --example must not run anything", calls.Load())
 	}
-	manifest, err := room.ParseManifest(output.Bytes(), room.ValidationOptions{
+	manifest, err := roomtest.ParseManifest(output.Bytes(), roomtest.ValidationOptions{
 		LookupCredential: func(name string) (string, bool) { return "x", name == "OPENAI_API_KEY" },
 	})
 	if err != nil {

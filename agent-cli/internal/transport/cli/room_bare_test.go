@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/roomtest"
 
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
@@ -49,7 +49,7 @@ func TestRoomRunCommandBareInvocationPassesResolvedPlanToRunner(t *testing.T) {
 	if got.LaunchPlan == nil || got.LaunchPlan.Mode != rooms.RoomLaunchModeBare {
 		t.Fatalf("launch plan = %+v, want bare plan", got.LaunchPlan)
 	}
-	if len(got.Manifest.Participants) != 2 || string(got.Manifest.Participants[0].Kind) != string(room.ParticipantKindHuman) || string(got.Manifest.Participants[1].Kind) != string(room.ParticipantKindAgent) {
+	if len(got.Manifest.Participants) != 2 || string(got.Manifest.Participants[0].Kind) != string(roomtest.ParticipantKindHuman) || string(got.Manifest.Participants[1].Kind) != string(roomtest.ParticipantKindAgent) {
 		t.Fatalf("manifest participants = %+v, want human then agent", got.Manifest.Participants)
 	}
 	if got.Manifest.Participants[0].InputDevice != registry.input.ID || got.Manifest.Participants[0].OutputDevice != registry.output.ID {

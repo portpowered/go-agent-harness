@@ -10,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 // Fixture values shared by the direct invoke and cancel command tests.
@@ -352,8 +353,8 @@ func TestWebMCPDirectPreservesExternallyOwnedTarget(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	_, target, candidate, tool := directFixture()
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(candidate,
+		webmcptest.NewTargetConfig(target, webmcptest.WithInitialCatalog(tool)),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
@@ -365,10 +366,10 @@ func TestWebMCPDirectPreservesExternallyOwnedTarget(t *testing.T) {
 		t.Fatalf("select through real broker: %v\nstdout=%s", result.err, result.stdout)
 	}
 	ops := runtime.Operations()
-	if !hasTestkitOperation(ops, testkit.OperationDetach) {
+	if !hasTestkitOperation(ops, webmcptest.OperationDetach) {
 		t.Fatalf("external target was not detached: %+v", ops)
 	}
-	if hasTestkitOperation(ops, testkit.OperationCloseTarget) {
+	if hasTestkitOperation(ops, hermetic.OperationCloseTarget) {
 		t.Fatalf("external target was closed: %+v", ops)
 	}
 }
@@ -376,11 +377,11 @@ func TestWebMCPDirectPreservesExternallyOwnedTarget(t *testing.T) {
 func TestWebMCPDirectActivateClassifiesLiveOperationFailure(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	_, target, candidate, _ := directFixture()
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(webmcptest.BrowserConfig{
 		Candidate:     candidate,
 		ActivateError: errors.New("foreground activation rejected by headless Chrome"),
-		Targets: []testkit.TargetConfig{
-			testkit.NewTargetConfig(target),
+		Targets: []webmcptest.TargetConfig{
+			webmcptest.NewTargetConfig(target),
 		},
 	})
 	browser := webmcp.NewBroker(webmcp.BrokerOptions{
@@ -403,7 +404,7 @@ func TestWebMCPDirectActivateClassifiesLiveOperationFailure(t *testing.T) {
 		t.Fatalf("live activation failure requested reconnect: %#v", envelope.Error.Details)
 	}
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationAttach || operation.Kind == testkit.OperationEnableWebMCP || operation.Kind == testkit.OperationEnableAcknowledged {
+		if operation.Kind == webmcptest.OperationAttach || operation.Kind == hermetic.OperationEnableWebMCP || operation.Kind == webmcptest.OperationEnableAcknowledged {
 			t.Fatalf("activation-only command initialized WebMCP: %#v", runtime.Operations())
 		}
 	}

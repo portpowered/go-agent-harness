@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	directops "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestProductionWebMCPDirectCommandsRehydrateSelectionAndOperateLiveBroker(t *testing.T) {
@@ -165,22 +166,22 @@ func productionSetStateTool(origin string) webmcp.ToolDescriptor {
 
 // assertLiveBrokerOperations requires balanced attach/detach and handle
 // cleanup, no closed external target, and the exact invocation on the target.
-func assertLiveBrokerOperations(t *testing.T, operations []testkit.Operation, target webmcp.Target, tool webmcp.ToolDescriptor) {
+func assertLiveBrokerOperations(t *testing.T, operations []webmcptest.Operation, target webmcp.Target, tool webmcp.ToolDescriptor) {
 	t.Helper()
-	attachCount := countProductionRuntimeOperations(operations, testkit.OperationAttach)
-	detachCount := countProductionRuntimeOperations(operations, testkit.OperationDetach)
+	attachCount := countProductionRuntimeOperations(operations, webmcptest.OperationAttach)
+	detachCount := countProductionRuntimeOperations(operations, webmcptest.OperationDetach)
 	if attachCount == 0 || detachCount != attachCount {
 		t.Fatalf("external attach/detach counts = %d/%d; operations=%+v", attachCount, detachCount, operations)
 	}
-	if hasTestkitOperation(operations, testkit.OperationCloseTarget) {
+	if hasTestkitOperation(operations, hermetic.OperationCloseTarget) {
 		t.Fatalf("production direct commands closed an externally owned target: %+v", operations)
 	}
-	if openCount := countProductionRuntimeOperations(operations, testkit.OperationOpen); openCount != countProductionRuntimeOperations(operations, testkit.OperationCloseHandle) {
-		t.Fatalf("browser handle cleanup count = %d opens/%d closes; operations=%+v", openCount, countProductionRuntimeOperations(operations, testkit.OperationCloseHandle), operations)
+	if openCount := countProductionRuntimeOperations(operations, webmcptest.OperationOpen); openCount != countProductionRuntimeOperations(operations, webmcptest.OperationCloseHandle) {
+		t.Fatalf("browser handle cleanup count = %d opens/%d closes; operations=%+v", openCount, countProductionRuntimeOperations(operations, webmcptest.OperationCloseHandle), operations)
 	}
 	foundInvocation := false
 	for _, operation := range operations {
-		if operation.Kind != testkit.OperationInvoke {
+		if operation.Kind != webmcptest.OperationInvoke {
 			continue
 		}
 		foundInvocation = true
@@ -227,8 +228,8 @@ type reopeningProductionRuntime struct {
 	tool      webmcp.ToolDescriptor
 	output    json.RawMessage
 
-	children []*testkit.ScriptedBrowserRuntime
-	sessions []*testkit.ScriptedTargetSession
+	children []*webmcptest.ScriptedBrowserRuntime
+	sessions []*webmcptest.ScriptedTargetSession
 }
 
 func newReopeningProductionRuntime(candidate webmcp.BrowserCandidate, target webmcp.Target, tool webmcp.ToolDescriptor, output json.RawMessage) *reopeningProductionRuntime {
@@ -244,7 +245,7 @@ func (r *reopeningProductionRuntime) Open(ctx context.Context, candidate webmcp.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	child := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(r.candidate, testkit.NewTargetConfig(r.target, testkit.WithInitialCatalog(r.tool), testkit.WithAutoResponse(r.output))))
+	child := webmcptest.NewScriptedBrowserRuntime(webmcptest.NewBrowserConfig(r.candidate, webmcptest.NewTargetConfig(r.target, webmcptest.WithInitialCatalog(r.tool), webmcptest.WithAutoResponse(r.output))))
 	handle, err := child.Open(ctx, candidate)
 	if err != nil {
 		return nil, err
@@ -255,17 +256,17 @@ func (r *reopeningProductionRuntime) Open(ctx context.Context, candidate webmcp.
 	return &reopeningProductionHandle{owner: r, delegate: handle}, nil
 }
 
-func (r *reopeningProductionRuntime) recordSession(session *testkit.ScriptedTargetSession) {
+func (r *reopeningProductionRuntime) recordSession(session *webmcptest.ScriptedTargetSession) {
 	r.mu.Lock()
 	r.sessions = append(r.sessions, session)
 	r.mu.Unlock()
 }
 
-func (r *reopeningProductionRuntime) operations() []testkit.Operation {
+func (r *reopeningProductionRuntime) operations() []webmcptest.Operation {
 	r.mu.Lock()
-	children := append([]*testkit.ScriptedBrowserRuntime(nil), r.children...)
+	children := append([]*webmcptest.ScriptedBrowserRuntime(nil), r.children...)
 	r.mu.Unlock()
-	var operations []testkit.Operation
+	var operations []webmcptest.Operation
 	for _, child := range children {
 		operations = append(operations, child.Operations()...)
 	}
@@ -294,7 +295,7 @@ func (h *reopeningProductionHandle) Attach(ctx context.Context, targetID webmcp.
 	if err != nil {
 		return nil, err
 	}
-	if scripted, ok := session.(*testkit.ScriptedTargetSession); ok {
+	if scripted, ok := session.(*webmcptest.ScriptedTargetSession); ok {
 		h.owner.recordSession(scripted)
 	}
 	return session, nil
@@ -302,7 +303,7 @@ func (h *reopeningProductionHandle) Attach(ctx context.Context, targetID webmcp.
 
 func (h *reopeningProductionHandle) Close() error { return h.delegate.Close() }
 
-func countProductionRuntimeOperations(operations []testkit.Operation, want testkit.OperationKind) int {
+func countProductionRuntimeOperations(operations []webmcptest.Operation, want webmcptest.OperationKind) int {
 	count := 0
 	for _, operation := range operations {
 		if operation.Kind == want {

@@ -15,8 +15,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -106,7 +107,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 // assertWebMCPDeviceLoopEvidence requires audible assistant playback on the
 // speaker, exactly one cube page invocation, and both capture and render
 // device evidence.
-func assertWebMCPDeviceLoopEvidence(t *testing.T, registry *devicegw.VirtualRegistry, page *testkit.ScriptedTargetSession) {
+func assertWebMCPDeviceLoopEvidence(t *testing.T, registry *devicegw.VirtualRegistry, page *webmcptest.ScriptedTargetSession) {
 	t.Helper()
 	var played []int16
 	for _, observation := range registry.PCMObservations() {
@@ -179,23 +180,23 @@ func (d webMCPDeviceDiscoverer) Discover(ctx context.Context, _ webmcp.DiscoverO
 	return []webmcp.BrowserCandidate{d.candidate}, nil
 }
 
-func newWebMCPCubeBroker(t *testing.T) (*webmcp.StatefulBroker, *testkit.ScriptedTargetSession) {
+func newWebMCPCubeBroker(t *testing.T) (*webmcp.StatefulBroker, *webmcptest.ScriptedTargetSession) {
 	t.Helper()
 	candidate := webmcp.BrowserCandidate{ID: "device-browser", Product: "fixture", Loopback: true}
 	target := webmcp.Target{BrowserID: candidate.ID, ID: "cube-tab", Type: "page", Title: "Cubecade", URL: "https://cube.test/", Origin: "https://cube.test"}
 	write := false
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(testkit.RuntimeOptions{IDs: testkit.NewDeterministicIDs()}, testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(webmcptest.RuntimeOptions{IDs: hermetic.NewDeterministicIDs()}, webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(target,
-			testkit.WithInitialCatalog(webmcp.ToolDescriptor{
+		Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target,
+			webmcptest.WithInitialCatalog(webmcp.ToolDescriptor{
 				Name: "queue_cube_moves", Description: "Queue Rubik's cube moves.", FrameID: "cube-frame",
 				InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
 				Annotations: webmcp.ToolAnnotations{ReadOnly: &write},
 			}),
-			testkit.WithAutoResponse(json.RawMessage(`{"ok":true,"queued":["R","U"]}`)),
+			webmcptest.WithAutoResponse(json.RawMessage(`{"ok":true,"queued":["R","U"]}`)),
 		)},
 	})
-	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: webMCPDeviceDiscoverer{candidate}, IDs: testkit.NewDeterministicIDs()})
+	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: webMCPDeviceDiscoverer{candidate}, IDs: hermetic.NewDeterministicIDs()})
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +204,7 @@ func newWebMCPCubeBroker(t *testing.T) (*webmcp.StatefulBroker, *testkit.Scripte
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := mustAs[*testkit.ScriptedBrowserHandle](t, handle).TargetSession(target.ID)
+	page := mustAs[*webmcptest.ScriptedBrowserHandle](t, handle).TargetSession(target.ID)
 	if page == nil {
 		t.Fatal("cube target session is nil")
 	}

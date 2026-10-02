@@ -18,8 +18,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -154,7 +155,7 @@ func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduled
 func releaseSessionAudioInterruptInvocations(
 	t *testing.T,
 	scenario sessionAudioInterruptScenario,
-	targetSession *testkit.ScriptedTargetSession,
+	targetSession *webmcptest.ScriptedTargetSession,
 	wire *sessionAudioInterruptWire,
 	dispatches <-chan webmcp.BrokerEvent,
 	result chan<- error,
@@ -166,7 +167,7 @@ func releaseSessionAudioInterruptInvocations(
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	var record testkit.InvocationRecord
+	var record webmcptest.InvocationRecord
 	for {
 		nextRecord, err := targetSession.WaitForInvocation(ctx)
 		if err != nil {
@@ -213,10 +214,10 @@ func releaseSessionAudioInterruptInvocations(
 	result <- targetSession.ReleaseInvocation(record.ID, json.RawMessage(`{"state":"queued"}`))
 }
 
-func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *testkit.ScriptedTargetSession, map[string]webmcp.ToolRef) {
+func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *webmcptest.ScriptedTargetSession, map[string]webmcp.ToolRef) {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	// Broker events and provider writes share wall time; browser simulation uses
 	// its own clock. Compare producer timestamps, not observer scheduling.
 	brokerClock := sessionAudioInterruptRealClock{}
@@ -231,13 +232,13 @@ func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *tes
 	}
 	readOnly := true
 	writeTool := false
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				target,
-				testkit.WithInitialCatalog(
+				webmcptest.WithInitialCatalog(
 					webmcp.ToolDescriptor{
 						Name:        sessionAudioInterruptReadTool,
 						Description: "Read the deterministic cube state.",

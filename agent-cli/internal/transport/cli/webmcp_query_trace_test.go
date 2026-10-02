@@ -10,9 +10,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	directops "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -49,7 +50,7 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 		t.Fatalf("direct result = %+v / %+v, want fresh completed payload", directResult, directData)
 	}
 	trace.assertSelectionUnchanged(t)
-	directOperation, ok := firstQueryTraceOperation(trace.runtime.Operations(), testkit.OperationInvoke, directResult.BrowserInvocationID)
+	directOperation, ok := firstQueryTraceOperation(trace.runtime.Operations(), webmcptest.OperationInvoke, directResult.BrowserInvocationID)
 	if !ok {
 		t.Fatalf("runtime operations after direct call = %#v, want direct invoke", trace.runtime.Operations())
 	}
@@ -69,9 +70,9 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 // queryTraceFixture is one selected Margin page with a resolved read-only
 // list_documents tool, published through the first-class page tool set.
 type queryTraceFixture struct {
-	runtime   *testkit.ScriptedBrowserRuntime
+	runtime   *webmcptest.ScriptedBrowserRuntime
 	broker    webmcp.Broker
-	session   *testkit.ScriptedTargetSession
+	session   *webmcptest.ScriptedTargetSession
 	selected  webmcp.PageContext
 	resolved  webmcp.ToolDescriptor
 	pageTools *webmcpTools.BrokerToolSet
@@ -86,8 +87,8 @@ type queryTraceLiveData struct {
 
 func newQueryTraceFixture(t *testing.T) *queryTraceFixture {
 	t.Helper()
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDSource("query-trace")
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDSource("query-trace")
 	candidate := webmcp.BrowserCandidate{ID: "browser-margin", Product: "fixture", Loopback: true}
 	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-margin", Type: "page", Title: "Margin", URL: "https://margin.fixture/", Origin: "https://margin.fixture"}
 	readOnly := true
@@ -100,11 +101,11 @@ func newQueryTraceFixture(t *testing.T) *queryTraceFixture {
 		Origin:      target.Origin,
 	}
 	f := &queryTraceFixture{}
-	f.runtime = testkit.NewScriptedBrowserRuntimeWithOptions(testkit.RuntimeOptions{Clock: clock, IDs: ids}, testkit.BrowserConfig{
+	f.runtime = webmcptest.NewScriptedBrowserRuntimeWithOptions(webmcptest.RuntimeOptions{Clock: clock, IDs: ids}, webmcptest.BrowserConfig{
 		Candidate: candidate,
-		Targets: []testkit.TargetConfig{testkit.NewTargetConfig(target,
-			testkit.WithContext(webmcp.PageContext{Generation: 1, CatalogReady: true, CatalogEvidence: "scripted_fixture"}),
-			testkit.WithInitialCatalog(tool),
+		Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(target,
+			webmcptest.WithContext(webmcp.PageContext{Generation: 1, CatalogReady: true, CatalogEvidence: "scripted_fixture"}),
+			webmcptest.WithInitialCatalog(tool),
 		)},
 	})
 	f.broker = webmcp.NewBroker(webmcp.BrokerOptions{Runtime: f.runtime, IDs: ids, Clock: clock, ToolRefFactory: webmcp.StableToolRef})
@@ -176,7 +177,7 @@ func (f *queryTraceFixture) executeLiveQuery(t *testing.T) webmcp.ToolResultEnve
 func (f *queryTraceFixture) assertLiveDispatch(t *testing.T, staleID webmcp.InvocationID) {
 	t.Helper()
 	operations := f.runtime.Operations()
-	liveOperation, ok := firstQueryTraceOperation(operations, testkit.OperationInvoke, staleID)
+	liveOperation, ok := firstQueryTraceOperation(operations, webmcptest.OperationInvoke, staleID)
 	if !ok {
 		t.Fatalf("runtime operations = %#v, want live invoke for %q", operations, staleID)
 	}
@@ -283,7 +284,7 @@ func (f *queryTraceFixture) assertSelectionUnchanged(t *testing.T) {
 
 // assertQueryTraceEventOrder requires the stale terminal to precede the live
 // invocation event, and the direct terminal to follow its own invocation.
-func assertQueryTraceEventOrder(t *testing.T, events []testkit.PublishedEvent, staleID, directID webmcp.InvocationID, generation uint64) {
+func assertQueryTraceEventOrder(t *testing.T, events []webmcptest.PublishedEvent, staleID, directID webmcp.InvocationID, generation uint64) {
 	t.Helper()
 	find := func(eventType webmcp.BrowserEventType, id webmcp.InvocationID, label string) webmcp.BrowserEvent {
 		event, ok := firstQueryTracePublishedEvent(events, eventType, id)
@@ -325,16 +326,16 @@ func marshalQueryTraceValue(value any) string {
 	return string(encoded)
 }
 
-func firstQueryTraceOperation(operations []testkit.Operation, kind testkit.OperationKind, id webmcp.InvocationID) (testkit.Operation, bool) {
+func firstQueryTraceOperation(operations []webmcptest.Operation, kind webmcptest.OperationKind, id webmcp.InvocationID) (webmcptest.Operation, bool) {
 	for _, operation := range operations {
 		if operation.Kind == kind && operation.InvocationID == id {
 			return operation, true
 		}
 	}
-	return testkit.Operation{}, false
+	return webmcptest.Operation{}, false
 }
 
-func firstQueryTracePublishedEvent(events []testkit.PublishedEvent, eventType webmcp.BrowserEventType, id webmcp.InvocationID) (webmcp.BrowserEvent, bool) {
+func firstQueryTracePublishedEvent(events []webmcptest.PublishedEvent, eventType webmcp.BrowserEventType, id webmcp.InvocationID) (webmcp.BrowserEvent, bool) {
 	for _, published := range events {
 		if published.Event.Type == eventType && published.Event.InvocationID == id {
 			return published.Event, true

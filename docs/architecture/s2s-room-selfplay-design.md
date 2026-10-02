@@ -334,7 +334,7 @@ by design (confirmed by reading it directly, not inferring from doc comments).
 implementation does not exist anywhere in this repo today. Grepped every
 `.go` file for something satisfying the interface: the only implementations
 are `LoopbackEndpoint` (signaling_loopback.go) and test doubles in
-`session_runtime_rtc_test.go`/`agent-cli/internal/probe/fault/rtc_test.go`.
+`session_runtime_rtc_test.go`/`agent-cli/internal/probe/faulttest/rtc_test.go`.
 `SessionRTCSignalingResolver`/`ResolveSignaling` is wired into the production
 `wire`/`cli` graph through `provideSessionRTCRuntimeFactory` and the default
 `SessionRTCComponents`. That default resolver currently supports only the

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 type replacementDiscoverer struct {
@@ -29,7 +29,7 @@ func (d *replacementDiscoverer) Replace(candidate webmcp.BrowserCandidate) {
 	d.mu.Unlock()
 }
 
-func countRuntimeOperationsAfter(operations []testkit.Operation, after uint64, kind testkit.OperationKind) int {
+func countRuntimeOperationsAfter(operations []webmcptest.Operation, after uint64, kind webmcptest.OperationKind) int {
 	count := 0
 	for _, operation := range operations {
 		if operation.Sequence > after && operation.Kind == kind {
@@ -58,11 +58,11 @@ func TestStatefulBrokerRetiresSameAddressReplacementBeforeExplicitSelection(t *t
 	oldTarget := webmcp.Target{BrowserID: oldCandidate.ID, ID: targetID, Type: "page", Title: "same target", URL: "https://same.test/page", Origin: "https://same.test", Eligible: true}
 	newTarget := oldTarget
 	newTarget.BrowserID = newCandidate.ID
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: oldCandidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(oldTarget, testkit.WithInitialCatalog(pageTool("old_tool", "frame-1", `{}`))),
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(oldTarget, webmcptest.WithInitialCatalog(pageTool("old_tool", "frame-1", `{}`))),
 			},
 		},
 	)
@@ -87,7 +87,7 @@ func TestStatefulBrokerRetiresSameAddressReplacementBeforeExplicitSelection(t *t
 	if oldHandle == nil {
 		t.Fatal("old runtime handle is nil")
 	}
-	if _, err := runtime.ReplaceEndpoint(oldCandidate, newCandidate, testkit.NewTargetConfig(newTarget, testkit.WithInitialCatalog(pageTool("new_tool", "frame-1", `{}`)))); err != nil {
+	if _, err := runtime.ReplaceEndpoint(oldCandidate, newCandidate, webmcptest.NewTargetConfig(newTarget, webmcptest.WithInitialCatalog(pageTool("new_tool", "frame-1", `{}`)))); err != nil {
 		t.Fatalf("replace endpoint after selection: %v", err)
 	}
 	discoverer.Replace(newCandidate)
@@ -109,13 +109,13 @@ func TestStatefulBrokerRetiresSameAddressReplacementBeforeExplicitSelection(t *t
 		_, invokeErr := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: oldRef, Input: json.RawMessage(`{}`)})
 		return invokeErr
 	}, webmcp.ErrorStaleSelection, "old replacement ref")
-	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, testkit.OperationAttach); got != 0 {
+	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, webmcptest.OperationAttach); got != 0 {
 		t.Fatalf("replacement discovery attached a target %d times", got)
 	}
-	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, testkit.OperationActivate); got != 0 {
+	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, webmcptest.OperationActivate); got != 0 {
 		t.Fatalf("replacement discovery activated a target %d times", got)
 	}
-	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, testkit.OperationInvoke); got != 0 {
+	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, webmcptest.OperationInvoke); got != 0 {
 		t.Fatalf("stale replacement path invoked a tool %d times", got)
 	}
 
@@ -129,7 +129,7 @@ func TestStatefulBrokerRetiresSameAddressReplacementBeforeExplicitSelection(t *t
 	if len(newCatalog.Tools) != 1 || newCatalog.Tools[0].Name != "new_tool" || newCatalog.Tools[0].Ref == oldRef {
 		t.Fatalf("replacement catalog = %#v, want fresh new tool/ref", newCatalog.Tools)
 	}
-	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, testkit.OperationAttach); got != 1 {
+	if got := countRuntimeOperationsAfter(runtime.Operations(), operationCursor, webmcptest.OperationAttach); got != 1 {
 		t.Fatalf("explicit replacement attach count = %d, want one after discovery", got)
 	}
 }

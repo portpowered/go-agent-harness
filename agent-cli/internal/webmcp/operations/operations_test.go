@@ -13,7 +13,7 @@ import (
 
 func TestBrowsersListsRedactedCandidates(t *testing.T) {
 	broker := newFakeBroker()
-	broker.candidates[0].HTTPURL = "http://user:pw@127.0.0.1:9222/json?token=secret"
+	broker.Candidates[0].HTTPURL = "http://user:pw@127.0.0.1:9222/json?token=secret"
 	data, err := Browsers(context.Background(), broker, config.BrowserConfig{}, "")
 	if err != nil || len(data.Browsers) != 1 {
 		t.Fatalf("Browsers = %+v, %v", data, err)
@@ -31,8 +31,8 @@ func TestTabsFiltersSortsAndMarksSelection(t *testing.T) {
 	broker := newFakeBroker()
 	ineligible := pageTarget("target-0", testOtherSite)
 	ineligible.Eligible = false
-	broker.targets = []webmcp.Target{pageTarget(testSecondID, testOrigin), ineligible, pageTarget(testTargetID, testOrigin), {ID: "worker", Type: "service_worker"}}
-	broker.selected = webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}, Connected: true, Generation: testGeneration}
+	broker.Targets = []webmcp.Target{pageTarget(testSecondID, testOrigin), ineligible, pageTarget(testTargetID, testOrigin), {ID: "worker", Type: "service_worker"}}
+	broker.Page = webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}, Connected: true, Generation: testGeneration}
 	data, err := Tabs(context.Background(), broker, config.BrowserConfig{}, TabFilter{})
 	if err != nil || len(data.Tabs) != 3 || data.Tabs[0].TargetID != "target-0" || data.Tabs[1].TargetID != testTargetID {
 		t.Fatalf("Tabs = %+v, %v, want sorted page targets only", data, err)
@@ -45,7 +45,7 @@ func TestTabsFiltersSortsAndMarksSelection(t *testing.T) {
 	if err != nil || len(filtered.Tabs) != 2 {
 		t.Fatalf("filtered Tabs = %+v, %v", filtered, err)
 	}
-	broker.listTargetsErr = errTestBroker
+	broker.ListTargetsErr = errTestBroker
 	if _, err := Tabs(context.Background(), broker, config.BrowserConfig{}, TabFilter{}); !errors.Is(err, errTestBroker) {
 		t.Fatalf("target list failure = %v", err)
 	}
@@ -54,7 +54,7 @@ func TestTabsFiltersSortsAndMarksSelection(t *testing.T) {
 func TestToolsListsSortedCatalogWithValidSchemas(t *testing.T) {
 	broker := newFakeBroker()
 	readOnly := true
-	broker.tools = []webmcp.ToolDescriptor{
+	broker.Catalog.Tools = []webmcp.ToolDescriptor{
 		{Ref: "webmcp.tool-ref.v1:b", Name: "b", FrameID: "main", InputSchema: []byte(`{broken`), Annotations: webmcp.ToolAnnotations{ReadOnly: &readOnly, UntrustedContent: &readOnly, AutoSubmit: &readOnly}},
 		{Ref: "webmcp.tool-ref.v1:a", Name: "a", FrameID: "main", InputSchema: []byte(`{"type":"object"}`)},
 	}
@@ -69,7 +69,7 @@ func TestToolsListsSortedCatalogWithValidSchemas(t *testing.T) {
 	if err != nil || withoutSchemas.Tools[0].InputSchema != nil {
 		t.Fatalf("Tools without schemas = %+v, %v", withoutSchemas, err)
 	}
-	broker.listToolsErr = errTestBroker
+	broker.ListToolsErr = errTestBroker
 	if _, err := Tools(context.Background(), broker, singleSelector(), ToolQuery{}); !errors.Is(err, errTestBroker) {
 		t.Fatalf("catalog failure = %v", err)
 	}
@@ -82,7 +82,7 @@ func TestDescribeContextRedactsURLAndPrefersCatalogContext(t *testing.T) {
 		t.Fatalf("DescribeContext = %+v, %v", data, err)
 	}
 	broker.refreshed = webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testSecondID}, URL: "https://user:pw@app.example/p?q=1#f"}
-	broker.catalogContext = webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}, Origin: testOrigin, Ready: true, Connected: true}
+	broker.Catalog.Context = webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}, Origin: testOrigin, Ready: true, Connected: true}
 	data, err = DescribeContext(context.Background(), broker, singleSelector(), true)
 	if err != nil || data.TargetID != testTargetID || !data.CatalogReady || data.Origin != testOrigin {
 		t.Fatalf("refreshed DescribeContext = %+v, %v", data, err)
@@ -145,7 +145,7 @@ func TestActivateUsesActivatorThenSelectionOptions(t *testing.T) {
 	if err != nil || len(activator.activated) != 1 || data.TargetID != testTargetID || data.URL != testOrigin+"/path" {
 		t.Fatalf("Activate = %+v, %v", data, err)
 	}
-	activator.selectErr = errTestBroker
+	activator.SelectErr = errTestBroker
 	if _, err := Activate(context.Background(), activator, singleSelector()); !errors.Is(err, errTestBroker) {
 		t.Fatalf("activation failure = %v", err)
 	}
@@ -170,8 +170,8 @@ func TestCancelRequiresExactTargetAndConfirmsTerminal(t *testing.T) {
 	}
 	plain := newFakeBroker()
 	request.Selector = Selector{Browser: config.BrowserConfig{Selection: config.BrowserSelectionConfig{Tab: testTargetID}}}
-	if _, err := Cancel(context.Background(), plain, request); err != nil || len(plain.cancels) != 1 {
-		t.Fatalf("broker Cancel = %v, %+v", err, plain.cancels)
+	if _, err := Cancel(context.Background(), plain, request); err != nil || len(plain.Cancels) != 1 {
+		t.Fatalf("broker Cancel = %v, %+v", err, plain.Cancels)
 	}
 	request.Selector = singleSelector()
 	if _, err := Cancel(context.Background(), plain, request); err == nil {
@@ -190,7 +190,7 @@ func TestCancelValidatesInvocationID(t *testing.T) {
 		}
 	}
 	broker := newFakeBroker()
-	broker.cancelErr = errTestBroker
+	broker.CancelErr = errTestBroker
 	request := CancelRequest{InvocationID: "inv-1", Selector: Selector{Browser: config.BrowserConfig{Selection: config.BrowserSelectionConfig{Tab: testTargetID}}}}
 	if _, err := Cancel(context.Background(), broker, request); !errors.Is(err, errTestBroker) {
 		t.Fatalf("browser rejection = %v", err)
@@ -228,13 +228,13 @@ func TestRunWatchStreamReportsTerminalStatus(t *testing.T) {
 
 func TestWatchSubscribesBeforeSelection(t *testing.T) {
 	broker := newFakeBroker()
-	broker.events = make(chan webmcp.BrokerEvent, 1)
-	broker.events <- webmcp.BrokerEvent{Type: webmcp.BrokerEventSelected, BrowserID: testBrowserID}
+	broker.Events = make(chan webmcp.BrokerEvent, 1)
+	broker.Events <- webmcp.BrokerEvent{Type: webmcp.BrokerEventSelected, BrowserID: testBrowserID}
 	data, err := Watch(context.Background(), broker, WatchRequest{Selector: singleSelector(), Timeout: time.Minute, Once: true})
 	if err != nil || data.Status != WatchStatusOnce || data.Events[0].BrowserID != testBrowserID {
 		t.Fatalf("Watch = %+v, %v", data, err)
 	}
-	broker.discoverErr = errTestBroker
+	broker.DiscoverErr = errTestBroker
 	if _, err := Watch(context.Background(), broker, WatchRequest{Selector: singleSelector()}); !errors.Is(err, errTestBroker) {
 		t.Fatalf("selection failure = %v", err)
 	}

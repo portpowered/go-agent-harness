@@ -27,7 +27,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/spf13/cobra"
 )
 
@@ -148,7 +148,7 @@ func randomizedWebMCPInstanceID(t *testing.T) string {
 	return "incarnation-" + hex.EncodeToString(value)
 }
 
-func countTestkitOperations(operations []testkit.Operation, kind testkit.OperationKind) int {
+func countTestkitOperations(operations []webmcptest.Operation, kind webmcptest.OperationKind) int {
 	count := 0
 	for _, operation := range operations {
 		if operation.Kind == kind {

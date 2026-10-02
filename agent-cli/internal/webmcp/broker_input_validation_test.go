@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerValidatesNestedPageInputWithoutChangingNumberTokens(t *testing.T) {
@@ -57,9 +57,9 @@ func TestStatefulBrokerValidatesNestedPageInputWithoutChangingNumberTokens(t *te
 		t.Fatalf("invoke result = %#v, want dispatched invocation", result)
 	}
 
-	var invokes []testkit.Operation
+	var invokes []webmcptest.Operation
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == testkit.OperationInvoke {
+		if operation.Kind == webmcptest.OperationInvoke {
 			invokes = append(invokes, operation)
 		}
 	}
@@ -199,16 +199,16 @@ func TestStatefulBrokerBoundsInvalidUTF8AndOversizedPageInputBeforeDispatch(t *t
 	}
 }
 
-func newInputValidationBroker(t *testing.T, schema string, maxInputBytes int) (*webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime) {
+func newInputValidationBroker(t *testing.T, schema string, maxInputBytes int) (*webmcp.StatefulBroker, *webmcptest.ScriptedBrowserRuntime) {
 	t.Helper()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntime(
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntime(
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Title: "Fixture", URL: "https://fixture.test/"},
-					testkit.WithInitialCatalog(pageTool("write_state", "frame-1", schema)),
+					webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", schema)),
 				),
 			},
 		},

@@ -158,6 +158,20 @@ const (
 	ScenarioV2ExpectationApprovalNotRequested            ScenarioV2ExpectationType = "approval_not_requested"
 	ScenarioV2ExpectationStaleToolRejected               ScenarioV2ExpectationType = "stale_tool_rejected"
 	ScenarioV2ExpectationBrowserConnectionClosed         ScenarioV2ExpectationType = "browser_connection_closed"
+
+	// Provider-runner expectations measure the provider session alone. They
+	// are valid only in a provider-only document (see ScenarioV2.ProviderOnly)
+	// and compile onto the runner's measurable expectations.
+	ScenarioV2ExpectationFrameCount           ScenarioV2ExpectationType = "frame_count"
+	ScenarioV2ExpectationTerminalReason       ScenarioV2ExpectationType = "terminal_reason"
+	ScenarioV2ExpectationTerminalProvenance   ScenarioV2ExpectationType = "terminal_provenance"
+	ScenarioV2ExpectationOutputState          ScenarioV2ExpectationType = "output_state"
+	ScenarioV2ExpectationBufferDisposition    ScenarioV2ExpectationType = "buffer_disposition"
+	ScenarioV2ExpectationAudioEnergy          ScenarioV2ExpectationType = "audio_energy"
+	ScenarioV2ExpectationToolCalled           ScenarioV2ExpectationType = "tool_called"
+	ScenarioV2ExpectationToolResultDelivered  ScenarioV2ExpectationType = "tool_result_delivered"
+	ScenarioV2ExpectationToolResultDiscarded  ScenarioV2ExpectationType = "tool_result_discarded"
+	ScenarioV2ExpectationNoOrphanedToolResult ScenarioV2ExpectationType = "no_orphaned_tool_result"
 )
 
 // V2ExpectationType is a shorter alias for ScenarioV2ExpectationType.
@@ -277,6 +291,7 @@ type ScenarioV2Expectation struct {
 	Operations    []string        `json:"operations,omitempty"`
 	Methods       []string        `json:"methods,omitempty"`
 	Equals        int64           `json:"equals,omitempty"`
+	ToolCallID    string          `json:"tool_call_id,omitempty"`
 	HasGeneration bool            `json:"-"`
 	HasEquals     bool            `json:"-"`
 }
@@ -371,6 +386,17 @@ func scenarioV2ExpectationFields() map[ScenarioV2ExpectationType]map[string]stru
 		ScenarioV2ExpectationApprovalNotRequested:    {"tool_ref": {}},
 		ScenarioV2ExpectationStaleToolRejected:       {"tool_ref": {}},
 		ScenarioV2ExpectationBrowserConnectionClosed: {},
+
+		ScenarioV2ExpectationFrameCount:           {"equals": {}},
+		ScenarioV2ExpectationTerminalReason:       {"value": {}},
+		ScenarioV2ExpectationTerminalProvenance:   {"value": {}},
+		ScenarioV2ExpectationOutputState:          {"value": {}},
+		ScenarioV2ExpectationBufferDisposition:    {"value": {}},
+		ScenarioV2ExpectationAudioEnergy:          {},
+		ScenarioV2ExpectationToolCalled:           {"name": {}},
+		ScenarioV2ExpectationToolResultDelivered:  {"tool_call_id": {}},
+		ScenarioV2ExpectationToolResultDiscarded:  {"tool_call_id": {}},
+		ScenarioV2ExpectationNoOrphanedToolResult: {},
 	}
 }
 

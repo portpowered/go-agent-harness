@@ -9,7 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 )
@@ -181,15 +181,15 @@ func TestRealExecutorWithoutFactoryIsUnavailable(t *testing.T) {
 
 func testRealFactory(t *testing.T, pageState json.RawMessage) (RealRuntimeFactory, *int, *int) {
 	t.Helper()
-	script := testkit.BrowserScript{
-		Version: testkit.BrowserScriptVersion,
-		Endpoint: testkit.BrowserEndpoint{
-			Version: testkit.EndpointVersionInfo{
+	script := hermetic.BrowserScript{
+		Version: hermetic.BrowserScriptVersion,
+		Endpoint: hermetic.BrowserEndpoint{
+			Version: hermetic.EndpointVersionInfo{
 				Browser:              "Chrome/Injected",
 				ProtocolVersion:      "1.3",
 				WebSocketDebuggerURL: "ws://injected/browser",
 			},
-			Targets: []testkit.BrowserTarget{{
+			Targets: []hermetic.BrowserTarget{{
 				ID:                   "tab-1",
 				Type:                 "page",
 				Title:                "Injected browser",
@@ -197,11 +197,11 @@ func testRealFactory(t *testing.T, pageState json.RawMessage) (RealRuntimeFactor
 				WebSocketDebuggerURL: "ws://injected/page/tab-1",
 			}},
 		},
-		Operations: []testkit.BrowserScriptOperation{
-			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
-			{Expect: testkit.OperationExpectation{Type: testkit.OperationEnableWebMCP}, Result: json.RawMessage(`{}`), Emit: []testkit.EmittedEvent{{
-				Type: testkit.EmittedToolsAdded,
-				Tools: []testkit.ToolDescriptor{{
+		Operations: []hermetic.BrowserScriptOperation{
+			{Expect: hermetic.OperationExpectation{Type: hermetic.OperationEnableLifecycle}, Result: json.RawMessage(`{}`)},
+			{Expect: hermetic.OperationExpectation{Type: hermetic.OperationEnableWebMCP}, Result: json.RawMessage(`{}`), Emit: []hermetic.EmittedEvent{{
+				Type: hermetic.EmittedToolsAdded,
+				Tools: []hermetic.ToolDescriptor{{
 					Name:        readStateTool,
 					Description: "Read injected state",
 					FrameID:     "frame-1",
@@ -210,20 +210,20 @@ func testRealFactory(t *testing.T, pageState json.RawMessage) (RealRuntimeFactor
 			}}},
 		},
 	}
-	runtime, err := testkit.NewBrowserScriptRuntime(script)
+	runtime, err := hermetic.NewBrowserScriptRuntime(script)
 	if err != nil {
 		t.Fatalf("construct injected browser runtime: %v", err)
 	}
-	adapter, err := testkit.NewBrowserScriptAdapter(script, runtime)
+	adapter, err := hermetic.NewBrowserScriptAdapter(script, runtime)
 	if err != nil {
 		t.Fatalf("construct injected browser adapter: %v", err)
 	}
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:        adapter,
 		Discoverer:     adapter,
-		IDs:            testkit.NewDeterministicIDs(),
-		Clock:          testkit.NewFakeClock(0),
-		Timers:         testkit.NewFakeClock(0),
+		IDs:            hermetic.NewDeterministicIDs(),
+		Clock:          hermetic.NewFakeClock(0),
+		Timers:         hermetic.NewFakeClock(0),
 		Ownership:      webmcp.TargetOwnershipHarnessOwned,
 		ToolRefFactory: webmcp.StableToolRef,
 	})

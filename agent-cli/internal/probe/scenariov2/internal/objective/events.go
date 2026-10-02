@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 )
 
 // Payload field names read from persisted browser events.
@@ -83,7 +83,7 @@ type ObservedOperation struct {
 
 // eventContext is one decoded event handed to an event handler.
 type eventContext struct {
-	event     testkit.Event
+	event     hermetic.Event
 	fields    map[string]json.RawMessage
 	hasFields bool
 	position  int
@@ -92,7 +92,7 @@ type eventContext struct {
 type eventHandler func(*BrowserEvidence, eventContext)
 
 // Index rebuilds browser evidence from a validated persisted event stream.
-func Index(events []testkit.Event) BrowserEvidence {
+func Index(events []hermetic.Event) BrowserEvidence {
 	evidence := BrowserEvidence{
 		targets:        make(map[string]persistedTarget),
 		catalog:        make(map[string]persistedTool),
@@ -120,27 +120,27 @@ func Index(events []testkit.Event) BrowserEvidence {
 	return evidence
 }
 
-func eventHandlers() map[testkit.EventType]eventHandler {
-	return map[testkit.EventType]eventHandler{
-		testkit.EventBrowserDiscoveryStarted:      operationHandler("connect"),
-		testkit.EventBrowserDiscoveryCompleted:    (*BrowserEvidence).onDiscoveryCompleted,
-		testkit.EventBrowserTargetsSnapshot:       (*BrowserEvidence).onTargetsSnapshot,
-		testkit.EventBrowserTargetSelected:        (*BrowserEvidence).onTargetSelected,
-		testkit.EventBrowserCatalogToolAdded:      (*BrowserEvidence).onCatalogToolAdded,
-		testkit.EventBrowserCatalogToolRemoved:    (*BrowserEvidence).onCatalogToolRemoved,
-		testkit.EventBrowserCatalogReady:          (*BrowserEvidence).onCatalogReady,
-		testkit.EventBrowserInvocationCreated:     (*BrowserEvidence).onInvocationCreated,
-		testkit.EventBrowserInvocationDispatched:  (*BrowserEvidence).onInvocationDispatched,
-		testkit.EventBrowserInvocationApproval:    (*BrowserEvidence).onInvocationApproval,
-		testkit.EventBrowserInvocationCompleted:   (*BrowserEvidence).onInvocationCompleted,
-		testkit.EventBrowserInvocationError:       (*BrowserEvidence).onInvocationError,
-		testkit.EventBrowserInvocationCanceled:    (*BrowserEvidence).onInvocationCanceled,
-		testkit.EventBrowserInvocationCancel:      (*BrowserEvidence).onInvocationCancel,
-		testkit.EventBrowserWebMCPEnabled:         methodHandler("WebMCP.enable"),
-		testkit.EventBrowserPageGenerationChanged: operationHandler("navigate"),
-		testkit.EventBrowserChromeTargetAttached:  operationHandler("attach"),
-		testkit.EventBrowserTargetDetached:        operationHandler("detach"),
-		testkit.EventBrowserChromeTargetClosed:    (*BrowserEvidence).onChromeTargetClosed,
+func eventHandlers() map[hermetic.EventType]eventHandler {
+	return map[hermetic.EventType]eventHandler{
+		hermetic.EventBrowserDiscoveryStarted:      operationHandler("connect"),
+		hermetic.EventBrowserDiscoveryCompleted:    (*BrowserEvidence).onDiscoveryCompleted,
+		hermetic.EventBrowserTargetsSnapshot:       (*BrowserEvidence).onTargetsSnapshot,
+		hermetic.EventBrowserTargetSelected:        (*BrowserEvidence).onTargetSelected,
+		hermetic.EventBrowserCatalogToolAdded:      (*BrowserEvidence).onCatalogToolAdded,
+		hermetic.EventBrowserCatalogToolRemoved:    (*BrowserEvidence).onCatalogToolRemoved,
+		hermetic.EventBrowserCatalogReady:          (*BrowserEvidence).onCatalogReady,
+		hermetic.EventBrowserInvocationCreated:     (*BrowserEvidence).onInvocationCreated,
+		hermetic.EventBrowserInvocationDispatched:  (*BrowserEvidence).onInvocationDispatched,
+		hermetic.EventBrowserInvocationApproval:    (*BrowserEvidence).onInvocationApproval,
+		hermetic.EventBrowserInvocationCompleted:   (*BrowserEvidence).onInvocationCompleted,
+		hermetic.EventBrowserInvocationError:       (*BrowserEvidence).onInvocationError,
+		hermetic.EventBrowserInvocationCanceled:    (*BrowserEvidence).onInvocationCanceled,
+		hermetic.EventBrowserInvocationCancel:      (*BrowserEvidence).onInvocationCancel,
+		hermetic.EventBrowserWebMCPEnabled:         methodHandler("WebMCP.enable"),
+		hermetic.EventBrowserPageGenerationChanged: operationHandler("navigate"),
+		hermetic.EventBrowserChromeTargetAttached:  operationHandler("attach"),
+		hermetic.EventBrowserTargetDetached:        operationHandler("detach"),
+		hermetic.EventBrowserChromeTargetClosed:    (*BrowserEvidence).onChromeTargetClosed,
 	}
 }
 
@@ -252,7 +252,7 @@ func appendObserved(operations *[]ObservedOperation, name string, position int) 
 	})
 }
 
-func eventFields(event testkit.Event) (map[string]json.RawMessage, bool) {
+func eventFields(event hermetic.Event) (map[string]json.RawMessage, bool) {
 	if len(event.Payload) == 0 || bytes.TrimSpace(event.Payload)[0] != '{' {
 		return nil, false
 	}

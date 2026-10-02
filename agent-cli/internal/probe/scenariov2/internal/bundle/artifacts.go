@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
@@ -56,7 +56,7 @@ type workspaceSnapshot struct {
 }
 
 func jsonLine(value any) ([]byte, error) {
-	encoded, err := testkit.JSONValue(value)
+	encoded, err := hermetic.JSONValue(value)
 	if err != nil {
 		return nil, err
 	}

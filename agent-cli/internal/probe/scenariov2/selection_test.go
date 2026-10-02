@@ -41,6 +41,17 @@ func TestLoadSelectionsKeepsInvalidDocumentsAndDeduplicates(t *testing.T) {
 		t.Fatalf("broken selection result = %+v", result)
 	}
 
+	providerOnly := writeScenarioFile(t, dir, "provider.json", `{"schema_version":"probe.scenario.v2","id":"provider-plan","steps":[{"type":"send_text","text":"hi"},{"type":"close"}],"expectations":[{"type":"frame_count","equals":2}]}`)
+	mixed, err := LoadSelections([]string{first, providerOnly}, allowAllCorpus{})
+	if err != nil || len(mixed) != 2 || mixed[1].Err == nil ||
+		!strings.Contains(mixed[1].Err.Error(), providerOnly) || !strings.Contains(mixed[1].Err.Error(), "provider-plan") ||
+		!strings.Contains(mixed[1].Err.Error(), "is provider-only") || !strings.Contains(mixed[1].Err.Error(), "run it separately") {
+		t.Fatalf("provider-only entry in a browser run = %+v, %v; want a named provider-only error", mixed, err)
+	}
+	if result := testRunner().Execute(context.Background(), mixed[1], ""); result.Pass || !strings.Contains(result.Error, "is provider-only") {
+		t.Fatalf("provider-only result in a browser run = %+v", result)
+	}
+
 	legacy := writeScenarioFile(t, dir, "legacy.json", `{"id":"legacy"}`)
 	if _, err := LoadSelections([]string{first, legacy}, allowAllCorpus{}); err == nil || !strings.Contains(err.Error(), "cannot mix") {
 		t.Fatalf("mixed selection error = %v", err)
@@ -50,36 +61,6 @@ func TestLoadSelectionsKeepsInvalidDocumentsAndDeduplicates(t *testing.T) {
 	}
 	if _, err := LoadSelections([]string{dir}, allowAllCorpus{}); err == nil || !strings.Contains(err.Error(), "path is a directory") {
 		t.Fatalf("directory selection error = %v", err)
-	}
-}
-
-func TestToLegacyProjectsProviderSteps(t *testing.T) {
-	versioned := probe.ScenarioV2{
-		SchemaVersion: probe.ScenarioV2Version,
-		ID:            "legacy-projection",
-		Steps: []probe.ScenarioV2Step{
-			{Type: probe.ScenarioV2StepSendText, Text: "hello"},
-			{Type: probe.ScenarioV2StepSleepFake, DurationMS: 5},
-			{Type: probe.ScenarioV2StepClose},
-		},
-		Expectations: []probe.ScenarioV2Expectation{{Type: probe.ScenarioV2ExpectationTranscriptContains, Text: "hello"}},
-	}
-	legacy, err := ToLegacy(versioned, allowAllCorpus{})
-	if err != nil {
-		t.Fatalf("project v2 scenario: %v", err)
-	}
-	if len(legacy.Steps) != 3 || legacy.Steps[0].Type != probe.StepSendText || legacy.Steps[1].Duration != 5 {
-		t.Fatalf("projected steps = %+v", legacy.Steps)
-	}
-	browser := versioned
-	browser.Steps = []probe.ScenarioV2Step{{Type: probe.ScenarioV2StepBrowserConnect}}
-	if _, err := ToLegacy(browser, allowAllCorpus{}); err == nil || !strings.Contains(err.Error(), "browser-aware probe executor") {
-		t.Fatalf("browser step projection error = %v", err)
-	}
-	fixture := versioned
-	fixture.BrowserFixture = "browser.json"
-	if _, err := ToLegacy(fixture, allowAllCorpus{}); err == nil {
-		t.Fatal("fixture-bearing scenario was projected")
 	}
 }
 

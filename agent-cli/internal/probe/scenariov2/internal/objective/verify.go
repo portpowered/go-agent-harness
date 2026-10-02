@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
@@ -79,7 +79,7 @@ func checkAudioStopped(capture runtimeReplay.CaptureProbeObservation, _ probe.Sc
 // first failing objective, in declaration order per evidence family, wins.
 func VerifyEvidenceData(
 	scenario probe.ScenarioV2,
-	events []testkit.Event,
+	events []hermetic.Event,
 	pageState json.RawMessage,
 	capture runtimeReplay.CaptureProbeObservation,
 	hasBrowserArtifact bool,
@@ -101,7 +101,7 @@ func VerifyEvidenceData(
 // verifyBrowserObjectives returns the first failed browser objective, if any.
 func verifyBrowserObjectives(
 	scenario probe.ScenarioV2,
-	events []testkit.Event,
+	events []hermetic.Event,
 	pageState json.RawMessage,
 	hasBrowserArtifact bool,
 ) (Verification, bool) {

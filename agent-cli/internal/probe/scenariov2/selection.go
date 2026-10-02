@@ -27,8 +27,9 @@ type Selection struct {
 }
 
 // LoadSelections loads every selected path as a probe.scenario.v2 document,
-// deduplicating by scenario identity. Mixing v2 with legacy or registered
-// scenarios is rejected.
+// deduplicating by scenario identity. A provider-only document gets a failed
+// entry that explains it runs on the JSONL probe runner. Mixing v2 with
+// legacy or registered scenarios is rejected.
 func LoadSelections(selections []string, lookup probe.CorpusLookup) ([]Selection, error) {
 	if len(selections) == 0 {
 		return nil, errors.New(NoSelectionMessage)
@@ -55,6 +56,14 @@ func LoadSelections(selections []string, lookup probe.CorpusLookup) ([]Selection
 			continue
 		}
 		seen[key] = struct{}{}
+		if scenario.ProviderOnly() {
+			// A provider-only document runs on the JSONL probe runner; it reaches
+			// this executor only when another selection of the run needs a browser.
+			result = append(result, Selection{Selection: selection, Scenario: scenario, Err: fmt.Errorf(
+				"probe scenario %q (%s) is provider-only: it runs on the JSONL probe runner with --replay or --devices, "+
+					"which cannot share a run with browser-aware documents; run it separately", selection, scenario.ID)})
+			continue
+		}
 		result = append(result, Selection{Selection: selection, Scenario: scenario})
 	}
 	return result, nil

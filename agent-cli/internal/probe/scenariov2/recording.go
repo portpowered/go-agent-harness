@@ -11,7 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 )
 
 // Browser event payload field names and values.
@@ -29,11 +29,11 @@ const (
 	reasonBrokerClose = "broker_close"
 )
 
-func (e *executor) recordBrowserEvent(eventType testkit.EventType, browserID webmcp.BrowserID, targetID webmcp.TargetID, generation uint64, payload any) error {
+func (e *executor) recordBrowserEvent(eventType hermetic.EventType, browserID webmcp.BrowserID, targetID webmcp.TargetID, generation uint64, payload any) error {
 	if e == nil || e.recorder == nil {
 		return errors.New("browser evidence recorder is unavailable")
 	}
-	input, err := testkit.NewEventInput(eventType, payload)
+	input, err := hermetic.NewEventInput(eventType, payload)
 	if err != nil {
 		return fmt.Errorf("encode browser event %s: %w", eventType, err)
 	}
@@ -47,14 +47,14 @@ func (e *executor) recordBrowserEvent(eventType testkit.EventType, browserID web
 }
 
 func (e *executor) recordDiscoveryStarted() error {
-	return e.recordBrowserEvent(testkit.EventBrowserDiscoveryStarted, "", "", 0, map[string]any{
+	return e.recordBrowserEvent(hermetic.EventBrowserDiscoveryStarted, "", "", 0, map[string]any{
 		fieldSource: e.browserEvidenceSource(),
 		"mode":      e.browserEvidenceMode(),
 	})
 }
 
 func (e *executor) recordDiscoveryEvidence(ctx context.Context) error {
-	if err := e.recordBrowserEvent(testkit.EventBrowserDiscoveryCompleted, discoveryBrowserID(e.discovered), "", 0, map[string]any{
+	if err := e.recordBrowserEvent(hermetic.EventBrowserDiscoveryCompleted, discoveryBrowserID(e.discovered), "", 0, map[string]any{
 		"candidate_count": len(e.discovered),
 		"candidates":      discoveryCandidateEvidence(e.discovered),
 		fieldSource:       e.browserEvidenceSource(),
@@ -70,7 +70,7 @@ func (e *executor) recordDiscoveryEvidence(ctx context.Context) error {
 }
 
 func (e *executor) recordCandidateEvidence(ctx context.Context, candidate webmcp.BrowserCandidate) error {
-	if err := e.recordBrowserEvent(testkit.EventBrowserEndpointVersion, candidate.ID, "", 0, map[string]any{
+	if err := e.recordBrowserEvent(hermetic.EventBrowserEndpointVersion, candidate.ID, "", 0, map[string]any{
 		"browser":                candidate.Product,
 		"protocol_version":       candidate.Protocol,
 		"websocket_debugger_url": objective.SafeURL(candidate.BrowserWSURL),
@@ -81,7 +81,7 @@ func (e *executor) recordCandidateEvidence(ctx context.Context, candidate webmcp
 	if err != nil {
 		return fmt.Errorf("record targets for browser %q: %w", candidate.ID, err)
 	}
-	return e.recordBrowserEvent(testkit.EventBrowserTargetsSnapshot, candidate.ID, "", 0, map[string]any{
+	return e.recordBrowserEvent(hermetic.EventBrowserTargetsSnapshot, candidate.ID, "", 0, map[string]any{
 		"target_count": len(targets),
 		"targets":      targetEvidence(targets),
 	})
@@ -157,20 +157,20 @@ func targetEvidence(targets []webmcp.Target) []map[string]any {
 func (e *executor) recordSelectionEvidence(page webmcp.PageContext, reason string) error {
 	browserID := page.Key.BrowserID
 	targetID := page.Key.TargetID
-	if err := e.recordBrowserEvent(testkit.EventBrowserTargetSelected, browserID, targetID, 0, map[string]any{
+	if err := e.recordBrowserEvent(hermetic.EventBrowserTargetSelected, browserID, targetID, 0, map[string]any{
 		fieldGeneration: page.Generation,
 		fieldReason:     reason,
 	}); err != nil {
 		return err
 	}
-	if err := e.recordBrowserEvent(testkit.EventBrowserChromeTargetAttached, browserID, targetID, 0, map[string]any{
+	if err := e.recordBrowserEvent(hermetic.EventBrowserChromeTargetAttached, browserID, targetID, 0, map[string]any{
 		"phase":        "attached",
 		fieldOwnership: ownershipHarness,
 		fieldReason:    reason,
 	}); err != nil {
 		return err
 	}
-	return e.recordBrowserEvent(testkit.EventBrowserWebMCPEnabled, browserID, targetID, page.Generation, map[string]any{
+	return e.recordBrowserEvent(hermetic.EventBrowserWebMCPEnabled, browserID, targetID, page.Generation, map[string]any{
 		"enabled":    true,
 		"capability": "webmcp",
 		"status":     "ready",
@@ -185,14 +185,14 @@ func (e *executor) recordCatalogEvidence(catalog webmcp.ToolCatalogSnapshot) err
 		tools = append(tools, toolEvidence(tool))
 	}
 	if len(tools) > 0 {
-		if err := e.recordBrowserEvent(testkit.EventBrowserCatalogToolAdded, browserID, targetID, catalog.Generation, map[string]any{
+		if err := e.recordBrowserEvent(hermetic.EventBrowserCatalogToolAdded, browserID, targetID, catalog.Generation, map[string]any{
 			"tools":        tools,
 			fieldToolCount: len(tools),
 		}); err != nil {
 			return err
 		}
 	}
-	return e.recordBrowserEvent(testkit.EventBrowserCatalogReady, browserID, targetID, catalog.Generation, map[string]any{
+	return e.recordBrowserEvent(hermetic.EventBrowserCatalogReady, browserID, targetID, catalog.Generation, map[string]any{
 		fieldToolCount:  len(catalog.Tools),
 		"schema_digest": catalogSchemaDigest(catalog.Tools),
 	})

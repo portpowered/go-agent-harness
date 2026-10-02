@@ -107,6 +107,7 @@ func decodeScenarioV2ExpectationStrings(expectation *ScenarioV2Expectation, valu
 		"browser_id": &expectation.BrowserID, "target_id": &expectation.TargetID,
 		"origin": &expectation.Origin, "name": &expectation.Name, "tool_ref": &expectation.ToolRef,
 		"path": &expectation.Path, "status": &expectation.Status, "text": &expectation.Text,
+		"tool_call_id": &expectation.ToolCallID,
 	} {
 		if value[fieldName] == nil {
 			continue
@@ -228,7 +229,8 @@ func validateScenarioV2ExpectationCommonFields(expectation ScenarioV2Expectation
 	requiresEquals := expectation.Type == ScenarioV2ExpectationBrowserCountEquals ||
 		expectation.Type == ScenarioV2ExpectationEligibleTabCountEquals ||
 		expectation.Type == ScenarioV2ExpectationCatalogGenerationEquals ||
-		expectation.Type == ScenarioV2ExpectationToolInvocationCount
+		expectation.Type == ScenarioV2ExpectationToolInvocationCount ||
+		expectation.Type == ScenarioV2ExpectationFrameCount
 	if requiresEquals && !expectation.HasEquals {
 		return newScenarioV2Error(location+".equals", "required field is missing")
 	}
@@ -248,8 +250,14 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 	case ScenarioV2ExpectationSelectedOriginEquals:
 		return nonEmpty(expectation.Origin, "origin")
 	case ScenarioV2ExpectationToolCatalogContains, ScenarioV2ExpectationToolCatalogNotContains,
-		ScenarioV2ExpectationToolInvocationCount:
+		ScenarioV2ExpectationToolInvocationCount, ScenarioV2ExpectationToolCalled:
 		return nonEmpty(expectation.Name, "name")
+	case ScenarioV2ExpectationTerminalReason, ScenarioV2ExpectationTerminalProvenance,
+		ScenarioV2ExpectationOutputState, ScenarioV2ExpectationBufferDisposition:
+		_, err := scenarioV2ExpectationStringValue(expectation, location)
+		return err
+	case ScenarioV2ExpectationToolResultDelivered, ScenarioV2ExpectationToolResultDiscarded:
+		return nonEmpty(expectation.ToolCallID, "tool_call_id")
 	case ScenarioV2ExpectationToolInputJSONEquals:
 		return validateScenarioV2ToolInputJSONExpectation(expectation, location)
 	case ScenarioV2ExpectationToolStatusEquals:
@@ -271,7 +279,8 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 		}
 	case ScenarioV2ExpectationTranscriptContains:
 		return nonEmpty(expectation.Text, "text")
-	case ScenarioV2ExpectationStaleToolRejected, ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed:
+	case ScenarioV2ExpectationStaleToolRejected, ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed,
+		ScenarioV2ExpectationFrameCount, ScenarioV2ExpectationAudioEnergy, ScenarioV2ExpectationNoOrphanedToolResult:
 		// These kinds need no handling here.
 	}
 	return nil
@@ -367,4 +376,20 @@ func validateScenarioV2InvokeStep(step ScenarioV2Step, location string) error {
 		return newScenarioV2Error(location+".input_json", "must contain a JSON object")
 	}
 	return nil
+}
+
+// scenarioV2ExpectationStringValue decodes the required non-empty JSON string
+// value of a provider-runner expectation.
+func scenarioV2ExpectationStringValue(expectation ScenarioV2Expectation, location string) (string, error) {
+	if len(expectation.Value) == 0 {
+		return "", newScenarioV2Error(location+".value", "required field is missing")
+	}
+	value, err := scenarioV2String(expectation.Value, location+".value")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", newScenarioV2Error(location+".value", "must not be empty")
+	}
+	return value, nil
 }

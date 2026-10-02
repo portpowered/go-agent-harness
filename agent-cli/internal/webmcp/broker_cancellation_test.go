@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 )
 
 func TestStatefulBrokerCancelsDispatchedWorkOnceAndIgnoresLateResults(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -66,24 +67,24 @@ func TestStatefulBrokerCancelsDispatchedWorkOnceAndIgnoresLateResults(t *testing
 		t.Fatalf("target pending invocations = %#v, want empty", pending)
 	}
 
-	cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel)
+	cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel)
 	if len(cancelOperations) != 1 || cancelOperations[0].InvocationID != dispatched.InvocationID || !cancelOperations[0].CancellationAcknowledged {
 		t.Fatalf("cancel operations = %#v, want one acknowledged correlated request", cancelOperations)
 	}
 }
 
 func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: "test_fixture"}),
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: "test_fixture"}),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -104,7 +105,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 	fresh := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:           runtime,
 		Discoverer:        staticDiscoverer{candidate},
-		IDs:               testkit.NewDeterministicIDs(),
+		IDs:               hermetic.NewDeterministicIDs(),
 		Clock:             clock,
 		InvocationTimeout: 30 * time.Second,
 	})
@@ -138,23 +139,23 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 	if pending := session.PendingInvocations(); len(pending) != 0 {
 		t.Fatalf("target pending invocations after direct cancel = %#v", pending)
 	}
-	cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel)
+	cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel)
 	if len(cancelOperations) != 1 || cancelOperations[0].BrowserID != candidate.ID || cancelOperations[0].TargetID != primaryTargetID || cancelOperations[0].InvocationID != dispatched.BrowserInvocationID || !cancelOperations[0].CancellationAcknowledged {
 		t.Fatalf("direct cancel operations = %#v", cancelOperations)
 	}
 }
 
 func TestStatefulBrokerCancelsQueuedWorkWithoutDispatch(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -188,7 +189,7 @@ func TestStatefulBrokerCancelsQueuedWorkWithoutDispatch(t *testing.T) {
 	if invocations := session.Invocations(); len(invocations) != 1 || invocations[0].ID != first.InvocationID {
 		t.Fatalf("target invocations after queued cancel = %#v, want first only", invocations)
 	}
-	if cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel); len(cancelOperations) != 0 {
+	if cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel); len(cancelOperations) != 0 {
 		t.Fatalf("cancel operations for queued work = %#v, want none", cancelOperations)
 	}
 
@@ -207,16 +208,16 @@ func TestStatefulBrokerCancelsQueuedWorkWithoutDispatch(t *testing.T) {
 }
 
 func TestStatefulBrokerContextCancellationLeavesUnknownMutationForReconciliation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -231,7 +232,7 @@ func TestStatefulBrokerContextCancellationLeavesUnknownMutationForReconciliation
 		t.Fatalf("observe target invocation: %v", err)
 	}
 	cancelInvoke()
-	if cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel); len(cancelOperations) != 0 {
+	if cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel); len(cancelOperations) != 0 {
 		t.Fatalf("context cancellation operations before reconciliation = %#v, want none for unknown mutation", cancelOperations)
 	}
 
@@ -251,16 +252,16 @@ func TestStatefulBrokerContextCancellationLeavesUnknownMutationForReconciliation
 }
 
 func TestStatefulBrokerTimeoutsDispatchedWorkAndBoundsLateReconciliation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -285,7 +286,7 @@ func TestStatefulBrokerTimeoutsDispatchedWorkAndBoundsLateReconciliation(t *test
 	if terminal.ErrorDetails["invocation_id"] != string(dispatched.InvocationID) || terminal.ErrorDetails["timeout_ms"] != int64(5000) || terminal.ErrorDetails["phase"] != "result" || terminal.ErrorDetails["side_effect_unknown"] != true {
 		t.Fatalf("timeout details = %#v, want frozen safe details", terminal.ErrorDetails)
 	}
-	if cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel); len(cancelOperations) != 1 || cancelOperations[0].InvocationID != dispatched.InvocationID {
+	if cancelOperations := operationsOfKind(runtime.Operations(), webmcptest.OperationCancel); len(cancelOperations) != 1 || cancelOperations[0].InvocationID != dispatched.InvocationID {
 		t.Fatalf("timeout cancel operations = %#v, want one correlated request", cancelOperations)
 	}
 
@@ -301,16 +302,16 @@ func TestStatefulBrokerTimeoutsDispatchedWorkAndBoundsLateReconciliation(t *test
 }
 
 func TestStatefulBrokerNavigationTerminalizesCurrentInvocation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -349,16 +350,16 @@ func TestStatefulBrokerNavigationTerminalizesCurrentInvocation(t *testing.T) {
 }
 
 func TestStatefulBrokerSeparatesTargetClosureFromPageNavigation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-lifecycle", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-lifecycle", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -404,7 +405,7 @@ func TestStatefulBrokerSeparatesTargetClosureFromPageNavigation(t *testing.T) {
 		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: oldRef, Input: []byte(`{}`)})
 		return err
 	}, webmcp.ErrorStaleSelection, "closed target selection")
-	if operations := operationsOfKind(runtime.Operations(), testkit.OperationInvoke); len(operations) != 0 {
+	if operations := operationsOfKind(runtime.Operations(), webmcptest.OperationInvoke); len(operations) != 0 {
 		t.Fatalf("post-close invoke operations = %#v, want none", operations)
 	}
 	targets, err := handle.ListTargets(context.Background())
@@ -414,16 +415,16 @@ func TestStatefulBrokerSeparatesTargetClosureFromPageNavigation(t *testing.T) {
 }
 
 func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-orphan", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: "tab-orphan", Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -447,7 +448,7 @@ func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *
 		invokeDone <- invocationCall{result: result, err: invokeErr}
 	}()
 	created := assertInvocationCreated(t, watch, ref)
-	if _, err := runtime.WaitForOperationAdmitted(testContext(t), testkit.OperationListTargets, operationCursor); err != nil {
+	if _, err := runtime.WaitForOperationAdmitted(testContext(t), webmcptest.OperationListTargets, operationCursor); err != nil {
 		t.Fatalf("wait blocked target check: %v", err)
 	}
 
@@ -479,7 +480,7 @@ func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *
 	if pending := broker.PendingInvocations(); len(pending) != 0 {
 		t.Fatalf("pending after closed-target reconciliation = %#v, want empty", pending)
 	}
-	if operations := operationsOfKind(runtime.Operations(), testkit.OperationInvoke); len(operations) != 0 {
+	if operations := operationsOfKind(runtime.Operations(), webmcptest.OperationInvoke); len(operations) != 0 {
 		t.Fatalf("closed-target invoke operations = %#v, want none", operations)
 	}
 }
@@ -487,25 +488,25 @@ func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *
 func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 	tests := []struct {
 		name       string
-		terminate  func(*testkit.ScriptedTargetSession) error
+		terminate  func(*webmcptest.ScriptedTargetSession) error
 		wantCode   webmcp.ErrorCode
 		wantReason string
 	}{
-		{name: "detach", terminate: func(session *testkit.ScriptedTargetSession) error { return session.Detach("tab_closed") }, wantCode: webmcp.ErrorTargetDetached, wantReason: "tab_closed"},
-		{name: "disconnect", terminate: func(session *testkit.ScriptedTargetSession) error { return session.Disconnect("transport_lost") }, wantCode: webmcp.ErrorBrowserDisconnected, wantReason: "transport_lost"},
+		{name: "detach", terminate: func(session *webmcptest.ScriptedTargetSession) error { return session.Detach("tab_closed") }, wantCode: webmcp.ErrorTargetDetached, wantReason: "tab_closed"},
+		{name: "disconnect", terminate: func(session *webmcptest.ScriptedTargetSession) error { return session.Disconnect("transport_lost") }, wantCode: webmcp.ErrorBrowserDisconnected, wantReason: "transport_lost"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-			ids := testkit.NewDeterministicIDs()
+			clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+			ids := hermetic.NewDeterministicIDs()
 			candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-			runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-				testkit.RuntimeOptions{Clock: clock, IDs: ids},
-				testkit.BrowserConfig{
+			runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+				webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+				webmcptest.BrowserConfig{
 					Candidate: candidate,
-					Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+					Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 						webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-						testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+						webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 					)},
 				},
 			)
@@ -538,16 +539,16 @@ func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 }
 
 func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -594,16 +595,16 @@ func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *t
 }
 
 func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+				webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
 	)
@@ -646,12 +647,12 @@ func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
 }
 
 func TestStatefulBrokerCloseBoundsNonCooperativeHandle(t *testing.T) {
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	inner := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{Candidate: candidate},
+	inner := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{Candidate: candidate},
 	)
 	runtime := &blockingCloseRuntime{
 		inner:   inner,
@@ -692,7 +693,7 @@ func TestStatefulBrokerCloseBoundsNonCooperativeHandle(t *testing.T) {
 }
 
 type blockingCloseRuntime struct {
-	inner   *testkit.ScriptedBrowserRuntime
+	inner   *webmcptest.ScriptedBrowserRuntime
 	started chan struct{}
 	release chan struct{}
 	done    chan struct{}
@@ -731,21 +732,21 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 	// A session-level SIGINT cleanup uses this same broker close boundary. An
 	// externally owned browser must be detached, never closed, so the caller's
 	// tabs remain usable after the agent process exits.
-	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-	ids := testkit.NewDeterministicIDs()
+	clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+	ids := hermetic.NewDeterministicIDs()
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-	inner := testkit.NewScriptedBrowserRuntimeWithOptions(
-		testkit.RuntimeOptions{Clock: clock, IDs: ids},
-		testkit.BrowserConfig{
+	inner := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+		webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+		webmcptest.BrowserConfig{
 			Candidate: candidate,
-			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(
+			Targets: []webmcptest.TargetConfig{
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-					testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`)),
+					webmcptest.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`)),
 				),
-				testkit.NewTargetConfig(
+				webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"},
-					testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`)),
+					webmcptest.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`)),
 				),
 			},
 		},
@@ -785,7 +786,7 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 		}
 	}
 	for _, operation := range inner.Operations() {
-		if operation.Kind == testkit.OperationCloseTarget || operation.Kind == testkit.OperationCloseHandle {
+		if operation.Kind == hermetic.OperationCloseTarget || operation.Kind == webmcptest.OperationCloseHandle {
 			t.Fatalf("external session cleanup issued destructive operation: %#v", operation)
 		}
 	}
@@ -795,7 +796,7 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 }
 
 type externalProbeRuntime struct {
-	inner *testkit.ScriptedBrowserRuntime
+	inner *webmcptest.ScriptedBrowserRuntime
 }
 
 func (r *externalProbeRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
@@ -814,16 +815,16 @@ func (externalProbeHandle) Close() error { return nil }
 
 func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T) {
 	for iteration := range 16 {
-		clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
-		ids := testkit.NewDeterministicIDs()
+		clock := hermetic.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
+		ids := hermetic.NewDeterministicIDs()
 		candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
-		runtime := testkit.NewScriptedBrowserRuntimeWithOptions(
-			testkit.RuntimeOptions{Clock: clock, IDs: ids},
-			testkit.BrowserConfig{
+		runtime := webmcptest.NewScriptedBrowserRuntimeWithOptions(
+			webmcptest.RuntimeOptions{Clock: clock, IDs: ids},
+			webmcptest.BrowserConfig{
 				Candidate: candidate,
-				Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
+				Targets: []webmcptest.TargetConfig{webmcptest.NewTargetConfig(
 					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
-					testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
+					webmcptest.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 				)},
 			},
 		)
@@ -883,7 +884,7 @@ func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T)
 	}
 }
 
-func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate, clock *testkit.FakeClock, ids *testkit.DeterministicIDs, timeout time.Duration) (*webmcp.StatefulBroker, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func newInvocationBroker(t *testing.T, runtime *webmcptest.ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate, clock *hermetic.FakeClock, ids *hermetic.DeterministicIDs, timeout time.Duration) (*webmcp.StatefulBroker, *webmcptest.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:           runtime,
@@ -929,8 +930,8 @@ func assertCanceledResult(t *testing.T, result webmcp.InvokeResult, id webmcp.In
 	}
 }
 
-func operationsOfKind(operations []testkit.Operation, kind testkit.OperationKind) []testkit.Operation {
-	result := make([]testkit.Operation, 0)
+func operationsOfKind(operations []webmcptest.Operation, kind webmcptest.OperationKind) []webmcptest.Operation {
+	result := make([]webmcptest.Operation, 0)
 	for _, operation := range operations {
 		if operation.Kind == kind {
 			result = append(result, operation)

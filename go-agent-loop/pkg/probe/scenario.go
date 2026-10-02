@@ -197,35 +197,6 @@ func (e *ScenarioError) Unwrap() error {
 // narrow seam that the eventual audiofixture implementation must satisfy.
 type CorpusLookup interface{ Has(string) bool }
 
-func Load(input any, lookups ...CorpusLookup) (Scenario, error) {
-	if len(lookups) > 1 {
-		return Scenario{}, makeError(CategoryInvalidField, "corpus_lookup", "only one corpus lookup is permitted")
-	}
-	data, err := readInput(input)
-	if err != nil {
-		return Scenario{}, makeError(CategoryMalformed, "document", "%v", err)
-	}
-	value, err := decodeObject(data)
-	if err != nil {
-		return Scenario{}, err
-	}
-	scenario, err := parseScenario(value)
-	if err != nil {
-		return Scenario{}, err
-	}
-	var lookup CorpusLookup
-	if len(lookups) == 1 {
-		lookup = lookups[0]
-	}
-	if err := scenario.validate(lookup); err != nil {
-		return Scenario{}, err
-	}
-	return scenario, nil
-}
-func LoadScenario(input any, lookups ...CorpusLookup) (Scenario, error) {
-	return Load(input, lookups...)
-}
-func Decode(input any, lookups ...CorpusLookup) (Scenario, error) { return Load(input, lookups...) }
 func (s Scenario) Validate(lookups ...CorpusLookup) error {
 	if len(lookups) > 1 {
 		return makeError(CategoryInvalidField, "corpus_lookup", "only one corpus lookup is permitted")

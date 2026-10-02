@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2/internal/objective"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
@@ -43,7 +43,7 @@ type preparedArtifacts struct {
 	pageState       []byte
 	workspace       []byte
 	providerCapture []byte
-	events          []testkit.Event
+	events          []hermetic.Event
 	browser         *transcript.BrowserArtifact
 }
 
@@ -102,7 +102,7 @@ func prepareArtifacts(ctx context.Context, in Input) (preparedArtifacts, error) 
 }
 
 func pageStateBytes(state json.RawMessage) ([]byte, error) {
-	normalized, err := testkit.JSONValue(state)
+	normalized, err := hermetic.JSONValue(state)
 	if err != nil {
 		return nil, fmt.Errorf("encode page-state oracle snapshot: %w", err)
 	}
@@ -128,18 +128,18 @@ func providerCaptureBytes(ctx context.Context, in Input) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func browserEvidence(in Input) ([]testkit.Event, *transcript.BrowserArtifact, error) {
+func browserEvidence(in Input) ([]hermetic.Event, *transcript.BrowserArtifact, error) {
 	if len(in.BrowserEvents) == 0 {
 		if in.Scenario.BrowserFixture != "" {
 			return nil, nil, errors.New("browser fixture completed without browser event evidence")
 		}
 		return nil, nil, nil
 	}
-	events, err := testkit.ValidateEventStream(in.BrowserEvents)
+	events, err := hermetic.ValidateEventStream(in.BrowserEvents)
 	if err != nil {
 		return nil, nil, fmt.Errorf("validate browser evidence before finalization: %w", err)
 	}
-	canonical, err := testkit.MarshalEvents(events)
+	canonical, err := hermetic.MarshalEvents(events)
 	if err != nil {
 		return nil, nil, fmt.Errorf("canonicalize browser evidence: %w", err)
 	}
