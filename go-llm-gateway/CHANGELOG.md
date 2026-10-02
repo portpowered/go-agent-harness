@@ -4,6 +4,26 @@
 
 ### Added
 
+- `pkg/providers/openaichatgpt`: the `openai-chatgpt` text provider
+  (`Infer`, `InferStream`). It speaks the Responses API over the ChatGPT
+  Codex backend (`POST https://chatgpt.com/backend-api/codex/responses`) on a
+  ChatGPT login, taking the access token and account id from a
+  `CredentialSource` (`*chatgptauth.Manager`, which refreshes). Requests send
+  `store:false`, `stream:true`, `instructions`, input items, function tools
+  (`strict:false`), optional `reasoning`, `include:["reasoning.encrypted_content"]`
+  and `prompt_cache_key`, with the headers `Authorization`,
+  `chatgpt-account-id`, `originator`, `OpenAI-Beta: responses=experimental`,
+  `accept: text/event-stream`, `session-id` and `x-client-request-id`, as Codex
+  and OpenClaw do. The SSE stream maps to text, reasoning, tool-call, refusal,
+  usage and error stream messages. With no model configured, the provider
+  lists `GET {base}/models?client_version=...` once and uses the account's
+  default model by Codex's rule (`DefaultModel`; `Provider.Models` lists
+  them). HTTP 401/403 map to `ErrSignInAgain`; `usage_limit_reached`,
+  `usage_not_included`, rate-limit and context-length codes map to typed
+  errors. Errors never carry a token or a response body.
+- `pkg/providers/openaichatgpt/fakechatgpt`: a scripted fake ChatGPT Codex
+  backend (`POST /responses` as SSE, `GET /models`) for `httptest`. It is test
+  support; only `_test.go` files may import it.
 - `pkg/providers/openailive`: the wire layer of the OpenAI GPT-Live protocol
   (`gpt-live-1`, `/v1/live/sessions`), the first phase of
   docs/architecture/gpt-live-provider.md. It has typed structs for every

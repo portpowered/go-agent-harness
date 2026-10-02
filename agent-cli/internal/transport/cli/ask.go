@@ -149,7 +149,7 @@ func (c *AskCommand) Generate() *cobra.Command {
 		Use:           "ask [prompt] [files...]",
 		Short:         "Ask the agent a question and get a response",
 		Long:          "One-shot queries. Pass a prompt and optional file paths for multimodal input.\nText can also be piped via stdin: echo \"question\" | yui ask",
-		Example:       "  yui ask \"Summarize this repository\"\n  yui ask \"Describe this image\" screenshot.png",
+		Example:       "  yui ask \"Summarize this repository\"\n  yui ask \"Describe this image\" screenshot.png\n  yui ask --provider openai-chatgpt \"hi\"",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -161,7 +161,7 @@ func (c *AskCommand) Generate() *cobra.Command {
 	cmd.Flags().BoolVar(&c.askFlags.ContinueLastSession, "continue-last-session", false, "Continue from the most recent session")
 	cmd.Flags().StringVar(&c.askFlags.SessionID, "session-id", "", "Specific session ID to continue")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Model ID (overrides config)")
-	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Provider ID (overrides config)")
+	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Provider ID (overrides config); openai-chatgpt uses the ChatGPT login from \"yui auth chatgpt\" instead of an API key")
 	cmd.Flags().BoolVar(&c.askFlags.ShowToolUse, "show-tool-use", false, "Show tool invocations in output")
 	cmd.Flags().StringVar(&c.askFlags.APIKey, "api-key", "", "API key (overrides config)")
 	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Base URL for the provider (required with --provider local if no local config exists)")

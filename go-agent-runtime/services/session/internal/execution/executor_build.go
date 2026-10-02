@@ -96,6 +96,7 @@ func (e *Executor) buildInferencer(ctx context.Context, cfg *Config) (messages.I
 		APIKey:     providerConfig.APIKey,
 		BaseURL:    providerConfig.BaseURL,
 		RecordPath: cfg.RecordCapturePath, ReplayPath: cfg.ReplayCapturePath,
+		ChatGPTAuthPath: providerConfig.ChatGPTAuthPath,
 		Fal: func() *runtimeproviders.FalConfig {
 			if providerConfig.Fal == nil {
 				return nil

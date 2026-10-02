@@ -1,0 +1,3 @@
+MESSAGE.START
+ERROR provider_rejected "openai-chatgpt: ChatGPT plan does not include Codex usage (usage_not_included)"
+MESSAGE.END prompt=0 completion=0 total=0 reasoning=0

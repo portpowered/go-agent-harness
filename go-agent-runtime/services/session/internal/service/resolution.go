@@ -98,10 +98,11 @@ func toExecutionConfig(request session.Request, resolution session.Resolution) a
 func toRuntimeResolution(resolution session.Resolution) agent.RuntimeResolution {
 	provider := resolution.Provider
 	executionProvider := agent.ProviderConfig{
-		Provider: provider.Provider,
-		Model:    provider.Model,
-		APIKey:   provider.APIKey,
-		BaseURL:  provider.BaseURL,
+		Provider:        provider.Provider,
+		Model:           provider.Model,
+		APIKey:          provider.APIKey,
+		BaseURL:         provider.BaseURL,
+		ChatGPTAuthPath: provider.ChatGPTAuthPath,
 	}
 	if provider.Fal != nil {
 		executionProvider.Fal = &agent.FalProviderConfig{

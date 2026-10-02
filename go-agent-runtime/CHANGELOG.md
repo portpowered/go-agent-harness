@@ -4,6 +4,13 @@
 
 ### Added
 
+- `providers.OpenAIChatGPTProvider` (`"openai-chatgpt"`) and
+  `providers.Config.ChatGPTAuthPath`: the provider service builds the
+  `openai-chatgpt` text provider over the ChatGPT auth store the host names.
+  `Build` fails before any network call, with "run `yui auth chatgpt`", when
+  the store is missing, and needs no API key. Token refresh uses its own HTTP
+  client, so a recording never captures it. The session runtime carries the
+  path from the host resolution to the provider build.
 - `providers.OpenAILiveProvider` (`"openai-live"`) and
   `providers.OpenAILive1Model` (`"gpt-live-1"`): the built-in catalog lists
   `gpt-live-1` under `openai-live`.

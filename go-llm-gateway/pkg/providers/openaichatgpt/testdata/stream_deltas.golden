@@ -1,0 +1,10 @@
+MESSAGE.START
+REASONING.START
+REASONING.DELTA "Thinking"
+REASONING.END
+TEXT.START
+TEXT.DELTA "Hi "
+TEXT.DELTA "there"
+TEXT.END
+MESSAGE.END prompt=9 completion=4 total=13 reasoning=0
+USAGE.INFO prompt=9 completion=4 total=13 reasoning=0

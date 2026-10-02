@@ -17,6 +17,8 @@ import (
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	falprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openaichatgpt"
 )
 
 var _ providers.Service = (*Service)(nil)
@@ -59,7 +61,7 @@ func (s *Service) Build(ctx context.Context, cfg providers.Config) (llmproviders
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(cfg.APIKey) == "" && cfg.ReplayPath == "" && cfg.Provider != "fal" && requiresCredential(cfg.BaseURL) {
+	if strings.TrimSpace(cfg.APIKey) == "" && cfg.ReplayPath == "" && cfg.Provider != "fal" && cfg.Provider != providers.OpenAIChatGPTProvider && requiresCredential(cfg.BaseURL) {
 		return nil, errors.New("provider API key is missing")
 	}
 	invocation, recorder, err := s.httpRuntime(cfg)
@@ -110,9 +112,40 @@ func (s *Service) buildFal(cfg providers.Config) (llmproviders.Provider, error) 
 	return falprovider.New(opts...), nil
 }
 
-func (s *Service) buildConfiguredProvider(cfg providers.Config) (llmproviders.Provider, error) {
-	if cfg.Provider == "fal" {
-		return s.buildFal(cfg)
+// buildOpenAIChatGPT builds the openai-chatgpt provider over the ChatGPT
+// auth store at cfg.ChatGPTAuthPath. It fails before any network operation
+// when there is no usable sign-in. Token refresh uses its own HTTP client,
+// so a recording transport never captures the refresh token exchange.
+func (s *Service) buildOpenAIChatGPT(cfg providers.Config) (llmproviders.Provider, error) {
+	path := strings.TrimSpace(cfg.ChatGPTAuthPath)
+	if path == "" {
+		return nil, fmt.Errorf("%s has no ChatGPT auth store: %w", providers.OpenAIChatGPTProvider, chatgptauth.ErrNotLoggedIn)
 	}
-	return s.buildOpenAI(cfg), nil
+	store := chatgptauth.NewFileStore(path)
+	if _, err := store.Load(); err != nil {
+		return nil, fmt.Errorf("%s: %w", providers.OpenAIChatGPTProvider, err)
+	}
+	opts := []openaichatgpt.Option{
+		openaichatgpt.WithModel(cfg.Model),
+		openaichatgpt.WithLogger(s.logger),
+	}
+	if cfg.BaseURL != "" {
+		opts = append(opts, openaichatgpt.WithBaseURL(cfg.BaseURL))
+	}
+	if s.httpClient != nil {
+		opts = append(opts, openaichatgpt.WithHTTPClient(s.httpClient))
+	}
+	manager := chatgptauth.NewManager(store, chatgptauth.NewClient(chatgptauth.Config{}))
+	return openaichatgpt.New(manager, opts...), nil
+}
+
+func (s *Service) buildConfiguredProvider(cfg providers.Config) (llmproviders.Provider, error) {
+	switch cfg.Provider {
+	case "fal":
+		return s.buildFal(cfg)
+	case providers.OpenAIChatGPTProvider:
+		return s.buildOpenAIChatGPT(cfg)
+	default:
+		return s.buildOpenAI(cfg), nil
+	}
 }

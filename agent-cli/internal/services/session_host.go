@@ -52,7 +52,7 @@ func (h *sessionHostResolver) Resolve(ctx context.Context, request session.Reque
 		return session.Resolution{}, fmt.Errorf("load CLI config: %w", err)
 	}
 	effective := loaded.ApplyOverrides(request.APIKey, request.Model, request.Provider, request.BaseURL)
-	provider, err := resolvedProvider(effective)
+	provider, err := resolvedProvider(effective, configDir)
 	if err != nil {
 		return session.Resolution{}, err
 	}
@@ -156,7 +156,7 @@ func globalAllowPaths(globalFlags *flags.GlobalFlags, workDir string) []string {
 	return paths
 }
 
-func resolvedProvider(cfg config.Config) (session.ProviderConfig, error) {
+func resolvedProvider(cfg config.Config, configDir string) (session.ProviderConfig, error) {
 	provider := session.ProviderConfig{Provider: cfg.Model.Provider}
 	switch cfg.Model.Provider {
 	case config.ProviderOpenAI:
@@ -195,6 +195,13 @@ func resolvedProvider(cfg config.Config) (session.ProviderConfig, error) {
 			return session.ProviderConfig{}, fmt.Errorf("model.provider is grok but model.grok is not set")
 		}
 		provider.Model, provider.APIKey, provider.BaseURL = cfg.Model.Grok.Model, cfg.Model.Grok.APIKey, cfg.Model.Grok.BaseURL
+	case config.ProviderOpenAIChatGPT:
+		// The ChatGPT login signs requests; the provider service reads and
+		// refreshes the auth store and fails fast when it is missing.
+		if chatgpt := cfg.Model.OpenAIChatGPT; chatgpt != nil {
+			provider.Model, provider.BaseURL = chatgpt.Model, chatgpt.BaseURL
+		}
+		provider.ChatGPTAuthPath = config.ChatGPTAuthStorePath(configDir)
 	default:
 		return session.ProviderConfig{}, fmt.Errorf("unsupported model.provider %q", cfg.Model.Provider)
 	}

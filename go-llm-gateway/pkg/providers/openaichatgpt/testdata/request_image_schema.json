@@ -1,0 +1,21 @@
+{
+  "model": "gpt-test",
+  "instructions": "You are a helpful assistant.",
+  "input": [
+    {"type": "message", "role": "user", "content": [
+      {"type": "input_text", "text": "what is this?"},
+      {"type": "input_image", "image_url": "data:image/png;base64,AQID", "detail": "auto"},
+      {"type": "input_image", "image_url": "https://example.test/cat.jpg", "detail": "auto"}
+    ]}
+  ],
+  "tools": [
+    {"type": "function", "name": "lookup", "description": "Look up a term", "parameters": {"type": "object", "properties": {"term": {"type": "string", "minLength": 1}}, "required": ["term"]}, "strict": false},
+    {"type": "function", "name": "noop", "description": "No arguments", "parameters": {"type": "object", "properties": {}, "additionalProperties": false}, "strict": false}
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "store": false,
+  "stream": true,
+  "include": ["reasoning.encrypted_content"],
+  "prompt_cache_key": "session-fixed"
+}

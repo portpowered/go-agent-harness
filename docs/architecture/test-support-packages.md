@@ -46,6 +46,7 @@ recording services read and write provider captures through it.
 | `agent-cli/internal/probe/faulttest` | transport and RTC fault decorators for probe tests |
 | `agent-cli/internal/roomtest` | the CLI room-document aliases, mixer and mesh that only tests use |
 | `agent-cli/internal/transport/cli/clitest`, `agent-cli/internal/services/servicetest` | CLI and service test harnesses |
+| `go-llm-gateway/pkg/providers/openaichatgpt/fakechatgpt` | the scripted fake ChatGPT Codex backend (`POST /responses` as SSE, `GET /models`) that the `openaichatgpt`, provider-service and CLI ask/chat tests use |
 | `go-llm-gateway/pkg/providers/openailive/fakelive` | the scripted fake GPT-Live server (in-process dialer and `httptest` handler) that the `openailive` codec and runtime admission tests use |
 | `go-llm-gateway/pkg/providers/openailive/codexrtc/fakecodex` | the fake ChatGPT-credential GPT-Live backend (`httptest` call creation answered by an in-process pion peer on a virtual network, and the sideband WebSocket) that the `codexrtc` transport tests use |
 

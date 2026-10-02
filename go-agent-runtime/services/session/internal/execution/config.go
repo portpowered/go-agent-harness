@@ -11,11 +11,12 @@ import (
 // runtime's file-backed configuration tree so embedders do not need to import
 // or construct an implementation package.
 type ProviderConfig struct {
-	Provider string
-	Model    string
-	APIKey   string
-	BaseURL  string
-	Fal      *FalProviderConfig
+	Provider        string
+	Model           string
+	APIKey          string
+	BaseURL         string
+	ChatGPTAuthPath string
+	Fal             *FalProviderConfig
 }
 
 // FalProviderConfig contains the provider-specific values used by fal.ai.

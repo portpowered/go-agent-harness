@@ -109,8 +109,13 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
+	return newTestAgentCLIWithService(globalFlags, newChatTestSessionService(inferencer))
+}
+
+// newTestAgentCLIWithService composes the test CLI around textService, the
+// session service behind ask and chat.
+func newTestAgentCLIWithService(globalFlags *flags.GlobalFlags, textService session.Service) (*AgentCLI, *flags.ChatFlags, *flags.LoopFlags) {
 	rootCommand := NewRootCommand(globalFlags)
-	textService := newChatTestSessionService(inferencer)
 	askFlags := flags.NewAskFlags()
 	askFlags.NoSystemInformation = true
 	loopFlags := flags.NewLoopFlags()
