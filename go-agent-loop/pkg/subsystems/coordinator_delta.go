@@ -130,16 +130,23 @@ func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseVa
 	)
 }
 
-// trackOpenModelResponse follows the model response lifecycle across this
-// tick's model deltas: a response is open from its first delta until its
-// MESSAGE.END or a terminal ERROR. Stale-pass deltas never reach
-// ModelInputDelta, and tool acknowledgements are not responses of their own.
-// An interrupt cancels the response, and the resumed inference it dispatches
-// carries the whole conversation, so it also settles a deferred user turn.
-func (c *Coordinator) trackOpenModelResponse(curr *state.LoopState) {
+// trackOpenExchange follows the model response and tool batch lifecycles
+// across this tick's deltas: a response is open from its first delta until
+// its MESSAGE.END or a terminal ERROR, and a dispatched tool batch is
+// outstanding until its MESSAGE.END. Stale-pass deltas never reach the
+// inputs, and tool acknowledgements are not responses of their own. An
+// interrupt cancels both; InterruptHandler places held user turns and its
+// resumed inference answers them.
+func (c *Coordinator) trackOpenExchange(curr *state.LoopState) {
 	if hasInterruptMessage(curr.Inputs.UserControlPlaneMessage) {
 		c.modelResponseOpen = false
-		c.deferredUserTurn = false
+		c.toolBatchesOutstanding = 0
+		c.heldTurnNeedsInference = false
+	}
+	for _, delta := range curr.Inputs.ToolInputDelta {
+		if _, ok := delta.Value.(*messages.MessageEndValue); ok && c.toolBatchesOutstanding > 0 {
+			c.toolBatchesOutstanding--
+		}
 	}
 	for _, delta := range curr.Inputs.ModelInputDelta {
 		if delta.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
@@ -153,9 +160,59 @@ func (c *Coordinator) trackOpenModelResponse(curr *state.LoopState) {
 				c.modelResponseOpen = false
 			}
 		default:
-			c.modelResponseOpen = true
+			if opensModelResponse(delta.Type) {
+				c.modelResponseOpen = true
+			}
 		}
 	}
+}
+
+// opensModelResponse reports whether a model delta of typ is response
+// content. Session lifecycle, control and usage events are not: a session's
+// SESSION.OPEN does not start a response that a MESSAGE.END would close.
+func opensModelResponse(typ messages.StreamMessageType) bool {
+	switch typ { //nolint:exhaustive // Response content opens a response; every other type leaves it as is.
+	case messages.StreamTypeMessageStart,
+		messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeRefusal:
+		return true
+	default:
+		return false
+	}
+}
+
+// holdingUserTurns reports whether a user turn arriving now must wait for
+// the open response or outstanding tool batch before joining history.
+func (c *Coordinator) holdingUserTurns() bool {
+	return c.modelResponseOpen || c.toolBatchesOutstanding > 0
+}
+
+// holdUserTurns moves this tick's user messages out of history into the held
+// queue. A tick carries one input, so in a user tick they are the tail of
+// ConversationBuffer, appended by UpdateWorldHistory.
+func (c *Coordinator) holdUserTurns(curr *state.LoopState) {
+	buffer := curr.History.ConversationBuffer
+	tail := len(buffer) - len(curr.Inputs.UserOutputMessage)
+	curr.History.HeldUserMessages = append(curr.History.HeldUserMessages, buffer[tail:]...)
+	clear(buffer[tail:])
+	curr.History.ConversationBuffer = buffer[:tail]
+}
+
+// placeHeldUserTurns records the held user turns, in arrival order, to the
+// kernel and to history, so both see them after the exchange they waited for.
+func (c *Coordinator) placeHeldUserTurns(ctx context.Context, curr *state.LoopState) {
+	for _, message := range curr.History.HeldUserMessages {
+		c.sendInferenceResult(ctx, curr, messages.User, message)
+	}
+	curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, curr.History.HeldUserMessages...)
+	curr.History.HeldUserMessages = nil
 }
 
 func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {

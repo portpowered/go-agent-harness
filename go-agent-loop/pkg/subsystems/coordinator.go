@@ -28,12 +28,15 @@ type Coordinator struct {
 	modelResponsesOverlap bool
 
 	// modelResponseOpen is true from a model response's first delta until its
-	// MESSAGE.END, a terminal ERROR, or an interrupt. A user turn that lands
-	// inside that span must not discard the response; see dispatchUserOutputs.
-	modelResponseOpen bool
-	// deferredUserTurn records a turn-based user turn whose inference waits
-	// for the open response to finish; see dispatchUserOutputs.
-	deferredUserTurn bool
+	// MESSAGE.END, a terminal ERROR, or an interrupt. toolBatchesOutstanding
+	// counts dispatched tool batches whose MESSAGE.END has not arrived. A
+	// user turn that lands while either holds is held; see
+	// dispatchUserOutputs.
+	modelResponseOpen      bool
+	toolBatchesOutstanding int
+	// heldTurnNeedsInference records that a held turn-based user turn has not
+	// been dispatched to the model yet.
+	heldTurnNeedsInference bool
 }
 
 func NewCoordinator(
@@ -70,7 +73,7 @@ func (c *Coordinator) sendInferenceResult(ctx context.Context, state *state.Loop
 // tool output -> triggers agent
 // agent -(if has no tool call)-> user (close current loop on current turn end)
 func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error {
-	c.trackOpenModelResponse(curr)
+	c.trackOpenExchange(curr)
 	completedModelResponses, err := c.observeModelResponses(curr.Inputs.ModelInputDelta)
 	if err != nil {
 		return err
@@ -102,9 +105,6 @@ func (c *Coordinator) dispatchToolOutputs(ctx context.Context, curr *state.LoopS
 	for _, message := range curr.Inputs.ToolOutputMessage {
 		c.sendInferenceResult(ctx, curr, messages.Tool, message)
 	}
-	// The continuation below carries the whole conversation, including any
-	// user turn that arrived while the tool-calling response streamed.
-	c.deferredUserTurn = false
 	// if the input receives a message from the tool gateway, then trigger a new assistant message from that call.
 	curr.History.ModelDeltaStartIndex = len(curr.History.ConversationDeltaBuffer)
 	curr.History.CurrentModelDeltaCount = 0
@@ -116,6 +116,17 @@ func (c *Coordinator) dispatchToolOutputs(ctx context.Context, curr *state.LoopS
 	conversation := append([]messages.Message(nil), curr.History.ConversationBuffer...)
 	if !toolResultsAtHistoryTail(conversation, curr.Inputs.ToolOutputMessage) {
 		conversation = append(conversation, curr.Inputs.ToolOutputMessage...)
+	}
+	if !c.holdingUserTurns() && len(curr.History.HeldUserMessages) > 0 {
+		// The held user turns follow the tool results they waited for. A
+		// turn-based continuation answers them; a duplex provider already
+		// received them, and its runner keys the continuation on the tool
+		// result suffix, so only history gains them.
+		if curr.Mode != state.DuplexSession {
+			conversation = append(conversation, curr.History.HeldUserMessages...)
+		}
+		c.heldTurnNeedsInference = false
+		c.placeHeldUserTurns(ctx, curr)
 	}
 	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
 		conversation, curr.Tools, passID, curr.InferenceDefaults,
@@ -145,13 +156,18 @@ func (c *Coordinator) dispatchModelOutputs(ctx context.Context, curr *state.Loop
 	// LOOP.END after all SYSTEM.FULL_MESSAGE messages in the same delta inbox.
 	// DuplexSession suppresses auto-termination; the session persists until
 	// the control plane closes it (session_close or stop).
+	if !c.holdingUserTurns() && len(curr.History.HeldUserMessages) > 0 {
+		// The response the held user turns waited for is complete: they
+		// follow it in history and, turn-based, are answered now instead of
+		// the loop ending with them unanswered.
+		c.placeHeldUserTurns(ctx, curr)
+		if c.heldTurnNeedsInference {
+			c.heldTurnNeedsInference = false
+			c.dispatchInference(ctx, curr)
+			hasFinalResponse = false
+		}
+	}
 	switch {
-	case hasFinalResponse && c.deferredUserTurn:
-		// A user turn arrived while this response streamed. It is answered
-		// now, from a conversation that holds both turns, instead of ending
-		// the loop with that turn unanswered.
-		c.deferredUserTurn = false
-		c.dispatchInference(ctx, curr)
 	case hasFinalResponse && curr.Mode != state.DuplexSession:
 		c.logInfo("Coordinator: terminating loop", logging.Field{Key: "hasFinalResponse", Value: hasFinalResponse})
 		curr.Inputs.TerminateLoop = true
@@ -192,6 +208,7 @@ func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopStat
 		// outbox is full too. Every link waits on ctx, the loop context, so
 		// ending the loop releases all three; no link waits without it.
 		curr.Outputs.ToolInbox.WriteWaitContext(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
+		c.toolBatchesOutstanding++
 		return false
 	case !message.HasOnlyReasoning():
 		c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})
@@ -205,30 +222,32 @@ func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopStat
 
 // dispatchUserOutputs records user messages and starts the next model pass.
 func (c *Coordinator) dispatchUserOutputs(ctx context.Context, curr *state.LoopState) {
-	// Dispatch user messages to kernel via unified delta inbox.
-	for _, message := range curr.Inputs.UserOutputMessage {
-		c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
-		c.sendInferenceResult(ctx, curr, messages.User, message)
-	}
-	if c.modelResponseOpen {
-		// A user turn does not cancel a response that is still streaming:
-		// the client already saw its deltas, so its tool calls must still
-		// execute. The response keeps its delta window (later model deltas
-		// are inserted ahead of this turn's deltas, so it still reconstructs
-		// from one contiguous window); the user message is already in
-		// history at its arrival position. Explicit cancellation goes through
-		// InterruptHandler, which resets the window itself.
+	if c.holdingUserTurns() {
+		// A user turn does not cancel a response that is still streaming or
+		// a tool batch that is still running: the client already saw the
+		// response, so its tool calls must still execute and their results
+		// must still follow them. The response keeps its delta window (later
+		// model deltas are inserted ahead of this turn's deltas, so it still
+		// reconstructs from one contiguous window). Explicit cancellation
+		// goes through InterruptHandler, which resets the window itself.
+		c.holdUserTurns(curr)
 		if curr.Mode != state.DuplexSession {
-			// A turn-based pass bump would retire the open response: the
-			// ordering layer drops its remaining deltas as stale, MESSAGE.END
-			// included. Defer this turn's inference until the response ends.
-			c.deferredUserTurn = true
+			// A turn-based pass bump would retire the open exchange: the
+			// ordering layer drops its remaining deltas as stale. The model
+			// answers this turn once the exchange completes.
+			c.heldTurnNeedsInference = true
 			return
 		}
 		// Session deltas carry no LoopPassID, so the pass bump cannot retire
 		// the provider's response; the request forwards the text to it.
-		c.dispatchInference(ctx, curr)
+		conversation := append(append([]messages.Message(nil), curr.History.ConversationBuffer...), curr.History.HeldUserMessages...)
+		c.dispatchInferenceOver(ctx, curr, conversation)
 		return
+	}
+	// Dispatch user messages to kernel via unified delta inbox.
+	for _, message := range curr.Inputs.UserOutputMessage {
+		c.logInfo("Coordinator: user text output message", logging.Field{Key: "message", Value: message})
+		c.sendInferenceResult(ctx, curr, messages.User, message)
 	}
 	c.resetModelDeltaWindow(curr)
 	c.dispatchInference(ctx, curr)
@@ -236,9 +255,14 @@ func (c *Coordinator) dispatchUserOutputs(ctx context.Context, curr *state.LoopS
 
 // dispatchInference starts the next model pass over the whole conversation.
 func (c *Coordinator) dispatchInference(ctx context.Context, curr *state.LoopState) {
+	c.dispatchInferenceOver(ctx, curr, curr.History.ConversationBuffer)
+}
+
+// dispatchInferenceOver starts the next model pass over conversation.
+func (c *Coordinator) dispatchInferenceOver(ctx context.Context, curr *state.LoopState, conversation []messages.Message) {
 	curr.History.CurrentPassID++
 	curr.Outputs.ModelInbox.Write(ctx, messages.NewInferenceRequest(
-		curr.History.ConversationBuffer, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
+		conversation, curr.Tools, curr.History.CurrentPassID, curr.InferenceDefaults,
 	))
 }
 

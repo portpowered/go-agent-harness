@@ -93,6 +93,19 @@ func (h *InterruptHandler) Execute(ctx context.Context, curr *state.LoopState) e
 		h.toolCanceller.CancelCurrentExecution()
 	}
 
+	// Held user turns were sent before the interrupt; they precede its text.
+	for _, message := range curr.History.HeldUserMessages {
+		messages.WriteKernelDelta(ctx, curr.Outputs.KernelDeltaInbox, messages.KernelDeltaRequest{
+			Source: messages.User,
+			Delta: messages.StreamMessage{
+				Type:  messages.StreamTypeSystemFullMessage,
+				Value: messages.NewInferenceResultValue(string(messages.User), message),
+			},
+		})
+	}
+	curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, curr.History.HeldUserMessages...)
+	curr.History.HeldUserMessages = nil
+
 	// 3. If the interrupt message carries text content, add it as a user turn so
 	//    the resumed inference has the caller's follow-up instruction.
 	for _, msg := range curr.Inputs.UserControlPlaneMessage {

@@ -13,8 +13,9 @@ import (
 // realistic duplex one: the provider answers the first user turn only after
 // receiving it, streams a tool call the client sees complete, and the user
 // types again before the provider's MESSAGE.END. Nothing cancelled the
-// response, so its tool call must execute, and history must keep the second
-// user turn at its arrival position ahead of the response it interleaved with.
+// response, so its tool call must execute. The second user turn reaches the
+// provider at once, but joins history after the tool call and its result, so
+// the result still directly follows its call.
 func TestSessionUserTurnDuringToolCallResponseStillExecutesToolCall(t *testing.T) {
 	t.Parallel()
 	const wait = 3 * time.Second
@@ -64,9 +65,9 @@ func TestSessionUserTurnDuringToolCallResponseStillExecutesToolCall(t *testing.T
 	}
 	want := []string{
 		"user:first: please look this up",
-		"user:second: also, one more thing",
 		"assistant:tool_call=call-x",
 		"tool:result=call-x",
+		"user:second: also, one more thing",
 	}
 	if got := describeHistory(history); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("history:\n got %q\nwant %q", got, want)

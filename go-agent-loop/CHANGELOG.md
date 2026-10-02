@@ -104,12 +104,20 @@ every program that imports `pkg/probe`. These names have no replacement:
   response's MESSAGE.END rebuilt a message without the tool calls the client
   had already seen complete, and they never executed. The response is not
   cancelled, so it now completes from its own deltas and its tool calls run.
-  The user turn is still recorded at its arrival position in history.
-  - Duplex sessions: the user turn is forwarded to the provider immediately,
-    as before.
-  - Turn-based loops: the user turn's inference waits for the open response
-    to end. A tool continuation carries it. After a final answer, the loop
-    answers the deferred turn instead of ending. Previously the new pass
-    retired the open response, and its remaining deltas were dropped as stale.
-  - Explicit interrupts (`SendInterrupt`) and barge-in cancellation behave as
-    before.
+- A user turn that arrives while a response is open, or while a tool batch
+  has not reported its results, now joins the conversation history (and the
+  kernel's full-message stream) only after that exchange completes:
+  `[user, assistant answer, user]`, or `[user, assistant tool_call, tool,
+  user]`. History no longer splits a tool call from its result, which Chat
+  Completions and Anthropic reject, and no inference request ends on an
+  assistant message, which current Claude models reject as a prefill.
+  `History.HeldUserMessages` holds such turns in the meantime.
+  - Duplex sessions: the user turn is still forwarded to the provider
+    immediately.
+  - Turn-based loops: the model answers the held turn once the exchange
+    completes. A tool continuation carries it. After a final answer, the loop
+    answers it instead of ending. Previously the new pass retired the open
+    exchange, and its remaining deltas, including tool results, were dropped
+    as stale.
+  - Explicit interrupts (`SendInterrupt`) place held turns at once, ahead of
+    the interrupt's own text; barge-in cancellation behaves as before.

@@ -108,6 +108,13 @@ type History struct {
 	ModelDeltaStartIndex   int
 	CurrentModelDeltaCount int
 
+	// HeldUserMessages are user turns that arrived while a model response was
+	// still open or a tool batch had not reported its results. They join
+	// ConversationBuffer once that exchange is complete, so history never
+	// splits a tool call from its result and never ends a model request on
+	// an assistant message. An interrupt places them at once.
+	HeldUserMessages []messages.Message
+
 	// ToolDeltaStartIndex is the index in ConversationDeltaBuffer where the current
 	// tool batch's deltas begin (set when a tool MESSAGE.START delta is consumed).
 	ToolDeltaStartIndex   int
