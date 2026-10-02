@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -73,8 +74,10 @@ func (p *providerSession) Receive() *messages.TypedBuffer[messages.StreamMessage
 		p.claimedLate = true
 	}
 	p.mu.Unlock()
-	p.receiveOnce.Do(func() { close(p.receiveSeen) })
+	// Record before signalling: the test records sink_admission as soon as
+	// receiveSeen closes, so the receipt must already be in the trace.
 	p.trace.record("provider_receipt", 0, boundarySamples)
+	p.receiveOnce.Do(func() { close(p.receiveSeen) })
 	return p.receive
 }
 func (p *providerSession) Done() <-chan struct{} { return p.done }
@@ -230,12 +233,16 @@ terminalObserved:
 	trace.record("graceful_drain", sampleCount, sampleCount)
 }
 
+// The bubble puts the one-second guards on fake time: they fire only if
+// every goroutine is durably blocked, never because the host is loaded.
 func TestTerminalDrainOrderedBoundaryTrace(t *testing.T) {
-	trace := &boundaryTrace{started: time.Now()}
-	provider := newProviderSession(trace)
-	handle := openHandle(t, provider)
-	pcm := samples()
-	admitAndRender(t, handle, provider, trace, pcm)
-	closeAfterTerminal(t, handle, provider, trace, len(pcm))
-	t.Logf("C127_ORDERED_BOUNDARY_TRACE events=%s", assertTrace(t, trace))
+	synctest.Test(t, func(t *testing.T) {
+		trace := &boundaryTrace{started: time.Now()}
+		provider := newProviderSession(trace)
+		handle := openHandle(t, provider)
+		pcm := samples()
+		admitAndRender(t, handle, provider, trace, pcm)
+		closeAfterTerminal(t, handle, provider, trace, len(pcm))
+		t.Logf("C127_ORDERED_BOUNDARY_TRACE events=%s", assertTrace(t, trace))
+	})
 }

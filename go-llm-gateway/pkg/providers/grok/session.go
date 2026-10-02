@@ -17,14 +17,19 @@ import (
 )
 
 var (
-	_ messages.Session                   = (*grokSession)(nil)
-	_ messages.SessionSendOutcomeSender  = (*grokSession)(nil)
-	_ messages.SessionResponseRequester  = (*grokSession)(nil)
-	_ messages.SessionResponseCapability = (*grokSession)(nil)
-	_ messages.SessionDropCounters       = (*grokSession)(nil)
-	_ messages.SessionOutboundFlusher    = (*grokSession)(nil)
-	_ sharedaudio.MediaSession           = (*grokSession)(nil)
-	_ realtime.Handler                   = (*grokSession)(nil)
+	_ messages.Session                     = (*grokSession)(nil)
+	_ messages.SessionSendOutcomeSender    = (*grokSession)(nil)
+	_ messages.SessionResponseRequester    = (*grokSession)(nil)
+	_ messages.SessionResponseCapability   = (*grokSession)(nil)
+	_ messages.SessionDropCounters         = (*grokSession)(nil)
+	_ messages.SessionOutboundFlusher      = (*grokSession)(nil)
+	_ sharedaudio.MediaSession             = (*grokSession)(nil)
+	_ messages.SessionInitialConfigMarker  = (*grokSession)(nil)
+	_ messages.SessionTerminalError        = (*grokSession)(nil)
+	_ messages.SessionLocalPlayback        = (*grokSession)(nil)
+	_ messages.SessionInputFormat          = (*grokSession)(nil)
+	_ sharedaudio.ConfigurableMediaSession = (*grokSession)(nil)
+	_ realtime.Handler                     = (*grokSession)(nil)
 )
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage
@@ -32,7 +37,10 @@ var (
 // this type translates between StreamMessages and the Grok wire protocol
 // (OpenAI Realtime API conventions).
 type grokSession struct {
-	*realtime.Session
+	// Surface promotes only the caller-facing session methods; base is the
+	// skeleton itself, whose mutators stay private to this provider.
+	realtime.Surface
+	base *realtime.Session
 }
 
 // grokSessionSettings are the per-connection session options.
@@ -46,7 +54,7 @@ func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
 
 func newConfiguredGrokSession(conn transport.Conn, logger logging.Logger, settings grokSessionSettings) *grokSession {
 	s := &grokSession{}
-	s.Session = realtime.NewSession(conn, logger, realtime.Config{
+	s.base = realtime.NewSession(conn, logger, realtime.Config{
 		LogPrefix:        "grok",
 		MediaName:        "Grok",
 		OutputSampleRate: settings.outputSampleRate,
@@ -56,13 +64,14 @@ func newConfiguredGrokSession(conn transport.Conn, logger logging.Logger, settin
 		// provider-side truncation is possible.
 		InterruptPlayback: func(context.Context) { s.interruptRTCPlayback() },
 	})
+	s.Surface = s.base.Surface()
 	return s
 }
 
 // start launches the read and write goroutines.
-func (s *grokSession) start(ctx context.Context) { s.Start(ctx, s) }
+func (s *grokSession) start(ctx context.Context) { s.base.Start(ctx, s) }
 
-func (s *grokSession) writeLoop(ctx context.Context) { s.WriteLoop(ctx, s) }
+func (s *grokSession) writeLoop(ctx context.Context) { s.base.WriteLoop(ctx, s) }
 
 // Send writes a StreamMessage to the session's outbound queue.
 // It translates the StreamMessage to a Grok wire event. Returns false
@@ -115,7 +124,7 @@ func (s *grokSession) sendEvents(ctx context.Context, events []models.SessionEve
 	if ctx.Err() != nil {
 		return realtime.ContextOutcome(ctx)
 	}
-	return s.EnqueueEvents(ctx, events)
+	return s.base.EnqueueEvents(ctx, events)
 }
 
 // HandleEvent forwards provider audio to the RTC media path and translates the
@@ -134,7 +143,9 @@ func (*grokSession) ExpectedReadClose(err error) bool {
 
 // ExpectedWriteClose treats any write failure during shutdown as orderly;
 // every other Grok write failure is terminal.
-func (s *grokSession) ExpectedWriteClose(ctx context.Context, _ error) bool { return s.Stopping(ctx) }
+func (s *grokSession) ExpectedWriteClose(ctx context.Context, _ error) bool {
+	return s.base.Stopping(ctx)
+}
 
 // EventWritten has no Grok-specific bookkeeping.
 func (*grokSession) EventWritten(models.SessionEvent) {}

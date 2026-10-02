@@ -16,6 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testcover"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ const updateGoldensFlag = "update"
 // hangingAgentName, and the tests otherwise.
 func TestMain(m *testing.M) {
 	if runAsHangingAgent() {
+		testcover.MustIsolateFixtureProcess()
 		blockHangingAgent()
 		os.Exit(0)
 	}

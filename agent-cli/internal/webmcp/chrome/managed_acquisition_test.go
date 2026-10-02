@@ -19,6 +19,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testcover"
 )
 
 func TestManagedChromeAcquirerPrefersQualifiedStockChrome(t *testing.T) {
@@ -473,6 +475,7 @@ const chromeVersionHelperOutput = "Google Chrome for Testing 152.0.7977.64 (vers
 // binary on every platform.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		testcover.MustIsolateFixtureProcess()
 		if _, err := os.Stdout.WriteString(chromeVersionHelperOutput + "\n"); err != nil {
 			os.Exit(1)
 		}

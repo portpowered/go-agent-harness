@@ -45,6 +45,10 @@ type ToolDiagnostic struct {
 	Source     string
 	ErrorCode  string
 	Error      error
+	// Stack is the goroutine stack of a panic recovered behind Error, or nil.
+	// It is kept out of Error's text so single-line log formatters stay
+	// clean; operator sinks print it separately.
+	Stack []byte
 }
 
 type ToolDiagnosticSink interface {

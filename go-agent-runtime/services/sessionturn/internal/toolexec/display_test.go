@@ -25,10 +25,12 @@ type screenExecutor struct {
 	supported    bool
 	panicSupport bool
 	panicCheck   bool
-	pageSight    bool
-	started      chan struct{}
-	exited       chan struct{}
-	startOnce    sync.Once
+	// panicLate panics in the re-check only after its bound has expired.
+	panicLate bool
+	pageSight bool
+	started   chan struct{}
+	exited    chan struct{}
+	startOnce sync.Once
 }
 
 func newScreenExecutor(permission tools.DisplayPermission) *screenExecutor {
@@ -62,6 +64,10 @@ func (e *screenExecutor) RecheckScreenRecordingPermission(ctx context.Context) (
 	e.mu.Unlock()
 	if e.panicCheck {
 		panic("recheck failed")
+	}
+	if e.panicLate {
+		<-ctx.Done()
+		panic("late recheck failed")
 	}
 	if wait != nil {
 		select {

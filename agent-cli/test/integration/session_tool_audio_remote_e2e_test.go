@@ -263,7 +263,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	prompt := strings.Repeat("p", promptBytes)
 	provider := newRemoteToolAudioProvider(responses, testCase.toolResponses, calls, deltaDelay, prompt, inputFrames*audio.FrameSize*3/2)
 	defer provider.Close()
-	device, startAgent := startRemoteToolAudioTopology(t, testCase, provider)
+	device, startAgent := startPacedRemoteToolAudioTopology(t, testCase, provider, responses, callbackInterval)
 
 	paths := newRemoteToolAudioPaths(t, testCase, calls, toolDelay)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

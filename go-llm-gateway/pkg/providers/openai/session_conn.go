@@ -64,12 +64,12 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	// Queue any immediate server audio before the read loop starts. A caller
 	// that only consumes the normalized stream releases this speculative queue
 	// on its first Receive call; an RTC caller claims it through RTCMedia.
-	session.PrepareRTCMedia()
+	session.base.PrepareRTCMedia()
 	sessionUpdate, err := p.buildRealtimeSessionUpdate(config, model)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("openai realtime: build session update for %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
-	if err := session.WriteEvent(sessionUpdate); err != nil {
+	if err := session.base.WriteEvent(sessionUpdate); err != nil {
 		return nil, errors.Join(fmt.Errorf("openai realtime: send session update to %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
 
@@ -121,13 +121,13 @@ func safeEndpointForError(endpoint string) string {
 }
 
 func (s *realtimeSession) start(ctx context.Context) {
-	s.Start(ctx, s)
+	s.base.Start(ctx, s)
 	go s.responseIntentLoop(ctx)
 }
 
-func (s *realtimeSession) readLoop(ctx context.Context) { s.ReadLoop(ctx, s) }
+func (s *realtimeSession) readLoop(ctx context.Context) { s.base.ReadLoop(ctx, s) }
 
-func (s *realtimeSession) writeLoop(ctx context.Context) { s.WriteLoop(ctx, s) }
+func (s *realtimeSession) writeLoop(ctx context.Context) { s.base.WriteLoop(ctx, s) }
 
 // HandleEvent tracks the provider response lifecycle, forwards audio to the
 // RTC media path and translates the event for the normalized stream.
@@ -137,7 +137,7 @@ func (s *realtimeSession) HandleEvent(ctx context.Context, event models.SessionE
 	}
 	s.observeResponseLifecycle(event)
 	if err := s.publishRTCMedia(ctx, event); err != nil {
-		s.Logger().Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
+		s.base.Logger().Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
 	}
 	return realtimeInboundMessages(event)
 }
@@ -151,7 +151,7 @@ func (s *realtimeSession) ExpectedReadClose(err error) bool {
 // ExpectedWriteClose treats a connection close after session.closed or Close
 // as orderly; the read loop still drains the provider's final frames.
 func (s *realtimeSession) ExpectedWriteClose(_ context.Context, err error) bool {
-	return isProviderCloseTransportError(err) && (s.providerClosed.Load() || s.Closed())
+	return isProviderCloseTransportError(err) && (s.providerClosed.Load() || s.base.Closed())
 }
 
 // EventWritten arms the single retry of a written response.create.
@@ -168,7 +168,7 @@ func (s *realtimeSession) FlushOutbound(ctx context.Context) error {
 		return nil
 	}
 	for {
-		if err := s.Session.FlushOutbound(ctx); err != nil {
+		if err := s.Surface.FlushOutbound(ctx); err != nil {
 			return err
 		}
 		settlements := s.pendingAudioIntentSettlements()

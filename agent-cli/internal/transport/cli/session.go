@@ -33,7 +33,7 @@ func sessionToolDiagnosticSink(out io.Writer) serviceSession.SessionToolDiagnost
 		if diagnostic.Error == nil {
 			return
 		}
-		writeAdvisory(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
+		writeToolDiagnostic(out, diagnostic)
 	})
 }
 

@@ -294,6 +294,18 @@ func TestWriteEventRejectsNonObjectData(t *testing.T) {
 	}
 }
 
+// JSON null decodes into a nil map; it must still write a type-only event.
+func TestWriteEventTreatsNullDataAsEmpty(t *testing.T) {
+	conn := newFakeConn()
+	s := NewSession(conn, nil, Config{LogPrefix: "test"})
+	if err := s.WriteEvent(models.SessionEvent{Type: "x", Data: []byte(`null`)}); err != nil {
+		t.Fatalf("null event data: %v", err)
+	}
+	if got := string(<-conn.writes); got != `{"type":"x"}` {
+		t.Fatalf("wire frame = %s, want type only", got)
+	}
+}
+
 func TestParseEvent(t *testing.T) {
 	event, err := ParseEvent([]byte(`{"type":"response.done","response":{}}`))
 	if err != nil || event.Type != models.SessionEventResponseDone {

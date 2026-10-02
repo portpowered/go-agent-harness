@@ -253,12 +253,24 @@ func (s *Session) enqueue(ctx context.Context, event models.SessionEvent, backpr
 }
 
 // WriteEvent serializes event as one flat JSON object, its Data fields plus
-// "type", and writes it to the connection.
+// "type", and writes it to the connection. Empty or JSON null Data writes a
+// type-only event.
+//
+// Data that is not a JSON object is an error, and the write loop treats it as
+// a terminal write failure. This is deliberate and differs from Grok's
+// pre-#616 writer, which dropped undecodable Data and sent a type-only event:
+// stripping the payload silently sends a different event (an audio append
+// without audio, a tool result without output) and hides the encoder bug that
+// produced it. Every outbound event is built by json.Marshal of an object, so
+// in practice this fires only on such a bug.
 func (s *Session) WriteEvent(event models.SessionEvent) error {
 	payload := map[string]json.RawMessage{}
 	if len(event.Data) > 0 {
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return fmt.Errorf("unmarshal event payload: %w", err)
+		}
+		if payload == nil { // JSON null
+			payload = map[string]json.RawMessage{}
 		}
 	}
 	typeBytes, err := json.Marshal(event.Type)

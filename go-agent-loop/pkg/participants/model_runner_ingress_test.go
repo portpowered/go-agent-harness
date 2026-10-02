@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -42,18 +43,16 @@ type wireLogSession struct {
 	*recordingSession
 	mu  sync.Mutex
 	log []string
-	got chan struct{}
 }
 
 func newWireLogSession() *wireLogSession {
-	return &wireLogSession{recordingSession: newRecordingSession(), got: make(chan struct{}, 64)}
+	return &wireLogSession{recordingSession: newRecordingSession()}
 }
 
 func (s *wireLogSession) record(entry string) {
 	s.mu.Lock()
 	s.log = append(s.log, entry)
 	s.mu.Unlock()
-	s.got <- struct{}{}
 }
 
 func (s *wireLogSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
@@ -70,15 +69,7 @@ func (s *wireLogSession) SendMessageWithoutResponse(_ context.Context, msg messa
 	return true
 }
 
-func (s *wireLogSession) waitFor(t *testing.T, n int) []string {
-	t.Helper()
-	for range n {
-		select {
-		case <-s.got:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("timed out waiting for %d provider inputs", n)
-		}
-	}
+func (s *wireLogSession) snapshot() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.log...)
@@ -97,15 +88,21 @@ func assertWireOrder(t *testing.T, got, want []string) {
 }
 
 // runQueuedInputs starts the runner after every input is already queued, so
-// the order the provider sees depends only on the ingress.
+// the order the provider sees depends only on the ingress. It must run inside
+// a synctest bubble: once the runner has drained the ingress and is durably
+// blocked, every forwardable input has reached the provider.
 func runQueuedInputs(t *testing.T, runner *ModelRunner, session *wireLogSession, n int) []string {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- runner.Run(ctx) }()
-	got := session.waitFor(t, n)
+	synctest.Wait()
+	got := session.snapshot()
 	cancel()
 	<-done
+	if len(got) < n {
+		t.Fatalf("provider inputs after the runner went idle = %q, want %d", got, n)
+	}
 	return got
 }
 
@@ -126,19 +123,21 @@ func audioInput(b byte) SessionInput {
 // overtakes the turn boundary admitted before it, and never falls behind one
 // admitted after it.
 func TestSessionIngress_AudioControlsAndMessagesKeepAdmissionOrder(t *testing.T) {
-	session := newWireLogSession()
-	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 16, nil)
-	admit(t, runner,
-		audioInput('1'),
-		SessionEvent(messages.StreamMessage{Type: messages.StreamTypeMessageEnd}),
-		audioInput('2'),
-		SessionMessage(messages.NewTextMessage(messages.RoleUser, "look"), false),
-		audioInput('3'),
-		SessionEvent(messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}),
-		audioInput('4'),
-	)
-	assertWireOrder(t, runQueuedInputs(t, runner, session, 7), []string{
-		"AUDIO.DELTA:1", "MESSAGE.END", "AUDIO.DELTA:2", "COMPLETE:look", "AUDIO.DELTA:3", "RESPONSE.CREATE", "AUDIO.DELTA:4",
+	synctest.Test(t, func(t *testing.T) {
+		session := newWireLogSession()
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 16, nil)
+		admit(t, runner,
+			audioInput('1'),
+			SessionEvent(messages.StreamMessage{Type: messages.StreamTypeMessageEnd}),
+			audioInput('2'),
+			SessionMessage(messages.NewTextMessage(messages.RoleUser, "look"), false),
+			audioInput('3'),
+			SessionEvent(messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}),
+			audioInput('4'),
+		)
+		assertWireOrder(t, runQueuedInputs(t, runner, session, 7), []string{
+			"AUDIO.DELTA:1", "MESSAGE.END", "AUDIO.DELTA:2", "COMPLETE:look", "AUDIO.DELTA:3", "RESPONSE.CREATE", "AUDIO.DELTA:4",
+		})
 	})
 }
 
@@ -168,10 +167,12 @@ func TestSessionIngress_CancelPriorityRespectsQueuedControls(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			session := newWireLogSession()
-			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 16, nil)
-			admit(t, runner, test.inputs...)
-			assertWireOrder(t, runQueuedInputs(t, runner, session, len(test.want)), test.want)
+			synctest.Test(t, func(t *testing.T) {
+				session := newWireLogSession()
+				runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 16, nil)
+				admit(t, runner, test.inputs...)
+				assertWireOrder(t, runQueuedInputs(t, runner, session, len(test.want)), test.want)
+			})
 		})
 	}
 }
@@ -387,5 +388,68 @@ func TestSessionModelRunner_CompleteMessageRequiresProviderSupport(t *testing.T)
 	}
 	if got := session.completeMessages(); len(got) != 1 || got[0].TextContent() != "now" {
 		t.Fatalf("complete messages = %#v, want the admitted message", got)
+	}
+}
+
+// A progress acknowledgement that arrives while a response is speaking is
+// dropped, never replayed. Dropping it must still release its pending tool
+// boundary, or later inference requests wait on a boundary that never comes.
+func TestModelRunner_DroppedAcknowledgementReleasesPendingToolBoundary(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+
+	if err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewToolAcknowledgementResponseCreateValue(),
+	}), SessionAdmitOrFail); err != nil {
+		t.Fatalf("queue acknowledgement: %v", err)
+	}
+	input := <-runner.ingress.ordered
+
+	state := &sessionRunState{}
+	state.Response.Start("resp-speaking")
+	runner.forwardQueuedSessionEvent(ctx, session, state, input.event)
+
+	if sent := session.sentMessages(); len(sent) != 0 {
+		t.Fatalf("acknowledgement over a live response reached the provider: %#v", sent)
+	}
+	if len(state.Deferred) != 0 {
+		t.Fatalf("dropped acknowledgement was deferred: %#v", state.Deferred)
+	}
+	if runner.hasPendingSessionToolEvents() {
+		t.Fatal("dropped acknowledgement left its tool boundary pending")
+	}
+}
+
+// A continuation held behind an outstanding acknowledgement replays later, so
+// its tool boundary stays pending until the replay forwards it.
+func TestModelRunner_HeldContinuationStaysPendingUntilReplayed(t *testing.T) {
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx := context.Background()
+
+	if err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCreate,
+		Value: messages.NewResponseCreateValue(),
+	}), SessionAdmitOrFail); err != nil {
+		t.Fatalf("queue continuation: %v", err)
+	}
+	input := <-runner.ingress.ordered
+
+	state := &sessionRunState{}
+	state.Ack.Request()
+	runner.forwardQueuedSessionEvent(ctx, session, state, input.event)
+	if !runner.hasPendingSessionToolEvents() {
+		t.Fatal("held continuation released its tool boundary before it was forwarded")
+	}
+
+	state.Ack.Phase = sessionstate.AcknowledgementNone
+	runner.flushDeferredSessionEvents(ctx, session, state)
+	if runner.hasPendingSessionToolEvents() {
+		t.Fatal("replayed continuation left its tool boundary pending")
+	}
+	if sent := session.sentMessages(); len(sent) != 1 || sent[0].Type != messages.StreamTypeResponseCreate {
+		t.Fatalf("replayed continuation sends = %#v, want one RESPONSE.CREATE", sent)
 	}
 }

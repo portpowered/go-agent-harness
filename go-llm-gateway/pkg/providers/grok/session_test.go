@@ -329,7 +329,7 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 		t.Fatalf("ConnectSession: %v", err)
 	}
 	defer closeForTest(t, session)
-	if grokSessionForTest(t, session).CurrentRTCMedia() == nil {
+	if grokSessionForTest(t, session).base.CurrentRTCMedia() == nil {
 		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
 }

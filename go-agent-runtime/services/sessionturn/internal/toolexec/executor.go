@@ -115,16 +115,19 @@ func (e *Executor) expired(ctx, execCtx context.Context, call messages.ToolCall,
 	if e.sigintCancelled(execCtx, execCtx.Err()) {
 		return cancelledResult(call, execCtx.Err())
 	}
+	var recheckPanic error
 	if errors.Is(execCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-		if permission, denied := e.deniedScreenPermission(ctx, call); denied {
+		permission, denied, panicked := e.deniedScreenPermission(ctx, call)
+		if denied {
 			return e.finish(call, e.failure(call, e.presentation.DisplayPermissionDenied(permission)))
 		}
+		recheckPanic = panicked
 	}
 	failure := contextFailure(execCtx.Err())
 	if errors.Is(failure, sessionturn.ErrToolTimeout) {
 		failure = fmt.Errorf("%w after %s", sessionturn.ErrToolTimeout, timeout)
 	}
-	return e.finish(call, e.failure(call, failure))
+	return e.finish(call, e.failureWithCause(call, failure, recheckPanic))
 }
 
 // finish keeps the provider's call identity authoritative even when an

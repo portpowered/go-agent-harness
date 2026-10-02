@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -88,32 +87,13 @@ func waitForFrameCount(t *testing.T, conn *mockWebSocketConn, n int, deadline ti
 	}
 }
 
-func finishComposedResponse(t *testing.T, conn *mockWebSocketConn, session messages.Session, responseID string, deadline time.Time) {
-	t.Helper()
-	realtime, ok := session.(*realtimeSession)
-	if !ok {
-		t.Fatalf("session type = %T, want *realtimeSession", session)
-	}
-	conn.mu.Lock()
-	doneIndex := len(conn.serverMessages) + 2
-	conn.mu.Unlock()
+// finishComposedResponse scripts the provider's continuation response. The
+// session holds later response work until this response's done releases the
+// single response slot, so the next client frame waited for with
+// waitForFrameCount is itself the proof that the done was handled.
+func finishComposedResponse(conn *mockWebSocketConn, responseID string) {
 	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": responseID}})
 	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": responseID, "status": "completed"}})
-	// The read loop handles frames in order: once response.done has been read,
-	// response.created has taken the slot, so an idle slot means the done was
-	// handled.
-	for {
-		conn.mu.Lock()
-		read := conn.readIdx >= doneIndex
-		conn.mu.Unlock()
-		if read && !realtimeResponseActive(realtime) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("provider did not finish the admitted response")
-		}
-		runtime.Gosched()
-	}
 }
 
 func addServerEvent(conn *mockWebSocketConn, eventType string, fields map[string]any) {
@@ -131,7 +111,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		continuationResponseID = "resp_composed_continuation"
 	)
 
-	conn, session, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+	conn, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
 		callID: {ToolCallID: callID, Name: toolName, Content: toolOut},
 	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
 
@@ -173,9 +153,9 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 	if frames[3].Type != string(models.SessionEventResponseCreate) {
 		t.Fatalf("tool continuation frame = %q, want response.create", frames[3].Type)
 	}
-	// Acknowledge only after the continuation request reaches the wire, then
-	// wait for its completion to release the next response admission slot.
-	finishComposedResponse(t, conn, session, continuationResponseID, deadline)
+	// Acknowledge only after the continuation request reaches the wire. The
+	// plain-text turn below queues behind this response until its done.
+	finishComposedResponse(conn, continuationResponseID)
 
 	// Turn 2: plain user-text turn must keep the unchanged pairing.
 	if err := al.SendSessionEvent(ctx, messages.StreamMessage{
@@ -226,7 +206,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		timeoutOut = `tool "lookup_weather" failed (classification=interactive_tool_timeout): tool execution timed out after 20s`
 	)
 
-	conn, _, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+	conn, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
 		callID: {ToolCallID: callID, Name: toolName, Content: timeoutOut},
 	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
 	runLoopUntilCleanup(t, ctx, al)
@@ -323,7 +303,7 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 	)
 	imageBytes := []byte("committed image bytes")
 
-	conn, _, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
+	conn, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
 		textCallID:  {ToolCallID: textCallID, Content: textOutput},
 		imageCallID: {ToolCallID: imageCallID, ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}}},
 	}, []messages.ToolDefinition{
@@ -397,7 +377,7 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 // startComposedToolLoop connects a realtime session over a mock websocket and
 // builds a DuplexSession agent loop that executes the scripted tool responses.
 // The session is closed, then the context cancelled, when the test ends.
-func startComposedToolLoop(t *testing.T, responses map[string]messages.ToolCallResponse, tools []messages.ToolDefinition) (*mockWebSocketConn, messages.Session, *agentloop.AgentLoop, context.Context) {
+func startComposedToolLoop(t *testing.T, responses map[string]messages.ToolCallResponse, tools []messages.ToolDefinition) (*mockWebSocketConn, *agentloop.AgentLoop, context.Context) {
 	t.Helper()
 	conn := newMockWebSocketConn()
 	provider := newMockRealtimeProvider(conn)
@@ -421,7 +401,7 @@ func startComposedToolLoop(t *testing.T, responses map[string]messages.ToolCallR
 	if err != nil {
 		t.Fatalf("agentloop.New: %v", err)
 	}
-	return conn, session, al, ctx
+	return conn, al, ctx
 }
 
 // wireItemTypeMessage is the conversation item type of user messages.

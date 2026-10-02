@@ -281,6 +281,29 @@ func TestSessionToolDiagnosticSinkWritesTypedOperatorDetail(t *testing.T) {
 			t.Errorf("stderr diagnostic %q does not contain %q", got, want)
 		}
 	}
+	if strings.Contains(got, "stack:") {
+		t.Errorf("stderr diagnostic %q printed a stack for a diagnostic without one", got)
+	}
+}
+
+func TestSessionToolDiagnosticSinkPrintsPanicStackAfterItsLine(t *testing.T) {
+	var stderr strings.Builder
+	sessionToolDiagnosticSink(&stderr).RecordSessionToolDiagnostic(servicetest.SessionToolDiagnostic{
+		ToolCallID: "panic-call",
+		ToolName:   "panicky",
+		Error:      errors.New("tool execution panicked: boom"),
+		Stack:      []byte("goroutine 7 [running]:\nmain.boom()\n"),
+	})
+	lines := strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n")
+	want := []string{
+		`tool diagnostic: tool="panicky" call_id="panic-call" source="" error_code="" detail=tool execution panicked: boom`,
+		`tool diagnostic stack: call_id="panic-call"`,
+		"goroutine 7 [running]:",
+		"main.boom()",
+	}
+	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("stderr = %q, want %q", lines, want)
+	}
 }
 
 func hasSessionDefinition(definitions []messages.ToolDefinition, name string) bool {

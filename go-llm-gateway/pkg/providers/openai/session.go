@@ -15,21 +15,29 @@ import (
 )
 
 var (
-	_ messages.Session                   = (*realtimeSession)(nil)
-	_ messages.SessionSendOutcomeSender  = (*realtimeSession)(nil)
-	_ messages.SessionResponseRequester  = (*realtimeSession)(nil)
-	_ messages.SessionResponseCapability = (*realtimeSession)(nil)
-	_ messages.SessionDropCounters       = (*realtimeSession)(nil)
-	_ messages.SessionOutboundFlusher    = (*realtimeSession)(nil)
-	_ sharedaudio.MediaSession           = (*realtimeSession)(nil)
-	_ realtime.Handler                   = (*realtimeSession)(nil)
+	_ messages.Session                     = (*realtimeSession)(nil)
+	_ messages.SessionSendOutcomeSender    = (*realtimeSession)(nil)
+	_ messages.SessionResponseRequester    = (*realtimeSession)(nil)
+	_ messages.SessionResponseCapability   = (*realtimeSession)(nil)
+	_ messages.SessionDropCounters         = (*realtimeSession)(nil)
+	_ messages.SessionOutboundFlusher      = (*realtimeSession)(nil)
+	_ sharedaudio.MediaSession             = (*realtimeSession)(nil)
+	_ messages.SessionInitialConfigMarker  = (*realtimeSession)(nil)
+	_ messages.SessionTerminalError        = (*realtimeSession)(nil)
+	_ messages.SessionLocalPlayback        = (*realtimeSession)(nil)
+	_ messages.SessionInputFormat          = (*realtimeSession)(nil)
+	_ sharedaudio.ConfigurableMediaSession = (*realtimeSession)(nil)
+	_ realtime.Handler                     = (*realtimeSession)(nil)
 )
 
 // realtimeSession is the OpenAI Realtime session. The shared realtime
 // skeleton owns the queues, loops and RTC media; this type owns OpenAI event
 // mapping and response admission.
 type realtimeSession struct {
-	*realtime.Session
+	// Surface promotes only the caller-facing session methods; base is the
+	// skeleton itself, whose mutators stay private to this provider.
+	realtime.Surface
+	base *realtime.Session
 
 	// clientTurnBoundaries reports that provider VAD is disabled.
 	clientTurnBoundaries bool
@@ -75,7 +83,7 @@ func newConfiguredRealtimeSession(conn transport.Conn, logger logging.Logger, se
 		clientTurnBoundaries: settings.clientTurnBoundaries,
 		responseWake:         make(chan struct{}, 1),
 	}
-	s.Session = realtime.NewSession(conn, logger, realtime.Config{
+	s.base = realtime.NewSession(conn, logger, realtime.Config{
 		LogPrefix:         "openai realtime",
 		MediaName:         "OpenAI",
 		WriteBackpressure: settings.writeBackpressure,
@@ -86,6 +94,7 @@ func newConfiguredRealtimeSession(conn transport.Conn, logger logging.Logger, se
 		InterruptPlayback: s.interruptPlaybackForCancel,
 		OnClose:           s.releaseResponseAdmission,
 	})
+	s.Surface = s.base.Surface()
 	return s
 }
 
@@ -145,14 +154,14 @@ func (s *realtimeSession) sendEvents(ctx context.Context, events []models.Sessio
 			return s.sendResponseCancel(ctx, events)
 		}
 	}
-	return s.EnqueueEvents(ctx, events)
+	return s.base.EnqueueEvents(ctx, events)
 }
 
 func (s *realtimeSession) admitResponseIntent(ctx context.Context, events []models.SessionEvent, reservesResponse bool) messages.SessionSendOutcome {
 	if ctx.Err() != nil {
 		return realtime.ContextOutcome(ctx)
 	}
-	if s.Closed() {
+	if s.base.Closed() {
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
 
@@ -218,7 +227,7 @@ func (s *realtimeSession) admitAudioCommitDeferringResponseLocked(ctx context.Co
 	commitEvents := withoutDefaultResponseCreate(events)
 	responseEvents := responseCreateEvents(events)
 	s.responseMu.Unlock()
-	outcome := s.EnqueueEvents(ctx, commitEvents)
+	outcome := s.base.EnqueueEvents(ctx, commitEvents)
 	if !outcome.OK() {
 		s.responseWireMu.Unlock()
 		return outcome
@@ -244,7 +253,7 @@ func (s *realtimeSession) dispatchResponseIntentNowLocked(ctx context.Context, e
 	s.response.beginDispatch(&responseIntent{events: events}, create, reservesResponse)
 	s.responseMu.Unlock()
 
-	outcome := s.EnqueueEvents(ctx, events)
+	outcome := s.base.EnqueueEvents(ctx, events)
 	s.responseMu.Lock()
 	s.response.inflight = nil
 	if outcome.OK() {
@@ -309,7 +318,7 @@ func (s *realtimeSession) dispatchNextPendingResponseIntent(ctx context.Context)
 	st.beginDispatch(&intent, create, reservesResponse)
 	s.responseMu.Unlock()
 
-	outcome := s.EnqueueEvents(ctx, intent.events)
+	outcome := s.base.EnqueueEvents(ctx, intent.events)
 	s.responseMu.Lock()
 	st.inflight = nil
 	s.responseMu.Unlock()
@@ -368,7 +377,7 @@ func (s *realtimeSession) publishResponseIntentFailure(outcome messages.SessionS
 		messages.TerminalOutputNone,
 	)
 	value.Err = outcome.Err
-	s.WriteTerminal(messages.StreamMessage{Type: messages.StreamTypeError, Value: value})
+	s.base.WriteTerminal(messages.StreamMessage{Type: messages.StreamTypeError, Value: value})
 }
 
 func (s *realtimeSession) signalResponseIntentWorker() {

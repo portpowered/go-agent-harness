@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // pcm16DeviceDurationAtRate converts samples using the negotiated device
@@ -28,7 +30,7 @@ func addPCM16FeedbackDuration(start, duration time.Duration) time.Duration {
 
 func pcm16FeedbackContextError(ctx context.Context) error {
 	if ctx == nil {
-		return nil
+		return contract.ErrNilContext
 	}
 	select {
 	case <-ctx.Done():

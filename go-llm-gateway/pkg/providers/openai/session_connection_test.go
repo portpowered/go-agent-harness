@@ -31,7 +31,7 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 	}
 	defer closeForTest(t, session)
 	realtime := realtimeSessionForTest(t, session)
-	if realtime.CurrentRTCMedia() == nil {
+	if realtime.base.CurrentRTCMedia() == nil {
 		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
 }

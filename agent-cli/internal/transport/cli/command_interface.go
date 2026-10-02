@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/spf13/cobra"
 )
 
@@ -74,3 +76,13 @@ func writeAdvisory(out io.Writer, format string, args ...any) {
 // or an abandoned connection); a close failure cannot change that outcome.
 // Callers pass the Close call inline so the close stays visible at the site.
 func discardCloseError(error) {}
+
+// writeToolDiagnostic writes one tool diagnostic as a single advisory line.
+// A recovered panic's stack follows that line as its own block, so the line
+// itself stays one line for log readers.
+func writeToolDiagnostic(out io.Writer, diagnostic serviceSession.SessionToolDiagnostic) {
+	writeAdvisory(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
+	if len(diagnostic.Stack) > 0 {
+		writeAdvisory(out, "tool diagnostic stack: call_id=%q\n%s\n", diagnostic.ToolCallID, bytes.TrimRight(diagnostic.Stack, "\n"))
+	}
+}

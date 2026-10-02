@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testcover"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
@@ -51,6 +52,7 @@ func runIntegrationTests(m *testing.M) int {
 	if os.Getenv(toolErrorPanicHelperEnv) != "" {
 		// The panic control's re-executed helper runs in place of the tests
 		// and execs no process-boundary binary.
+		testcover.MustIsolateFixtureProcess()
 		fmt.Fprintf(os.Stderr, "%v\n", runToolErrorPanicHelper())
 		return 1
 	}

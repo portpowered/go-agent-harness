@@ -19,13 +19,13 @@ func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedau
 	if err != nil {
 		return fmt.Errorf("encode OpenAI Realtime RTC audio: %w", err)
 	}
-	if s.Closed() {
+	if s.base.Closed() {
 		return errors.New("OpenAI Realtime RTC media write: session closed")
 	}
 	// Hardware capture is a continuous, clocked source. Backpressure it when
 	// the WebSocket writer is briefly behind instead of treating a transient
 	// full control queue as terminal audio loss.
-	outcome := s.EnqueueEventWait(ctx, models.NewAudioBufferAppendEvent(encoded))
+	outcome := s.base.EnqueueEventWait(ctx, models.NewAudioBufferAppendEvent(encoded))
 	if outcome.OK() {
 		return nil
 	}
@@ -39,7 +39,7 @@ func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedau
 }
 
 func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.SessionEvent) error {
-	media := s.CurrentRTCMedia()
+	media := s.base.CurrentRTCMedia()
 	if media == nil {
 		return nil
 	}
@@ -90,7 +90,7 @@ func (s *realtimeSession) interruptPlayback(ctx context.Context, media *sharedau
 		return nil
 	}
 	truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
-	outcome := s.EnqueueEventWait(ctx, truncate)
+	outcome := s.base.EnqueueEventWait(ctx, truncate)
 	if outcome.OK() {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []model
 	s.responseWireMu.Lock()
 	defer s.responseWireMu.Unlock()
 	s.invalidatePendingResponseIntents()
-	return s.EnqueueEvents(ctx, events)
+	return s.base.EnqueueEvents(ctx, events)
 }
 
 // ProviderTurnDetection reports whether OpenAI detects user speech itself. It
@@ -120,12 +120,12 @@ func (s *realtimeSession) ProviderTurnDetection() bool { return !s.clientTurnBou
 // at what was heard. A following server-VAD speech_started finds nothing
 // audible and sends no second truncation.
 func (s *realtimeSession) interruptPlaybackForCancel(ctx context.Context) {
-	media := s.CurrentRTCMedia()
+	media := s.base.CurrentRTCMedia()
 	if media == nil {
 		return
 	}
 	if err := s.interruptPlayback(ctx, media); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		s.Logger().Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
+		s.base.Logger().Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
 	}
 }
 
