@@ -520,6 +520,14 @@ gate fails naming that package.
 - Minimums use **exactly two decimal places** (`80.0` is rejected; write `80.00`).
 - The `packages` array stays **sorted** by import path.
 - Each entry carries **exactly one** of `minimum` or `exception`.
+- Floors **ratchet up**. The gate fails a floor more than 2.00 points below
+  the measured coverage (in a package so small that one statement is worth
+  more than that, one statement plus 0.10) and prints the minimum to raise it
+  to. Raise the floor in the same change that adds the coverage.
+- `0.00` is rejected: it enforces nothing. An `exception` must state its
+  reason, and is accepted only while no test covers a statement of the package
+  (declarations only, or a process entrypoint run only as a subprocess); once
+  a test covers one, register a `minimum`.
 - A refactor that moves code into a nested `internal/` subdirectory creates a
   **new measured package** — Go treats `.../foo/internal` as separate from
   `.../foo`, and the parent entry does not cover the child. Enumerate every new

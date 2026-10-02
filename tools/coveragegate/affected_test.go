@@ -140,7 +140,7 @@ func TestGateSelectedChecksOnlySelectedFloors(t *testing.T) {
 	writeTestFile(t, manifestPath, `{"packages": [
 		{"package": "example.test/a/checked", "minimum": 50.00},
 		{"package": "example.test/a/unmeasured", "minimum": 80.00},
-		{"package": "example.test/a/zero", "minimum": 0.00}
+		{"package": "example.test/a/zero", "exception": "process entrypoint"}
 	]}`)
 	profilePath := filepath.Join(directory, "a.out")
 	writeTestFile(t, profilePath, "mode: set\nexample.test/a/checked/c.go:1.1,2.1 3 1\nexample.test/a/checked/c.go:3.1,4.1 1 0\n")
@@ -151,7 +151,7 @@ func TestGateSelectedChecksOnlySelectedFloors(t *testing.T) {
 	if err := run([]string{"--manifest", manifestPath, "--select", selectPath, profilePath}, &stdout, &stderr); err != nil {
 		t.Fatalf("run(--select) error = %v", err)
 	}
-	if !strings.Contains(stdout.String(), "1 selected packages checked across 1 profiles") {
+	if !strings.Contains(stdout.String(), "2 selected packages checked across 1 profiles") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 

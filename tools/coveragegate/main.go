@@ -160,24 +160,11 @@ func gateSelected(manifest Manifest, selectPath string, measurements map[string]
 	if err != nil {
 		return fmt.Errorf("read --select file: %w", err)
 	}
-	floors := make(map[string]PackageEntry, len(manifest.Packages))
-	for _, entry := range manifest.Packages {
-		floors[entry.ImportPath] = entry
-	}
 	var selected []string
 	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+		if line = strings.TrimSpace(line); line != "" {
+			selected = append(selected, line)
 		}
-		// A zero floor passes whatever the measurement; a partial run may
-		// not have produced a profile for its module at all.
-		if entry, ok := floors[line]; ok && entry.HasMinimum && entry.MinimumCents == 0 {
-			if _, measured := measurements[line]; !measured {
-				continue
-			}
-		}
-		selected = append(selected, line)
 	}
 	if err := CompareSelected(manifest, selected, measurements); err != nil {
 		return err

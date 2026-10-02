@@ -25,13 +25,13 @@ func TestManifestErrorModes(t *testing.T) {
 		},
 		{
 			name:     "unsorted package array",
-			data:     `{"packages":[{"package":"example/z","minimum":0.00},{"package":"example/a","minimum":0.00}]}`,
+			data:     `{"packages":[{"package":"example/z","minimum":1.00},{"package":"example/a","minimum":1.00}]}`,
 			sentinel: ErrManifestUnsorted,
 			want:     `coverage manifest packages must be strictly sorted by import path: "example/a" follows "example/z"`,
 		},
 		{
 			name:     "both minimum and exception",
-			data:     manifestJSON(`{"package":"example/a","minimum":0.00,"exception":"later"}`),
+			data:     manifestJSON(`{"package":"example/a","minimum":1.00,"exception":"later"}`),
 			sentinel: ErrManifestBothFields,
 			want:     `coverage manifest package "example/a" must define exactly one of minimum or exception; found both`,
 		},
@@ -61,7 +61,7 @@ func TestManifestCompareErrorModes(t *testing.T) {
 	}{
 		{
 			name: "unregistered package",
-			data: manifestJSON(`{"package":"example/a","minimum":0.00}`),
+			data: manifestJSON(`{"package":"example/a","minimum":1.00}`),
 			measurements: map[string]Coverage{
 				"example/a":       {Covered: 1, Total: 1},
 				"example/missing": {Covered: 1, Total: 1},
@@ -124,7 +124,7 @@ func TestGoldenMultiPackageFailureReport(t *testing.T) {
 }
 
 func TestCompareReportsAllUnregisteredPackagesInOrder(t *testing.T) {
-	manifest := mustParseManifest(t, manifestJSON(`{"package":"example/registered","minimum":0.00}`))
+	manifest := mustParseManifest(t, manifestJSON(`{"package":"example/registered","minimum":1.00}`))
 	err := Compare(manifest, map[string]Coverage{
 		"example/registered": {Covered: 1, Total: 1},
 		"example/zeta":       {Covered: 1, Total: 1},

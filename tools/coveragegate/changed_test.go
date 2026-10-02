@@ -87,7 +87,7 @@ func TestSelectChangedPackagesIncludesAllChangeSourcesAndMapsCurrentPackages(t *
 func TestRunChangedCoverageTestsOnlySelectedNumericPackages(t *testing.T) {
 	repo, modules, base := newChangedPackageRepository(t)
 	appendTestFile(t, filepath.Join(modules[0], "a.go"), "\n// changed\n")
-	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example.test/a","minimum":80.00},{"package":"example.test/b","minimum":99.00}]}`)
+	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example.test/a","minimum":98.00},{"package":"example.test/b","minimum":99.00}]}`)
 	logPath := filepath.Join(t.TempDir(), "go-arguments.log")
 	fakeGo := filepath.Join(t.TempDir(), "go")
 	fakeGoScript := fmt.Sprintf(`#!/bin/sh
@@ -160,7 +160,7 @@ func TestCompareSelectedIgnoresUnchangedPackagesAndReportsFloorFailure(t *testin
 }
 
 func TestCompareSelectedReportsUnregisteredPackage(t *testing.T) {
-	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":0.00}]}`)
+	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":1.00}]}`)
 	err := CompareSelected(manifest, []string{"example/missing"}, map[string]Coverage{})
 	if err == nil || !errors.Is(err, ErrUnregisteredPackage) {
 		t.Fatalf("CompareSelected() error = %v, want unregistered-package failure", err)
