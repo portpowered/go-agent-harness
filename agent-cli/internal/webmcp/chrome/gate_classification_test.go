@@ -269,7 +269,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	// the page producer itself is the readiness evidence.
 	empty := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", unverifiedTab.TargetID, "--json")
 	emptyReport := requireClassificationDoctor(t, empty, true)
-	if emptyReport.Status != gateStatusReady || !emptyReport.Catalog.Ready || emptyReport.Catalog.Evidence != "page_producer" {
+	if emptyReport.Status != gateStatusReady || !emptyReport.Catalog.Ready || emptyReport.Catalog.Evidence != catalogEvidencePageProducer {
 		t.Fatalf("probe 10 exact empty-catalog report = %+v, want ready with page_producer catalog evidence", emptyReport)
 	}
 	recordClassificationResult(t, empty, configDir, "probe-10-exact-empty-catalog", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":true,"catalog_evidence":%q,"target_id":%q}`, emptyReport.Status, emptyReport.PageTools, emptyReport.Catalog.Evidence, unverifiedTab.TargetID))
@@ -405,13 +405,6 @@ func requireClassificationDoctor(t *testing.T, result gateCLIResult, wantSuccess
 		t.Fatalf("decode doctor report: %v; output=%q", err, result.Stdout)
 	}
 	return report
-}
-
-func classificationDoctorErrorCode(report classificationDoctorReport) string {
-	if report.Error == nil {
-		return "none"
-	}
-	return report.Error.Code
 }
 
 func requireClassificationFailure(t *testing.T, result gateCLIResult, wantCode webmcp.ErrorCode) webmcp.ToolResultEnvelope {
