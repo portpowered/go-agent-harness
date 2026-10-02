@@ -1,0 +1,7 @@
+{
+  "type": "session.commentary.appended",
+  "event_id": "evt_commentary_002",
+  "client_event_id": "evt_commentary_001",
+  "start_ms": 5200,
+  "end_ms": 5400
+}

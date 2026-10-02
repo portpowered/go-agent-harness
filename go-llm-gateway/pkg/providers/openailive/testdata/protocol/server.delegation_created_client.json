@@ -1,0 +1,10 @@
+{
+  "type": "session.delegation.created",
+  "event_id": "evt_delegation_001",
+  "offset_ms": 3600,
+  "delegation": {
+    "id": "del_abc123",
+    "type": "delegation",
+    "target": "client"
+  }
+}

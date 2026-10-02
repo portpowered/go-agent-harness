@@ -1,0 +1,13 @@
+{
+  "type": "session.update",
+  "event_id": "evt_update_001",
+  "session": {
+    "delegation": {
+      "type": "responses",
+      "responses": {
+        "instructions": "Check restaurant availability. Ask before confirming a booking.",
+        "max_output_tokens": 1024
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "type": "session.input_transcript.delta",
+  "event_id": "evt_input_transcript_001",
+  "delta": "A table for two at seven, please.",
+  "start_ms": 1600,
+  "end_ms": 3400
+}

@@ -1,0 +1,7 @@
+{ "type": "session.start",
+  "session": {
+    "model": "gpt-live-1",
+    "instructions": "Be concise.",
+    "delegation": { "type": "client" }
+  }
+}

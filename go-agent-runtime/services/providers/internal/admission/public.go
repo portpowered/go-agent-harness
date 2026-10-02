@@ -1,6 +1,8 @@
 package admission
 
 import (
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 )
 
@@ -29,6 +31,8 @@ func (a modelCatalogAdapter) LookupRealtimeModel(provider, model string) (Model,
 		SupportsImageInput:      modelValue.SupportsImageInput,
 		SupportsFunctionCalling: modelValue.SupportsFunctionCalling,
 		SupportsReasoning:       modelValue.SupportsReasoning,
+		Duplex:                  modelValue.Duplex,
+		Delegation:              modelValue.Delegation,
 	}, true
 }
 
@@ -63,9 +67,10 @@ func (s *Service) ValidateRealtimeModel(provider, model string, options provider
 	return decisionError(decision, options.PreserveModelInError)
 }
 
-// ResolveRealtimeModel returns metadata only for an admitted OpenAI realtime
-// model. Non-OpenAI providers remain unrestricted for validation but have no
-// catalog metadata on this surface.
+// ResolveRealtimeModel returns metadata only for an admitted model of a
+// catalog-restricted provider ("openai" or "openai-live"). Other providers
+// remain unrestricted for validation but have no catalog metadata on this
+// surface.
 func (s *Service) ResolveRealtimeModel(provider, model string, options providers.ModelAdmissionOptions) (providers.RealtimeModel, bool) {
 	if s == nil || s.delegate == nil {
 		return providers.RealtimeModel{}, false
@@ -80,6 +85,8 @@ func (s *Service) ResolveRealtimeModel(provider, model string, options providers
 		SupportsImageInput:      decision.Model.SupportsImageInput,
 		SupportsFunctionCalling: decision.Model.SupportsFunctionCalling,
 		SupportsReasoning:       decision.Model.SupportsReasoning,
+		Duplex:                  decision.Model.Duplex,
+		Delegation:              decision.Model.Delegation,
 	}, true
 }
 
@@ -95,10 +102,18 @@ func decisionError(decision Decision, preserveModel bool) error {
 		model = decision.RequestedModel
 	}
 	return &providers.UnsupportedRealtimeModelError{
-		Provider:        "OpenAI",
+		Provider:        providerLabel(decision.Provider),
 		Model:           model,
 		SupportedModels: append([]string(nil), decision.SupportedModels...),
 	}
+}
+
+// providerLabel is the provider name shown in an unsupported-model error.
+func providerLabel(provider string) string {
+	if strings.EqualFold(strings.TrimSpace(provider), providers.OpenAILiveProvider) {
+		return "OpenAI Live"
+	}
+	return "OpenAI"
 }
 
 var _ providers.ModelAdmission = (*Service)(nil)

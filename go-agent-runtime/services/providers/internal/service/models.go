@@ -18,7 +18,7 @@ func (s *Service) RealtimeModels(provider string) []providers.RealtimeModel {
 	if s == nil || s.catalog == nil {
 		return nil
 	}
-	if strings.EqualFold(strings.TrimSpace(provider), "openai") {
+	if admission.Restricted(strings.TrimSpace(provider)) {
 		return s.catalog.RealtimeModels(strings.TrimSpace(provider))
 	}
 	return nil
@@ -38,7 +38,7 @@ func (s *Service) SupportedRealtimeModelIDs(provider string) []string {
 	if s == nil || s.catalog == nil {
 		return nil
 	}
-	if !strings.EqualFold(strings.TrimSpace(provider), "openai") {
+	if !admission.Restricted(strings.TrimSpace(provider)) {
 		return nil
 	}
 	return s.catalog.SupportedRealtimeModelIDs(strings.TrimSpace(provider))

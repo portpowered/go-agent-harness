@@ -12,15 +12,34 @@ type Catalog struct{}
 
 func New() *Catalog { return &Catalog{} }
 
+// RealtimeModels lists the built-in models of provider. An empty provider
+// means "openai"; a provider with no catalog has no models.
 func (*Catalog) RealtimeModels(provider string) []providers.RealtimeModel {
 	provider = strings.TrimSpace(provider)
-	if provider != "" && !strings.EqualFold(provider, "openai") {
+	switch {
+	case provider == "" || strings.EqualFold(provider, "openai"):
+		return openAIRealtimeModels()
+	case strings.EqualFold(provider, providers.OpenAILiveProvider):
+		return openAILiveModels()
+	default:
 		return nil
 	}
+}
+
+func openAIRealtimeModels() []providers.RealtimeModel {
 	return []providers.RealtimeModel{
 		{ID: providers.OpenAIRealtimeLegacyModel, SupportsAudio: true, SupportsImageInput: true, SupportsFunctionCalling: true},
 		{ID: providers.OpenAIRealtimeDefaultModel, SupportsAudio: true, SupportsImageInput: true, SupportsFunctionCalling: true},
 		{ID: providers.OpenAIRealtime21Model, SupportsAudio: true, SupportsImageInput: true, SupportsFunctionCalling: true, SupportsReasoning: true},
+	}
+}
+
+// openAILiveModels is the GPT-Live catalog. gpt-live-1 takes audio and text
+// only, never calls a tool itself, and reaches tools through client
+// delegation, so it reports no function calling of its own.
+func openAILiveModels() []providers.RealtimeModel {
+	return []providers.RealtimeModel{
+		{ID: providers.OpenAILive1Model, SupportsAudio: true, Duplex: true, Delegation: providers.RealtimeDelegationClient},
 	}
 }
 

@@ -1,0 +1,10 @@
+{
+  "type": "session.usage.updated",
+  "event_id": "evt_usage_001",
+  "usage": {
+    "seconds": 32.5
+  },
+  "context_window": {
+    "usage_ratio": 0.12
+  }
+}

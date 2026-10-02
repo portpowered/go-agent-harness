@@ -1,0 +1,5 @@
+{ "type": "session.output_audio.delta",
+  "delta": "<base64-encoded-24khz-pcm16le-mono-audio>",
+  "start_ms": 0,
+  "end_ms": 100
+}

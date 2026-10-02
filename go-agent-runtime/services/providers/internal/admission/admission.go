@@ -5,7 +5,19 @@ package admission
 
 import "strings"
 
-const openAIProvider = "openai"
+// The catalog-restricted providers. They mirror providers.OpenAILiveProvider
+// and the "openai" provider name without importing the public contract.
+const (
+	openAIProvider     = "openai"
+	openAILiveProvider = "openai-live"
+)
+
+// Restricted reports whether provider admits only the models in its catalog.
+// "openai" and "openai-live" are restricted; every other provider is
+// intentionally unrestricted.
+func Restricted(provider string) bool {
+	return strings.EqualFold(provider, openAIProvider) || strings.EqualFold(provider, openAILiveProvider)
+}
 
 // Model is the private representation used while deciding whether a model is
 // available. Keeping this type local avoids coupling the decision core to the
@@ -16,6 +28,8 @@ type Model struct {
 	SupportsImageInput      bool
 	SupportsFunctionCalling bool
 	SupportsReasoning       bool
+	Duplex                  bool
+	Delegation              string
 }
 
 // Catalog is the smallest catalog surface needed by model admission. The
@@ -36,7 +50,8 @@ type Options struct {
 
 // Decision is the complete result of one admission attempt. Allowed is true
 // for providers whose realtime catalog is intentionally unrestricted; Matched
-// is true only when an OpenAI model was found and metadata is available.
+// is true only when a restricted provider's model was found and metadata is
+// available.
 type Decision struct {
 	Allowed         bool
 	Matched         bool
@@ -77,7 +92,7 @@ func (a *Admission) Decide(provider, model string, options Options) Decision {
 		decision.MissingCatalog = true
 		return decision
 	}
-	if !strings.EqualFold(provider, openAIProvider) {
+	if !Restricted(provider) {
 		decision.Allowed = true
 		return decision
 	}

@@ -179,14 +179,21 @@ func TestPublicServiceHandlesNilDependenciesAndAdapterBranches(t *testing.T) {
 	catalog := providerCatalog{models: []providers.RealtimeModel{{
 		ID: "mapped", SupportsAudio: true, SupportsImageInput: true,
 		SupportsFunctionCalling: true, SupportsReasoning: true,
+		Duplex: true, Delegation: providers.RealtimeDelegationClient,
 	}}}
 	adapter := modelCatalogAdapter{catalog: catalog}
 	if _, ok := adapter.LookupRealtimeModel("openai", "missing"); ok {
 		t.Fatal("adapter resolved an unknown model")
 	}
 	mapped, ok := adapter.LookupRealtimeModel("openai", "mapped")
-	if !ok || mapped.ID != "mapped" || !mapped.SupportsAudio || !mapped.SupportsImageInput || !mapped.SupportsFunctionCalling || !mapped.SupportsReasoning {
+	want := Model{ID: "mapped", SupportsAudio: true, SupportsImageInput: true, SupportsFunctionCalling: true,
+		SupportsReasoning: true, Duplex: true, Delegation: providers.RealtimeDelegationClient}
+	if !ok || mapped != want {
 		t.Fatalf("mapped model = %+v, %v, want all copied fields", mapped, ok)
+	}
+	resolved, ok := NewService(catalog).ResolveRealtimeModel("openai", "mapped", providers.ModelAdmissionOptions{})
+	if !ok || !resolved.Duplex || resolved.Delegation != providers.RealtimeDelegationClient {
+		t.Fatalf("resolved model = %+v, %v, want duplex delegation metadata", resolved, ok)
 	}
 	if got := adapter.SupportedRealtimeModelIDs("openai"); len(got) != 1 || got[0] != "mapped" {
 		t.Fatalf("adapter IDs = %v, want mapped", got)
@@ -216,5 +223,39 @@ func TestPublicServiceDecisionErrorPolicies(t *testing.T) {
 	var normalizedUnsupported *providers.UnsupportedRealtimeModelError
 	if !errors.As(normalizedErr, &normalizedUnsupported) || normalizedUnsupported.Model != "raw" || normalizedUnsupported.SupportedModels[0] != "first" {
 		t.Fatalf("normalized decision error = %v, want normalized independent snapshot", normalizedErr)
+	}
+}
+
+// liveCatalog knows one model under "openai-live" and none elsewhere.
+type liveCatalog struct{}
+
+func (liveCatalog) LookupRealtimeModel(provider, model string) (Model, bool) {
+	if strings.EqualFold(provider, "openai-live") && model == "gpt-live-1" {
+		return Model{ID: model, SupportsAudio: true, Duplex: true}, true
+	}
+	return Model{}, false
+}
+
+func (liveCatalog) SupportedRealtimeModelIDs(provider string) []string {
+	if strings.EqualFold(provider, "openai-live") {
+		return []string{"gpt-live-1"}
+	}
+	return nil
+}
+
+func TestDecideRestrictsOpenAILiveToItsCatalog(t *testing.T) {
+	service := New(liveCatalog{})
+	if admitted := service.Decide(" OpenAI-Live ", "gpt-live-1", Options{TrimProvider: true}); !admitted.Allowed || !admitted.Matched || !admitted.Model.Duplex {
+		t.Fatalf("catalogued live model decision = %+v, want admitted with metadata", admitted)
+	}
+	rejected := service.Decide("openai-live", "any-model", Options{})
+	if rejected.Allowed || len(rejected.SupportedModels) != 1 || rejected.SupportedModels[0] != "gpt-live-1" {
+		t.Fatalf("uncatalogued live model decision = %+v, want rejection with the live catalog", rejected)
+	}
+	if other := service.Decide("openai-live-beta", "any-model", Options{}); !other.Allowed {
+		t.Fatalf("unrelated provider decision = %+v, want unrestricted", other)
+	}
+	if err := decisionError(rejected, false); err == nil || !strings.HasPrefix(err.Error(), "OpenAI Live model") {
+		t.Fatalf("live rejection error = %v, want the OpenAI Live label", err)
 	}
 }

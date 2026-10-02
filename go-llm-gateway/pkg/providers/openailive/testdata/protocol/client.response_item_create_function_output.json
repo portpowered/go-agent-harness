@@ -1,0 +1,10 @@
+   {
+     "type": "response.item.create",
+     "event_id": "event_function_output_1",
+     "item": {
+       "type": "function_call_output",
+       "call_id": "call_123",
+       "output": "{\"temperature\":62,\"conditions\":\"rain\"}"
+     }
+   }
+   
