@@ -530,7 +530,7 @@ Put the core in **`go-llm-gateway/pkg/providers/openai/chatgptauth`**:
 | `client.go` | `ExchangeCode`, `Refresh`, `Revoke`, `RequestDeviceCode`, `PollDeviceCode`, and the classification of permanent and transient errors. |
 | `claims.go` | Unverified JWT payload decoding: account id, email, plan and `exp`. |
 | `credential.go` | `Credential{AccessToken, RefreshToken, IDToken, AccountID, Email, PlanType, ExpiresAt, LastRefresh}` |
-| `store.go` | `FileStore`: atomic writes with mode 0600 and directory mode 0700, and a lock directory with stale detection. |
+| `store.go` | `FileStore`: atomic writes with mode 0600 and directory mode 0700, and an OS advisory lock (flock on Unix, LockFileEx on Windows) on `<file>.lock`. |
 | `manager.go` | `Manager.Token(ctx)`: load, check expiry against the injected clock, lock, reload, refresh, save. |
 | `login.go` | `LoginBrowser` and `LoginDevice` orchestration, with an injected browser opener, output writer, clock and sleeper. |
 
@@ -697,7 +697,7 @@ Tests:
 
 - an `httptest` fake issuer for authorize, token, refresh, revoke and the
   device endpoints;
-- an injected clock for expiry, refresh and stale locks;
+- an injected clock for expiry and refresh, and an injected sleeper for lock polling;
 - an injected sleeper for device polling;
 - no real network and no real login.
 
