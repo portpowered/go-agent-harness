@@ -182,3 +182,26 @@ func TestCredentialValuesCoverEverySessionSecret(t *testing.T) {
 		})
 	}
 }
+
+// Rendered failures leave a dummy local key ("x", "ollama") alone: it is no
+// secret, and redacting it would rewrite the message. A real key is
+// redacted, and CredentialValues never lists a dummy key.
+func TestRunRedactorLeavesDummyKeysAlone(t *testing.T) {
+	redactor := newRunRedactor(serviceSession.Request{APIKey: "x"}, func(serviceSession.Request) ([]string, error) {
+		return []string{"ollama", "sk-real-local-key"}, nil
+	})
+	if got := redactor.text("x: ollama refused sk-real-local-key"); got != "x: ollama refused "+redactedMarker {
+		t.Fatalf("rendered = %q, want only the real key redacted", got)
+	}
+	cfg := config.Config{Model: config.ModelConfig{Provider: config.ProviderLocal, Local: &config.OpenAIConfig{Model: "llama", APIKey: "ollama"}}}
+	cfg.Model.OpenAI = &config.OpenAIConfig{APIKey: "x"}
+	values, err := CredentialValues(serviceSession.Request{Provider: config.ProviderOpenAILive, Model: config.OpenAILiveAPIKeyModel, ModelProvided: true, APIKey: "sk-live-real", ConfigDir: t.TempDir(), LoadedConfig: &cfg})
+	if err != nil {
+		t.Fatalf("CredentialValues: %v", err)
+	}
+	for _, value := range values {
+		if value == "x" || value == "ollama" {
+			t.Fatalf("credentials = %q, want no dummy key", values)
+		}
+	}
+}

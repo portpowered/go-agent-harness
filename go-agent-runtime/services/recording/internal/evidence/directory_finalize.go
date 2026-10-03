@@ -238,7 +238,7 @@ func redactRecordingBytes(value []byte, credentials []string) []byte {
 	}
 	redacted := append([]byte(nil), value...)
 	for _, credential := range credentials {
-		if credential == "" {
+		if len(strings.TrimSpace(credential)) < transcript.MinRedactableCredentialLength {
 			continue
 		}
 		redacted = bytes.ReplaceAll(redacted, []byte(credential), []byte(transcript.RecordingRedactionMarker))

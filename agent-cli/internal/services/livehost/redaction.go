@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
@@ -78,7 +79,9 @@ func runSecrets(request serviceSession.Request, credentialValues func(serviceSes
 	secrets := make([]string, 0, len(values))
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-		if value == "" {
+		if len(value) < transcript.MinRedactableCredentialLength {
+			// A dummy key such as "x" or "ollama" is no secret; redacting
+			// it would rewrite ordinary text.
 			continue
 		}
 		if _, ok := seen[value]; ok {

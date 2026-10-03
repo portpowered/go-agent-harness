@@ -1304,7 +1304,12 @@ above):
 - **Redacted forms and credentials.** Every recorder redacts each credential
   in each form `transcript.CredentialForms` lists: raw, JSON-escaped,
   URL-query-escaped and base64 (standard and URL alphabets, padded and
-  unpadded). The CLI's credential list (`livehost.CredentialValues`, fed to
+  unpadded, and embedded in a longer stream at each of the three byte
+  alignments, less the one or two characters at each end that also encode a
+  neighbouring byte). A credential shorter than 8 bytes, and any form
+  shorter than 8 characters, is never redacted: a dummy local key such as
+  "x" or "ollama" is no secret, and redacting it (or "eA", the base64 of
+  "x") would corrupt ordinary text and base64 audio in the evidence. The CLI's credential list (`livehost.CredentialValues`, fed to
   the bundle, the trace and rendered failures) holds the voice key, every
   API key the configuration holds (any of them can back a delegation, the
   delegation backend's own key included) and the ChatGPT sign-in's access,

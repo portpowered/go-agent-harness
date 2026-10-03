@@ -137,8 +137,11 @@ func newDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.So
 	return recorder, nil
 }
 
+// cloneEvidenceOptions copies options, keeping only the credentials worth
+// redacting: a dummy key shorter than transcript.MinRedactableCredentialLength
+// would rewrite ordinary text across the bundle.
 func cloneEvidenceOptions(options recording.LiveEvidenceOptions) recording.LiveEvidenceOptions {
-	options.Credentials = append([]string(nil), options.Credentials...)
+	options.Credentials = transcript.RedactableCredentials(options.Credentials)
 	return options
 }
 

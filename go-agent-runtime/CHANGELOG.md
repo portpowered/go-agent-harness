@@ -127,7 +127,8 @@
   the whole arguments, redacted.
 - Security: every form go-agent-loop's `transcript.CredentialForms` lists
   is redacted: raw, JSON-escaped, URL-query-escaped, and base64 (standard
-  and URL, padded and unpadded). The bundle recorder and the trace (its
+  and URL, standalone and embedded at each byte alignment). A credential
+  shorter than 8 bytes is never redacted, by the bundle or the trace. The bundle recorder and the trace (its
   payloads, error text and delegation tool payloads) both redact all of
   them.
 - Breaking (unreleased API): `livedelegation.Binding.Serialized`, a per-tool

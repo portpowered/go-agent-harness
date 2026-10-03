@@ -13,6 +13,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
@@ -118,4 +119,38 @@ func transcriptPayloads(data []byte) ([][]byte, error) {
 		payloads = append(payloads, record.Payload)
 	}
 	return payloads, nil
+}
+
+// A dummy local key ("x", "ollama") is no secret: the bundle publishes, and
+// ordinary text and base64 audio in a tool result ("eA" is the base64 of
+// "x") are kept as they are, while a real key beside them is redacted.
+func TestDirectoryRecorderLeavesDummyKeysAlone(t *testing.T) {
+	t.Parallel()
+	const realKey = "sk-real-local-key"
+	r := newEvidenceRecorder(t)
+	r.options.Credentials = cloneEvidenceOptions(recording.LiveEvidenceOptions{Credentials: []string{"x", "ollama", realKey}}).Credentials
+	text := "x marks the ollama spot; audio eAB4eA== key " + realKey
+	if err := r.RecordMessage(t.Context(), session.LiveRecord{Direction: session.LiveRecordClient, Timestamp: evidenceTime(), Message: messages.StreamMessage{
+		Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextDeltaValue(text),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatalf("Finalize: %v", err)
+	}
+	payloads, err := transcriptPayloads(readEvidenceFile(t, r, "client.transcript.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "x marks the ollama spot; audio eAB4eA== key " + transcript.RecordingRedactionMarker
+	for _, payload := range payloads {
+		if bytes.Contains(payload, []byte("call-1")) {
+			if !bytes.Contains(payload, []byte(want)) {
+				t.Fatalf("tool result payload = %s, want %q", payload, want)
+			}
+			return
+		}
+	}
+	t.Fatal("the bundle holds no tool result")
 }
