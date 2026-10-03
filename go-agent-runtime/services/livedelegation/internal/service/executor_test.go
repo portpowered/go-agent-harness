@@ -18,16 +18,20 @@ import (
 // backend is a provider service and provider in one. Each inference calls
 // answer with the task, which returns a tool call, text, or blocks.
 type backend struct {
-	mu      sync.Mutex
-	configs []providers.Config
-	answer  func(ctx context.Context, task string, turn int) []messages.StreamMessage
-	turns   map[string]int
+	mu       sync.Mutex
+	buildErr error
+	configs  []providers.Config
+	answer   func(ctx context.Context, task string, turn int) []messages.StreamMessage
+	turns    map[string]int
 }
 
 func (b *backend) Build(_ context.Context, config providers.Config) (llmproviders.Provider, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.configs = append(b.configs, config)
+	if b.buildErr != nil {
+		return nil, b.buildErr
+	}
 	return b, nil
 }
 
