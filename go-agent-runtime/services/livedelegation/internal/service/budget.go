@@ -61,10 +61,25 @@ func (b *budget) admit() error {
 	return nil
 }
 
-func (b *budget) addTokens(usage messages.TokenUsage) {
-	used := usage.TotalTokens
-	if used == 0 {
-		used = usage.PromptTokens + usage.CompletionTokens
+// uncount returns a turn the backend refused to stream, so the loop's
+// non-streaming fallback for the same turn is admitted once.
+func (b *budget) uncount() {
+	b.mu.Lock()
+	b.turns--
+	b.mu.Unlock()
+}
+
+// tokensOf is an inference's reported total.
+func tokensOf(usage messages.TokenUsage) int {
+	if usage.TotalTokens > 0 {
+		return usage.TotalTokens
+	}
+	return usage.PromptTokens + usage.CompletionTokens
+}
+
+func (b *budget) addTokens(used int) {
+	if used <= 0 {
+		return
 	}
 	b.mu.Lock()
 	b.tokens += used
@@ -77,13 +92,15 @@ func (b *budget) Infer(ctx context.Context, req messages.InferenceRequest) (mess
 		return messages.InferenceResult{}, err
 	}
 	result, err := b.inner.Infer(ctx, req)
-	b.addTokens(result.TokenUsage)
+	b.addTokens(tokensOf(result.TokenUsage))
 	return result, err
 }
 
-// InferStream forwards the backend stream and adds the inference's reported
-// usage. A provider may report usage on both MESSAGE.END and USAGE.INFO, so
-// the larger of the two counts once.
+// InferStream forwards the backend stream and counts the inference's
+// reported usage. A provider may report usage on both MESSAGE.END and
+// USAGE.INFO, so the larger report counts once. Usage is counted before the
+// message carrying it is forwarded, so the loop's next inference is admitted
+// against it.
 func (b *budget) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	if err := b.admit(); err != nil {
 		return nil, err
@@ -98,20 +115,14 @@ func (b *budget) InferStream(ctx context.Context, req messages.InferenceRequest)
 	return out, nil
 }
 
-// uncount returns a turn the backend refused to stream, so the loop's
-// non-streaming fallback for the same turn is admitted once.
-func (b *budget) uncount() {
-	b.mu.Lock()
-	b.turns--
-	b.mu.Unlock()
-}
-
 func (b *budget) forward(ctx context.Context, inner <-chan messages.StreamMessage, out chan<- messages.StreamMessage) {
 	defer close(out)
-	var used messages.TokenUsage
-	defer func() { b.addTokens(used) }()
+	counted := 0
 	for msg := range inner {
-		used = largerUsage(used, msg)
+		if reported, ok := reportedTokens(msg); ok && reported > counted {
+			b.addTokens(reported - counted)
+			counted = reported
+		}
 		select {
 		case out <- msg:
 		case <-ctx.Done():
@@ -123,20 +134,16 @@ func (b *budget) forward(ctx context.Context, inner <-chan messages.StreamMessag
 	}
 }
 
-func largerUsage(current messages.TokenUsage, msg messages.StreamMessage) messages.TokenUsage {
-	var usage messages.TokenUsage
+// reportedTokens is the usage a stream message reports, if any.
+func reportedTokens(msg messages.StreamMessage) (int, bool) {
 	switch value := msg.Value.(type) {
 	case *messages.MessageEndValue:
-		usage = value.Usage
+		return tokensOf(value.Usage), true
 	case *messages.UsageInfoValue:
-		usage = value.Usage
+		return tokensOf(value.Usage), true
 	default:
-		return current
+		return 0, false
 	}
-	if usage.TotalTokens+usage.PromptTokens+usage.CompletionTokens > current.TotalTokens+current.PromptTokens+current.CompletionTokens {
-		return usage
-	}
-	return current
 }
 
 // withTimeBudget returns a context that the budget's timer cancels after
