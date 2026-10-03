@@ -2,6 +2,7 @@ package quicksilver
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -181,18 +182,22 @@ type DelegationCreated struct {
 // for example on barge-in.
 type OutputAudioBufferCleared struct{}
 
-// ErrorDetail is the nested error object.
+// ErrorDetail is the nested error object. Status is an HTTP status, sent as
+// a number or a string.
 type ErrorDetail struct {
-	Type    string `json:"type,omitempty"`
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
+	Type    string          `json:"type,omitempty"`
+	Code    string          `json:"code,omitempty"`
+	Message string          `json:"message,omitempty"`
+	Status  json.RawMessage `json:"status,omitempty"`
 }
 
-// ErrorEvent reports a failure. The message appears at the top level or in
-// the nested error object.
+// ErrorEvent reports a failure. The message, code and status appear at the
+// top level or in the nested error object.
 type ErrorEvent struct {
-	Message string       `json:"message,omitempty"`
-	Error   *ErrorDetail `json:"error,omitempty"`
+	Message string          `json:"message,omitempty"`
+	Code    string          `json:"code,omitempty"`
+	Status  json.RawMessage `json:"status,omitempty"`
+	Error   *ErrorDetail    `json:"error,omitempty"`
 }
 
 // EventType methods name each event's wire type.
@@ -255,7 +260,7 @@ func (e ErrorEvent) Text() string {
 		return e.Message
 	}
 	if e.Error == nil {
-		return ""
+		return e.Code
 	}
 	if e.Error.Message != "" {
 		return e.Error.Message
@@ -263,15 +268,35 @@ func (e ErrorEvent) Text() string {
 	return e.Error.Code
 }
 
-// AuthFailure reports whether the nested error code is one OpenClaw treats as
-// a fatal credential failure. A refreshed token may succeed on a new call.
+// AuthFailure reports whether the error is one OpenClaw treats as a fatal
+// credential failure (realtime-quicksilver-events.ts,
+// isFatalQuicksilverAuthError): an HTTP 401 status, or one of the credential
+// codes, at the top level or in the nested error. A refreshed token may
+// succeed on a new call.
 func (e ErrorEvent) AuthFailure() bool {
-	if e.Error == nil {
-		return false
+	status, code := e.Status, e.Code
+	if e.Error != nil {
+		if len(status) == 0 {
+			status = e.Error.Status
+		}
+		if code == "" {
+			code = e.Error.Code
+		}
 	}
-	switch strings.ToLower(e.Error.Code) {
+	if s := strings.Trim(strings.TrimSpace(string(status)), `"`); s == "401" {
+		return true
+	}
+	switch strings.ToLower(code) {
 	case "authentication_error", "invalid_api_key", "invalid_token", "token_expired":
 		return true
 	}
 	return false
+}
+
+// ErrorCode is the error's code: the top-level one, else the nested one.
+func (e ErrorEvent) ErrorCode() string {
+	if e.Code != "" || e.Error == nil {
+		return e.Code
+	}
+	return e.Error.Code
 }

@@ -368,3 +368,44 @@ func TestConnectFailsFastWithoutAUsableLogin(t *testing.T) {
 		t.Fatalf("ConnectSession without credentials = %v", err)
 	}
 }
+
+// Against the fake backend: a client delegation.created reaches the stream as
+// DELEGATION.CREATED with its task, and the result sent back as
+// CONTEXT.APPEND reaches the backend as delegation.context.append on the
+// speakable channel.
+func TestADelegationRoundTripsThroughTheBackend(t *testing.T) {
+	ctx := deadline(t)
+	r := newRig(t)
+	session := r.connect(t, ctx)
+	skipOpen(t, ctx, session)
+	if err := r.backend.Send(
+		inputText("book a table"),
+		quicksilver.DelegationCreated{Item: quicksilver.DelegationItem{
+			ID: "del_1", Type: quicksilver.ItemTypeDelegation, Target: quicksilver.TargetClient,
+			Content: []quicksilver.ContentPart{{Type: quicksilver.PartInputText, Text: "Book a table for two."}},
+		}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	got := until(t, ctx, session, messages.StreamTypeDelegationCreated)
+	delegation, ok := got[len(got)-1].Value.(*messages.DelegationCreatedValue)
+	if !ok || delegation.ID != "del_1" || delegation.Task != "Book a table for two." || got[len(got)-1].ResponseID != "" {
+		t.Fatalf("DELEGATION.CREATED = %+v", got[len(got)-1].Value)
+	}
+	id := delegation.ID
+	outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeContextAppend,
+		Value: &messages.ContextAppendValue{Kind: messages.ContextAppendCommentary, DelegationID: &id, Content: "Booked for seven."},
+	})
+	if !outcome.OK() {
+		t.Fatalf("CONTEXT.APPEND: %+v", outcome)
+	}
+	events, err := r.backend.WaitClientEvents(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok := events[0].(quicksilver.DelegationContextAppend)
+	if !ok || result.DelegationItemID != "del_1" || result.Channel != quicksilver.ChannelSpeakable || result.Content[0].Text != "Booked for seven." {
+		t.Fatalf("client event = %#v, want the result on the speakable channel", events[0])
+	}
+}

@@ -76,7 +76,9 @@ func (p *fakePeer) frames() []sentFrame {
 // fakeControl is one sideband connection. The test feeds server events or a
 // read error through events; Send records client events.
 type fakeControl struct {
-	events  chan any
+	events chan any
+	// gate, when set, holds every Send until it is closed.
+	gate    chan struct{}
 	mu      sync.Mutex
 	sent    []quicksilver.Event
 	sendErr error
@@ -89,6 +91,9 @@ func newFakeControl() *fakeControl {
 }
 
 func (c *fakeControl) Send(event quicksilver.Event) error {
+	if c.gate != nil {
+		<-c.gate
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.sendErr != nil {
@@ -178,7 +183,7 @@ func newHarness(t *testing.T, dial *dialer) *harness {
 	}
 	session := livesession.New(transport, nil, livesession.Settings{
 		Name: "codex test", Format: livesession.Format{Type: livesession.AudioTypePCM, Rate: 24000},
-		Clock: clock.Real{}, SegmentGap: DefaultSegmentGap, CloseTimeout: time.Second,
+		Clock: clock.Real{}, SegmentGap: DefaultSegmentGap, DelegationSettle: DefaultDelegationSettle, CloseTimeout: time.Second,
 	}, dialect{})
 	session.Open(t.Context(), "rtc_test", quicksilver.ModelCodex)
 	h := &harness{peer: peer, side: side, dialer: dial, conn: transport, session: session}

@@ -20,7 +20,7 @@ func TestCredentialNeverFormatsItsToken(t *testing.T) {
 	for _, out := range []string{
 		fmt.Sprint(credential), fmt.Sprintf("%+v", credential), fmt.Sprintf("%#v", credential), credential.String(), logged.String(),
 	} {
-		if strings.Contains(out, "secret-access-token") || !strings.Contains(out, "acct_1") || !strings.Contains(out, "[REDACTED]") {
+		if strings.Contains(out, "secret-access-token") || strings.Contains(out, "acct_1") || !strings.Contains(out, "[REDACTED]") {
 			t.Fatalf("formatted credential %q", out)
 		}
 	}

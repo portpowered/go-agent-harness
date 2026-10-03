@@ -123,10 +123,7 @@ func mapServerEvent(event quicksilver.Event, in *livesession.Inbound) {
 	case quicksilver.ErrorEvent:
 		mapError(typed, in)
 	case quicksilver.DelegationCreated:
-		// Delegations reach the harness in a later phase, as on the public
-		// route: logged and dropped, never turned into tool calls.
-		in.Logger().Info(in.Name()+": delegation ignored",
-			logging.Field{Key: "delegation_id", Value: typed.Item.ID}, logging.Field{Key: "target", Value: typed.Item.Target})
+		mapDelegation(typed, in)
 	default:
 		// session.started needs no handshake on an attached sideband (the
 		// call was configured at creation); the sideband's output_audio.delta
@@ -134,6 +131,25 @@ func mapServerEvent(event quicksilver.Event, in *livesession.Inbound) {
 		// unknown events carry nothing for the stream.
 		in.Logger().Debug(in.Name()+": server event not mapped", logging.Field{Key: "type", Value: event.EventType()})
 	}
+}
+
+// mapDelegation reports a client delegation as DELEGATION.CREATED with the
+// item's input_text as its task, with the public route's settle semantics:
+// once a user transcript covers its offset, or the settle window passes.
+// Quicksilver transcripts carry no timing, so a delegation with an offset
+// waits for the settle window. Delegations for another target (the backend
+// itself) are logged and dropped, as Codex and OpenClaw ignore them.
+func mapDelegation(event quicksilver.DelegationCreated, in *livesession.Inbound) {
+	if !event.IsClient() {
+		in.Logger().Info(in.Name()+": delegation ignored",
+			logging.Field{Key: "delegation_id", Value: event.Item.ID}, logging.Field{Key: "target", Value: event.Item.Target})
+		return
+	}
+	var offsetMS int64
+	if event.OffsetMS != nil {
+		offsetMS = *event.OffsetMS
+	}
+	in.Delegation(event.Item.ID, offsetMS, event.Prompt())
 }
 
 // mapTurnDone ends the assistant segment or the user utterance the turn
@@ -152,9 +168,9 @@ func mapTurnDone(turn quicksilver.Turn, in *livesession.Inbound) {
 // mapError reports a command error, or ends the session on a credential
 // failure.
 func mapError(event quicksilver.ErrorEvent, in *livesession.Inbound) {
-	code, errorType := "", ""
+	code, errorType := event.ErrorCode(), ""
 	if event.Error != nil {
-		code, errorType = event.Error.Code, event.Error.Type
+		errorType = event.Error.Type
 	}
 	if event.AuthFailure() {
 		in.Fail(reasonAuthFailed, authFailure(fmt.Sprintf("the backend rejected the credential (%s)", code)))
@@ -184,6 +200,35 @@ func (dialect) InputAudio(audio []byte) models.SessionEvent {
 // InputEnd flushes the transport's partial input frame at the end of a user
 // turn, so the turn's last milliseconds are not held until the next one.
 func (dialect) InputEnd() models.SessionEvent { return models.SessionEvent{Type: typeInputEnd} }
+
+// ContextAppend maps one chunk of a CONTEXT.APPEND onto the quicksilver
+// appends: delegation.context.append for a delegation id, else
+// session.context.append. The channel follows Codex, which sends a final
+// answer as speakable and progress as commentary: a commentary result (for
+// the model to say) is speakable, quiet thinking is commentary, and
+// instructions carry no channel.
+func (dialect) ContextAppend(value *messages.ContextAppendValue, chunk string, _ int64) (models.SessionEvent, bool, error) {
+	var channel quicksilver.Channel
+	switch value.Kind {
+	case messages.ContextAppendCommentary:
+		channel = quicksilver.ChannelSpeakable
+	case messages.ContextAppendThinking:
+		channel = quicksilver.ChannelCommentary
+	case messages.ContextAppendInstructions:
+	default:
+		return models.SessionEvent{}, false, nil
+	}
+	content := []quicksilver.ContentPart{{Type: quicksilver.PartInputText, Text: chunk}}
+	var event quicksilver.Event = quicksilver.SessionContextAppend{Channel: channel, Content: content}
+	if value.DelegationID != nil && *value.DelegationID != "" {
+		event = quicksilver.DelegationContextAppend{DelegationItemID: *value.DelegationID, Channel: channel, Content: content}
+	}
+	data, err := quicksilver.EncodeEvent(event)
+	if err != nil {
+		return models.SessionEvent{}, false, err
+	}
+	return models.SessionEvent{Type: models.SessionEventType(event.EventType()), Data: data}, true, nil
+}
 
 // CloseEvent is session.close, sent on the sideband.
 func (dialect) CloseEvent() models.SessionEvent {

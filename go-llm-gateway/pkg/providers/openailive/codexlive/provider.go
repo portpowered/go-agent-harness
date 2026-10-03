@@ -28,6 +28,9 @@ const (
 	// DefaultSegmentGap is the quiet gap G that ends a speech segment or a
 	// user utterance when no turn.done arrives.
 	DefaultSegmentGap = 600 * time.Millisecond
+	// DefaultDelegationSettle is the settle window D a client delegation
+	// waits for the user transcript that covers it, as on the public route.
+	DefaultDelegationSettle = 400 * time.Millisecond
 	// DefaultCloseTimeout bounds the wait for the backend to close the
 	// sideband after session.close.
 	DefaultCloseTimeout = 15 * time.Second
@@ -153,7 +156,7 @@ func (p *Provider) ConnectSession(ctx context.Context, cfg models.SessionConfig)
 		return nil, err
 	}
 	if _, err := p.credentials.Credential(ctx); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrSignInAgain, err)
+		return nil, signInError(fmt.Errorf("codexlive: ChatGPT credential: %w", err))
 	}
 	session, err := quicksilver.BuildSession(cfg)
 	if err != nil {
@@ -180,12 +183,13 @@ func (p *Provider) ConnectSession(ctx context.Context, cfg models.SessionConfig)
 		return nil, errors.Join(err, side.Close(), peer.Close())
 	}
 	live := livesession.New(transport, p.logger, livesession.Settings{
-		Name:         "openai live codex",
-		MediaName:    "OpenAI Live (ChatGPT)",
-		Format:       livesession.Format{Type: livesession.AudioTypePCM, Rate: rate},
-		Clock:        p.clock,
-		SegmentGap:   p.segmentGap,
-		CloseTimeout: p.closeTimeout,
+		Name:             "openai live codex",
+		MediaName:        "OpenAI Live (ChatGPT)",
+		Format:           livesession.Format{Type: livesession.AudioTypePCM, Rate: rate},
+		Clock:            p.clock,
+		SegmentGap:       p.segmentGap,
+		DelegationSettle: DefaultDelegationSettle,
+		CloseTimeout:     p.closeTimeout,
 	}, dialect{})
 	live.Open(ctx, call.ID, session.Model)
 	p.logger.Info("openai live codex: call connected", logging.Field{Key: "call_id", Value: call.ID})

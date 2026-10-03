@@ -355,28 +355,55 @@ func (p *Peer) enqueue(frame []int16) bool {
 // synthesized for inbound sequence gaps.
 func (p *Peer) ConcealedFrames() int64 { return p.concealed.Load() }
 
-// LatePackets reports how many inbound packets arrived after their slot and
-// were dropped.
+// LatePackets reports how many inbound packets were dropped without being
+// played: late or repeated ones, and the first packet after a sequence jump
+// too large to be loss.
 func (p *Peer) LatePackets() int64 { return p.late.Load() }
 
-// sequenceTracker follows a 16-bit RTP sequence with wraparound.
+// Sequence validation bounds from RFC 3550 appendix A.1.
+const (
+	// maxDropout is the largest forward jump still treated as loss.
+	maxDropout = 3000
+	// maxMisorder is how far behind the last packet a late one may be.
+	maxMisorder = 100
+)
+
+// sequenceTracker follows a 16-bit RTP sequence with wraparound, as RFC 3550
+// appendix A.1 validates it. A forward jump within maxDropout is loss; a
+// packet at or up to maxMisorder behind the last is late or repeated; any
+// other jump (a sender restart or a reset sequence) is held as suspect, and
+// the sequence resynchronizes when the next packet follows it, so a jump
+// never stalls the stream.
 type sequenceTracker struct {
 	started bool
 	last    uint16
+	// suspect is the sequence a packet after a large jump must have to
+	// resynchronize; hasSuspect says whether one is pending.
+	suspect    uint16
+	hasSuspect bool
 }
 
 // next reports how many packets are missing before seq, and whether seq is
-// new: a packet at or behind the last one (within half the sequence space)
-// is late or repeated.
+// to be played. A late, repeated or first-after-a-jump packet is not.
 func (t *sequenceTracker) next(seq uint16) (missing int, fresh bool) {
 	if !t.started {
 		t.started, t.last = true, seq
 		return 0, true
 	}
 	delta := seq - t.last
-	if delta == 0 || delta >= 1<<15 {
+	switch {
+	case delta == 0 || delta >= 1<<16-maxMisorder:
+		return 0, false
+	case delta < maxDropout:
+		t.last, t.hasSuspect = seq, false
+		return int(delta) - 1, true
+	case t.hasSuspect && seq == t.suspect:
+		// Two packets in a row after the jump: the sender restarted its
+		// sequence. Resynchronize without concealing the jump.
+		t.last, t.hasSuspect = seq, false
+		return 0, true
+	default:
+		t.suspect, t.hasSuspect = seq+1, true
 		return 0, false
 	}
-	t.last = seq
-	return int(delta) - 1, true
 }

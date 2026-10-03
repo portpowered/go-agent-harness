@@ -1,6 +1,7 @@
 package quicksilver_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -114,6 +115,18 @@ func TestErrorTextAndCredentialFailure(t *testing.T) {
 		{errorGolden(t, "server.error_missing_scope"), "temporary provider rejection", false},
 		{qs.ErrorEvent{Error: &qs.ErrorDetail{Code: "Token_Expired"}}, "Token_Expired", true},
 		{qs.ErrorEvent{}, "", false},
+		// A top-level code and a 401 status, top-level or nested, number or
+		// string, are credential failures too (isFatalQuicksilverAuthError).
+		{qs.ErrorEvent{Code: "invalid_api_key"}, "invalid_api_key", true},
+		{qs.ErrorEvent{Message: "unauthorized", Status: json.RawMessage(`401`)}, "unauthorized", true},
+		{qs.ErrorEvent{Error: &qs.ErrorDetail{Message: "nope", Status: json.RawMessage(`"401"`)}}, "nope", true},
+		{qs.ErrorEvent{Message: "busy", Status: json.RawMessage(`503`)}, "busy", false},
+	}
+	if code := (qs.ErrorEvent{Code: "top", Error: &qs.ErrorDetail{Code: "nested"}}).ErrorCode(); code != "top" {
+		t.Errorf("ErrorCode = %q, want the top-level code", code)
+	}
+	if code := (qs.ErrorEvent{Error: &qs.ErrorDetail{Code: "nested"}}).ErrorCode(); code != "nested" {
+		t.Errorf("ErrorCode = %q, want the nested code", code)
 	}
 	for _, c := range cases {
 		if c.event.Text() != c.text || c.event.AuthFailure() != c.authFail {

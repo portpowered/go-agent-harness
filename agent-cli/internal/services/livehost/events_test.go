@@ -111,3 +111,35 @@ func TestProviderValuesPickTheCodexModelOnAChatGPTLogin(t *testing.T) {
 		t.Fatalf("ProviderValues --model gpt-live-1-codex without a login = %v", err)
 	}
 }
+
+// A recorded or replayed openai-live session never picks gpt-live-1-codex,
+// which has no provider capture: with no --model it runs gpt-live-1 on the
+// API key even when a ChatGPT login exists, without a key it says why, and an
+// explicit gpt-live-1-codex is refused before any session is built.
+func TestRecordAndReplayPreferTheAPIKeyModel(t *testing.T) {
+	configDir := t.TempDir()
+	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(configDir)).Save(chatgptauth.Credential{
+		AccessToken: "token", AccountID: "acct", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	withKey := openAIConfig(config.ProviderOpenAILive)
+	for name, request := range map[string]serviceSession.Request{
+		"record":           {ConfigDir: configDir, RecordPath: "capture.json"},
+		"record directory": {ConfigDir: configDir, RecordDirectory: "evidence"},
+		"replay":           {ConfigDir: configDir, ReplayPath: "capture.json"},
+	} {
+		if _, model, _, _, err := ProviderValues(withKey, request, nil); err != nil || model != config.OpenAILiveAPIKeyModel {
+			t.Fatalf("%s: model = %q, %v; want gpt-live-1", name, model, err)
+		}
+	}
+	noKey := config.Config{Model: config.ModelConfig{Provider: config.ProviderOpenAILive}}
+	_, _, _, _, err := ProviderValues(noKey, serviceSession.Request{ConfigDir: configDir, RecordPath: "capture.json"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "requires an OpenAI API key") || !strings.Contains(err.Error(), "no provider capture") {
+		t.Fatalf("record without a key = %v, want the API-key requirement and why", err)
+	}
+	explicit := serviceSession.Request{ConfigDir: configDir, ReplayPath: "capture.json", Model: config.OpenAILiveChatGPTModel, ModelProvided: true}
+	if _, _, _, _, err := ProviderValues(withKey, explicit, nil); err == nil || !strings.Contains(err.Error(), "--model gpt-live-1") {
+		t.Fatalf("replay --model gpt-live-1-codex = %v, want the refusal", err)
+	}
+}

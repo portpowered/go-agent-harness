@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexrtc"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/internal/livesession"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/quicksilver"
@@ -92,6 +93,9 @@ type conn struct {
 	pending        []quicksilver.Event
 	closeRequested bool
 	ended          bool
+	// expiry counts scheduled expiries; only the latest one ends the
+	// session.
+	expiry int
 }
 
 var _ transport.Conn = (*conn)(nil)
@@ -232,6 +236,10 @@ func (c *conn) sendControl(event quicksilver.Event) {
 	if err := side.Send(event); err != nil {
 		c.logger.Warn("openai live codex: sideband send failed; holding the event for the reconnect", logging.Field{Key: "type", Value: event.EventType()}, logging.Field{Key: "error", Value: err})
 		c.mu.Lock()
+		// Later events are held behind this one, so none overtakes it.
+		if c.side == side {
+			c.side = nil
+		}
 		c.holdLocked(event)
 		c.mu.Unlock()
 	}
@@ -329,12 +337,53 @@ func (c *conn) readSideband(ctx context.Context, side control) {
 }
 
 func (c *conn) deliverEvent(event quicksilver.Event) {
+	if expiresAt := sessionExpiry(event); expiresAt > 0 {
+		c.scheduleExpiry(expiresAt)
+	}
 	frame, err := quicksilver.EncodeEvent(event)
 	if err != nil {
 		c.logger.Warn("openai live codex: sideband event not re-encodable", logging.Field{Key: "error", Value: err})
 		return
 	}
 	c.push(frame)
+}
+
+// sessionExpiry is the expires_at (Unix seconds) a session.started or
+// session.updated reports, or zero.
+func sessionExpiry(event quicksilver.Event) int64 {
+	var session *quicksilver.SessionResource
+	switch typed := event.(type) {
+	case quicksilver.SessionStarted:
+		session = typed.Session
+	case quicksilver.SessionUpdated:
+		session = typed.Session
+	}
+	if session == nil {
+		return 0
+	}
+	return session.ExpiresAt
+}
+
+// scheduleExpiry ends the session as expired at expiresAt, as OpenClaw
+// schedules its session lease from session.started. A later expiry the
+// backend reports replaces an earlier one.
+func (c *conn) scheduleExpiry(expiresAt int64) {
+	at := time.Unix(expiresAt, 0)
+	c.mu.Lock()
+	c.expiry++
+	generation := c.expiry
+	c.mu.Unlock()
+	c.start(func() {
+		if !c.sleep(at.Sub(c.clock.Now())) {
+			return
+		}
+		c.mu.Lock()
+		current := generation == c.expiry
+		c.mu.Unlock()
+		if current {
+			c.end(endedFrame{Reason: livesession.CloseReasonExpired})
+		}
+	})
 }
 
 func (c *conn) sidebandLost(ctx context.Context, side control, err error) {
@@ -363,36 +412,71 @@ func (c *conn) sidebandLost(ctx context.Context, side control, err error) {
 	c.reconnect(ctx, connectedFor)
 }
 
-// reconnect waits out the backoff for this loss, redials, and on success
-// resumes reading and flushes held control events.
+// reconnect waits out the backoff for this loss, redials, flushes the held
+// control events in order and resumes reading. A sideband that fails while
+// the held events are flushed counts as another loss.
 func (c *conn) reconnect(ctx context.Context, connectedFor time.Duration) {
-	delay := c.policy.delayAfterLoss(connectedFor)
-	if !c.sleep(delay) {
-		return
-	}
-	side, err := c.redial(ctx)
-	if err != nil {
-		if !c.closed() {
-			c.end(endFor(err))
+	for {
+		if !c.sleep(c.policy.delayAfterLoss(connectedFor)) {
+			return
 		}
-		return
+		side, err := c.redial(ctx)
+		if err != nil {
+			if !c.closed() {
+				c.end(endFor(err))
+			}
+			return
+		}
+		published, done := c.publish(side)
+		if published {
+			c.logger.Info("openai live codex: sideband reconnected")
+			c.start(func() { c.readSideband(ctx, side) })
+			return
+		}
+		if done {
+			return
+		}
+		connectedFor = 0
 	}
-	c.mu.Lock()
-	if c.closed() {
+}
+
+// publish sends the held control events on side in order, then makes side
+// the current sideband. Until the queue is empty side is not published, so
+// a write that arrives meanwhile is held behind the earlier events instead
+// of overtaking them. published is false when side failed (it is closed and
+// the unsent events stay held, first) or the transport closed (done).
+func (c *conn) publish(side control) (published, done bool) {
+	for {
+		c.mu.Lock()
+		if c.closed() {
+			c.mu.Unlock()
+			c.closeQuietly(side)
+			return false, true
+		}
+		batch := c.pending
+		if len(batch) == 0 {
+			c.side, c.connectedAt = side, c.clock.Now()
+			c.mu.Unlock()
+			return true, false
+		}
+		c.pending = nil
 		c.mu.Unlock()
-		if closeErr := side.Close(); closeErr != nil {
-			c.logger.Debug("openai live codex: close redialed sideband", logging.Field{Key: "error", Value: closeErr})
+		for i, event := range batch {
+			if err := side.Send(event); err != nil {
+				c.logger.Warn("openai live codex: sideband failed while sending held events", logging.Field{Key: "error", Value: err})
+				c.mu.Lock()
+				c.pending = append(append([]quicksilver.Event(nil), batch[i:]...), c.pending...)
+				c.mu.Unlock()
+				c.closeQuietly(side)
+				return false, false
+			}
 		}
-		return
 	}
-	c.side, c.connectedAt = side, c.clock.Now()
-	held := c.pending
-	c.pending = nil
-	c.mu.Unlock()
-	c.logger.Info("openai live codex: sideband reconnected")
-	c.start(func() { c.readSideband(ctx, side) })
-	for _, event := range held {
-		c.sendControl(event)
+}
+
+func (c *conn) closeQuietly(side control) {
+	if err := side.Close(); err != nil {
+		c.logger.Debug("openai live codex: close sideband", logging.Field{Key: "error", Value: err})
 	}
 }
 
@@ -433,9 +517,12 @@ func permanentDialError(err error) bool {
 	return errors.Is(err, codexrtc.ErrCallEnded) || credentialError(err)
 }
 
-// credentialError reports a rejected or unusable ChatGPT credential.
+// credentialError reports a credential only a new sign-in fixes: the backend
+// answered 401, or the token manager has no login or can no longer refresh
+// it. Any other credential failure (a refresh that hit the network, for
+// example) is transient and retried.
 func credentialError(err error) bool {
-	return errors.Is(err, codexrtc.ErrUnauthorized) || errors.Is(err, codexrtc.ErrNoCredential)
+	return errors.Is(err, codexrtc.ErrUnauthorized) || errors.Is(err, chatgptauth.ErrReauthRequired) || errors.Is(err, chatgptauth.ErrNotLoggedIn)
 }
 
 // endFor maps a failed redial to the session's end.

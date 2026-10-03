@@ -1669,14 +1669,22 @@ plan above:
    (OpenClaw `realtime-quicksilver-sideband.ts`, and Codex's sideband join
    retry); the first attach uses the same five attempts. Control events
    written while the sideband is down, or whose send failed, are held (up to
-   64) and flushed in order after the reconnect. Every dial asks the
-   credential source, so a refreshed token is used.
-6. **Credential failures.** The error codes `invalid_token`,
-   `authentication_error` and `token_expired` (and `invalid_api_key`, which
-   OpenClaw also treats as fatal), an HTTP 401 on call creation or a redial,
-   and a sign-in the token manager can no longer refresh all end the session
-   with `codexlive.ErrSignInAgain`. Before any network operation,
-   `BuildSession` and `ConnectSession` fail the same way without a sign-in.
+   64) and flushed in order on the new sideband before it is published, so a
+   write that arrives during the flush is held behind them and the chunks of
+   a split `CONTEXT.APPEND` keep their order. A sideband that fails during
+   the flush is another loss; the unsent events stay held, first. Every dial
+   asks the credential source, so a refreshed token is used.
+6. **Credential failures.** As OpenClaw's `isFatalQuicksilverAuthError`: an
+   error event whose code (top-level or nested) is `invalid_token`,
+   `authentication_error`, `token_expired` or `invalid_api_key`, or whose
+   status is 401; an HTTP 401 on call creation or a redial; and a token
+   manager with no sign-in (`chatgptauth.ErrNotLoggedIn`) or one it can no
+   longer refresh (`chatgptauth.ErrReauthRequired`). All end the session with
+   `codexlive.ErrSignInAgain`. Any other credential failure, such as a
+   refresh that hit the network, is transient: a redial retries it. Before
+   any network operation, `BuildSession` and `ConnectSession` fail the same
+   way without a sign-in. `codexrtc.Credential` redacts both the token and
+   the account id when formatted or logged.
 7. **Audio.** The session rate is 24 kHz (16 kHz is accepted too; one shared
    PCM16 rate). Input is resampled to 48 kHz with go-audio's streaming
    resampler, cut into 20 ms frames and paced one per 20 ms on the injected
@@ -1684,24 +1692,53 @@ plan above:
    end of a user turn (`MESSAGE.END`) sends the held partial frame padded
    with silence (`livesession.InputEnder`); it is local and never asks for a
    response. An inbound RTP sequence gap is concealed with Opus PLC, at most
-   100 ms per gap; late or repeated packets are dropped.
+   100 ms per gap; late or repeated packets are dropped. The sequence is
+   validated as RFC 3550 appendix A.1 does: a jump over 3000 packets, or more
+   than 100 back, is a suspect sender restart, and the next consecutive
+   packet resynchronizes the sequence without concealment, so a jump never
+   stalls the audio.
 8. **Startup history** is bounded as OpenClaw bounds it (newest 16 messages,
    800 characters each, 8000 bytes in all) instead of being rejected over
    128 messages.
 9. **ICE servers** default to none and are set through
    `codexlive.Transport.ICEServers` (`providers.SessionConfig.CodexTransport`
-   in the runtime). There is no CLI flag for them yet.
+   in the runtime). There is no CLI flag for them yet. `CodexTransport` is an
+   `any` holding a `*codexlive.Transport`, not a typed `[]codexlive.Option`:
+   typing it makes the runtime's provider contract import `codexlive`, whose
+   pion and `chatgptauth` dependencies do not build for js/wasm, which the
+   other-OS lint checks for packages that reach the contract.
 10. **No record or replay.** The route does not go through the WebSocket
     dialer that provider capture wraps, so `BuildSession` refuses
-    `RecordPath` and `ReplayPath` for `gpt-live-1-codex`.
-11. **Delegations** are still logged and dropped on this route, as on the
-    public one, until PRs 3 and 4.
+    `RecordPath` and `ReplayPath` for `gpt-live-1-codex`. The CLI therefore
+    defaults a recorded or replayed `openai-live` session with no `--model`
+    to `gpt-live-1` (an API key, whatever the sign-in), says why when there is
+    no key, and refuses an explicit `--model gpt-live-1-codex`.
+11. **Delegations** use the public route's surface (PR 3), shared through
+    `livesession`: a client `delegation.created` becomes `DELEGATION.CREATED`
+    with the item's `input_text` content as `Task`, the transcript ring and
+    the same settle window `D` and `MustDeliver` handling. Quicksilver
+    transcripts carry no timing, so a delegation with an `offset_ms` waits
+    out `D`; one without is reported once any user transcript has arrived.
+    Delegations for another target are logged and dropped. `CONTEXT.APPEND`
+    goes through the same 500-byte sentence-boundary split and serialization
+    as on the public route, to `delegation.context.append` (with a delegation
+    id) or `session.context.append`, on the channels Codex uses: a
+    `commentary` result is `speakable`, `thinking` is `commentary`, and
+    `instructions` carry no channel.
 12. **Version header.** `yui` sends its build version
     (`agent-cli/internal/buildinfo`: the linked version, else the module
     version, else `dev`) as `version` on call creation and the sideband.
+13. **Session expiry.** `session.started` or `session.updated` with
+    `expires_at` schedules the end of the session (reason `expired`, a
+    provider close) at that time on the session clock, as OpenClaw schedules
+    its lease; a later value replaces an earlier one.
 
 Unverified until a live run: whether the backend sends `session.started` or
 audio copies on a WebRTC sideband, whether it streams silence or uses DTX,
 whether it answers `session.close` with a normal close, which close code a
 backend hang-up uses, the real error codes and HTTP statuses for an expired
-token, and whether the `version` header is required.
+token, whether the `version` header is required, the timing of `turn.done`
+against the audio still buffered on the WebRTC track (audio that plays out
+after `turn.done` opens a second segment with no transcript), and how the
+receive jitter differs from Codex's own peer (this route decodes frames as
+they arrive, with no jitter buffer beyond the 1 s frame queue).

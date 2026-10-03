@@ -42,26 +42,27 @@ type Credential struct {
 	AccountID string
 }
 
-// String describes the credential with the access token redacted; the
-// account id is an identifier, not a secret.
+// String describes the credential with the access token and the account id
+// redacted: the account id identifies the ChatGPT account, so it stays out of
+// logs too.
 func (c Credential) String() string {
-	token := `""`
-	if c.AccessToken != "" {
-		token = redactedMark
-	}
-	return fmt.Sprintf("Credential{AccessToken:%s AccountID:%q}", token, c.AccountID)
+	return fmt.Sprintf("Credential{AccessToken:%s AccountID:%s}", redacted(c.AccessToken), redacted(c.AccountID))
 }
 
 // GoString is String, so %#v redacts too.
 func (c Credential) GoString() string { return "codexrtc." + c.String() }
 
-// LogValue keeps the token out of structured logs.
+// LogValue keeps the token and the account id out of structured logs.
 func (c Credential) LogValue() slog.Value {
-	token := ""
-	if c.AccessToken != "" {
-		token = redactedMark
+	return slog.GroupValue(slog.String("access_token", redacted(c.AccessToken)), slog.String("account_id", redacted(c.AccountID)))
+}
+
+// redacted is redactedMark for a set secret and "" for an empty one.
+func redacted(secret string) string {
+	if secret == "" {
+		return ""
 	}
-	return slog.GroupValue(slog.String("access_token", token), slog.String("account_id", c.AccountID))
+	return redactedMark
 }
 
 // redactedMark replaces a secret in formatted output.

@@ -161,22 +161,33 @@
   turn sends the held partial frame. Peer audio is resampled back; silence
   never opens or extends a segment. Transcripts, `turn.done`,
   `output_audio_buffer.cleared` (the segment ends `cancelled` and local
-  playback is interrupted) and errors map onto the harness stream;
-  `delegation.created` is logged and ignored. A lost sideband is redialed
-  with the Codex backoff (200 ms doubling to 5 s, reset after 30 s up) and
-  held control events are flushed; a call that ended (HTTP 404/410) ends the
-  session with reason `call_ended`. Credential failures (`invalid_token`,
-  `authentication_error`, `token_expired`, HTTP 401, or a sign-in the token
-  manager can no longer refresh) end the session with a terminal
-  `authentication` error wrapping `codexlive.ErrSignInAgain` ("sign in again
-  with `yui auth chatgpt`"). `Transport` overrides the network edges (URLs,
+  playback is interrupted) and errors map onto the harness stream. A client
+  `delegation.created` becomes `DELEGATION.CREATED` with its input_text as
+  `Task`, and `CONTEXT.APPEND` becomes `delegation.context.append` or
+  `session.context.append` (commentary on the speakable channel, thinking on
+  the commentary channel), with the public route's settle window and
+  500-byte split. A lost sideband is redialed with the Codex backoff (200 ms
+  doubling to 5 s, reset after 30 s up); held control events are flushed in
+  order before new writes, and a call that ended (HTTP 404/410) ends the
+  session with reason `call_ended`. `expires_at` from `session.started` or
+  `session.updated` ends the session as `expired`. Credential failures (an
+  error event with `invalid_token`, `authentication_error`, `token_expired`
+  or `invalid_api_key`, top-level or nested, or status 401; HTTP 401; a
+  token manager with no sign-in or one it can no longer refresh) end the
+  session with a terminal `authentication` error wrapping
+  `codexlive.ErrSignInAgain` ("sign in again with `yui auth chatgpt`"); a
+  refresh that only failed on the network is retried. `Transport` overrides the network edges (URLs,
   HTTP client, sideband dialer, pion settings, ICE servers; none by default),
   and `ChatGPTCredentials` adapts `chatgptauth.Manager`.
 - `codexrtc.Peer` conceals packet loss: an inbound RTP sequence gap is filled
   with Opus PLC frames (at most `MaxConcealedFrames`, 100 ms) before the next
   decoded frame, and a late or repeated packet is dropped
-  (`ConcealedFrames`, `LatePackets`). `Peer.Failed` reports a connection that
-  failed after it was up.
+  (`ConcealedFrames`, `LatePackets`). A sequence jump too large to be loss
+  resynchronizes as RFC 3550 appendix A.1 does. `Peer.Failed` reports a
+  connection that failed after it was up.
+- `quicksilver.ErrorEvent` decodes a top-level `code` and a `status` (top
+  level or nested); `AuthFailure` treats status 401 and a top-level code as
+  credential failures, and `ErrorCode` returns the code.
 - `quicksilver.BoundInitialItems` bounds the startup history as OpenClaw
   does: the newest `MaxInitialItems` (16) messages, each cut to 800
   characters, 8000 bytes in total. `BuildSession` applies it.
@@ -197,6 +208,8 @@
   `pkg/providers/openailive/internal/livesession`, behind a `Dialect`, so the
   `gpt-live-1` and `gpt-live-1-codex` sessions share it. The public API and
   behaviour of `openailive` are unchanged.
+- `codexrtc.Credential` redacts the account id as well as the token in
+  `String`, `GoString` and `LogValue`.
 - `quicksilver.ParseOptions` no longer rejects more than 128 startup
   messages; `BuildSession` keeps the newest that fit the bounds instead.
 

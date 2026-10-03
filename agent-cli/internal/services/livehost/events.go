@@ -33,16 +33,10 @@ func ProviderValues(cfg config.Config, request serviceSession.Request, inspectio
 	if err != nil {
 		return provider, "", "", "", err
 	}
-	model = resolveModel(cfg, request, model, replayModel, provider, defaultModel(provider, request.ConfigDir))
+	model = resolveModel(cfg, request, model, replayModel, provider, defaultModel(provider, request))
 	apiKey, model, baseURL = applyProviderOverrides(request, apiKey, model, baseURL)
-	if provider == config.ProviderOpenAILive && request.ReplayPath == "" {
-		// The model picks the credential: the ChatGPT sign-in for
-		// gpt-live-1-codex, an API key otherwise.
-		credential, err := config.ResolveOpenAILiveCredential(model, apiKey, request.ConfigDir)
-		if err != nil {
-			return provider, model, "", baseURL, err
-		}
-		return provider, model, credential.APIKey, baseURL, nil
+	if provider == config.ProviderOpenAILive {
+		return openAILiveValues(request, model, apiKey, baseURL)
 	}
 	if err := validateProviderCredential(provider, apiKey, request.ReplayPath); err != nil {
 		return provider, model, "", baseURL, err
@@ -98,11 +92,44 @@ func selectProvider(cfg config.Config, request serviceSession.Request, inspectio
 // defaultModel is the live model a provider uses when none is configured.
 // For openai-live the credential found picks it, the ChatGPT sign-in under
 // configDir first.
-func defaultModel(provider, configDir string) string {
-	if provider == config.ProviderOpenAILive {
-		return config.DefaultOpenAILiveModel(configDir)
+func defaultModel(provider string, request serviceSession.Request) string {
+	if provider != config.ProviderOpenAILive {
+		return cliLiveDefaultModel
 	}
-	return cliLiveDefaultModel
+	if capturesProvider(request) {
+		// gpt-live-1-codex has no provider capture, so a recorded or
+		// replayed session defaults to gpt-live-1 whatever the sign-in.
+		return config.OpenAILiveAPIKeyModel
+	}
+	return config.DefaultOpenAILiveModel(request.ConfigDir)
+}
+
+// capturesProvider reports a session that records or replays the provider
+// wire.
+func capturesProvider(request serviceSession.Request) bool {
+	return request.ReplayPath != "" || request.RecordPath != "" || request.RecordDirectory != ""
+}
+
+// openAILiveValues applies the openai-live credential order: the model picks
+// the credential (the ChatGPT sign-in for gpt-live-1-codex, an API key
+// otherwise). A recorded or replayed session cannot run gpt-live-1-codex, and
+// a replay needs no credential.
+func openAILiveValues(request serviceSession.Request, model, apiKey, baseURL string) (string, string, string, string, error) {
+	provider := config.ProviderOpenAILive
+	if capturesProvider(request) && model == config.OpenAILiveChatGPTModel {
+		return provider, model, "", baseURL, fmt.Errorf("%s %s has no provider capture yet, so --record and --replay need --model %s with an OpenAI API key", provider, model, config.OpenAILiveAPIKeyModel)
+	}
+	if request.ReplayPath != "" {
+		return provider, model, apiKey, baseURL, nil
+	}
+	credential, err := config.ResolveOpenAILiveCredential(model, apiKey, request.ConfigDir)
+	if err != nil {
+		if capturesProvider(request) {
+			err = fmt.Errorf("%w (recording runs %s: the ChatGPT sign-in's %s has no provider capture yet)", err, config.OpenAILiveAPIKeyModel, config.OpenAILiveChatGPTModel)
+		}
+		return provider, model, "", baseURL, err
+	}
+	return provider, model, credential.APIKey, baseURL, nil
 }
 
 func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel, provider, fallback string) string {

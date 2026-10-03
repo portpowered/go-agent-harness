@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexrtc"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/internal/livesession"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/quicksilver"
@@ -106,7 +108,7 @@ func TestDialectMapsTheRestOfTheVocabulary(t *testing.T) {
 			t.Fatalf("error = %+v, want a non-terminal diagnostic", failure)
 		}
 		for _, ignored := range []quicksilver.Event{
-			quicksilver.DelegationCreated{Item: quicksilver.DelegationItem{ID: "del_1", Type: quicksilver.ItemTypeDelegation, Target: quicksilver.TargetClient}},
+			quicksilver.DelegationCreated{Item: quicksilver.DelegationItem{ID: "del_srv", Type: quicksilver.ItemTypeDelegation, Target: "server"}},
 			quicksilver.SessionStarted{},
 			quicksilver.OutputAudioDelta{Audio: "AAE="},
 			quicksilver.TurnDone{Turn: quicksilver.Turn{Role: "system"}},
@@ -205,6 +207,12 @@ func TestAFailedSendIsHeldForTheReconnect(t *testing.T) {
 // Ends the transport reports: redials exhausted, a call that ended, a
 // rejected credential, a failed media connection, a failed input write and
 // a normal close nobody asked for.
+// transientCredential is a refresh that failed on the network: the token
+// manager may well succeed on the next dial.
+func transientCredential() error {
+	return fmt.Errorf("%w: refresh: connection reset by peer", codexrtc.ErrNoCredential)
+}
+
 func TestTransportEndsMapOntoTheSessionClose(t *testing.T) {
 	refused := errors.New("refused")
 	for name, tc := range map[string]struct {
@@ -221,8 +229,20 @@ func TestTransportEndsMapOntoTheSessionClose(t *testing.T) {
 			dials:   []any{&codexrtc.StatusError{Op: "sideband", StatusCode: 404}},
 			trigger: func(_ *testing.T, h *harness) { h.side.events <- errors.New("reset") }, reason: reasonCallEnded, terminal: messages.TerminalReasonProviderClose,
 		},
+		"sign-in expired": {
+			dials:   []any{fmt.Errorf("%w: %w", codexrtc.ErrNoCredential, chatgptauth.ErrReauthRequired)},
+			trigger: func(_ *testing.T, h *harness) { h.side.events <- errors.New("reset") }, reason: reasonAuthFailed, terminal: messages.TerminalReasonTerminalFailure,
+		},
+		"signed out": {
+			dials:   []any{fmt.Errorf("%w: %w", codexrtc.ErrNoCredential, chatgptauth.ErrNotLoggedIn)},
+			trigger: func(_ *testing.T, h *harness) { h.side.events <- errors.New("reset") }, reason: reasonAuthFailed, terminal: messages.TerminalReasonTerminalFailure,
+		},
+		"refresh keeps failing": {
+			dials:   []any{transientCredential(), transientCredential(), transientCredential(), transientCredential(), transientCredential()},
+			trigger: func(_ *testing.T, h *harness) { h.side.events <- errors.New("reset") }, reason: livesession.CloseReasonConnectionLost, terminal: messages.TerminalReasonTerminalFailure,
+		},
 		"credential rejected": {
-			dials:   []any{fmt.Errorf("%w: refresh failed", codexrtc.ErrNoCredential)},
+			dials:   []any{&codexrtc.StatusError{Op: "sideband", StatusCode: 401}},
 			trigger: func(_ *testing.T, h *harness) { h.side.events <- errors.New("reset") }, reason: reasonAuthFailed, terminal: messages.TerminalReasonTerminalFailure,
 		},
 		"media failed": {
@@ -374,6 +394,217 @@ func TestTheEndOfAUserTurnFlushesTheHeldFrame(t *testing.T) {
 		}
 		if sent := h.side.sentEvents(); len(sent) != 0 {
 			t.Fatalf("the turn end reached the sideband: %v", sent)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// contextFrame is a session.context.append frame carrying text.
+func contextFrame(text string) []byte {
+	return []byte(`{"type":"session.context.append","content":[{"type":"input_text","text":"` + text + `"}]}`)
+}
+
+// sentTexts is the text of each context append side received, in order.
+func sentTexts(t *testing.T, side *fakeControl) []string {
+	t.Helper()
+	var texts []string
+	for _, event := range side.sentEvents() {
+		appended, ok := event.(quicksilver.SessionContextAppend)
+		if !ok {
+			t.Fatalf("event %T, want session.context.append", event)
+		}
+		texts = append(texts, appended.Content[0].Text)
+	}
+	return texts
+}
+
+// Events held while the sideband is down keep their order when it returns:
+// a write that arrives while the held events are being sent is held behind
+// them instead of overtaking them (a split CONTEXT.APPEND depends on it).
+func TestHeldEventsKeepTheirOrderAcrossAReconnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		second := newFakeControl()
+		second.gate = make(chan struct{})
+		h := newHarness(t, &dialer{results: []any{second}})
+		h.side.events <- errors.New("connection reset")
+		synctest.Wait()
+		for _, text := range []string{"A", "B"} {
+			if err := h.conn.WriteMessage(1, contextFrame(text)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wait(time.Second) // redialed; the flush is blocked on its first send
+		if err := h.conn.WriteMessage(1, contextFrame("C")); err != nil {
+			t.Fatal(err)
+		}
+		close(second.gate)
+		synctest.Wait()
+		if err := h.conn.WriteMessage(1, contextFrame("D")); err != nil {
+			t.Fatal(err)
+		}
+		if got := sentTexts(t, second); !slices.Equal(got, []string{"A", "B", "C", "D"}) {
+			t.Fatalf("sent %v, want A B C D", got)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// A sideband that fails while the held events are flushed is a new loss:
+// the unsent events stay held, first, and go out on the next sideband.
+func TestAFailedFlushRedialsAndKeepsTheHeldEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		broken, third := newFakeControl(), newFakeControl()
+		broken.sendErr = errors.New("broken pipe")
+		h := newHarness(t, &dialer{results: []any{broken, third}})
+		h.side.events <- errors.New("connection reset")
+		synctest.Wait()
+		for _, text := range []string{"A", "B"} {
+			if err := h.conn.WriteMessage(1, contextFrame(text)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wait(2 * time.Second)
+		if got := sentTexts(t, third); !slices.Equal(got, []string{"A", "B"}) {
+			t.Fatalf("sent on the third sideband %v, want A B", got)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// A credential the token manager failed to refresh on the network is
+// retried on the next dial; only a lost sign-in is fatal.
+func TestATransientCredentialFailureIsRetried(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		second := newFakeControl()
+		dial := &dialer{results: []any{transientCredential(), second}}
+		h := newHarness(t, dial)
+		h.side.events <- errors.New("connection reset")
+		wait(time.Second)
+		if n := len(dial.dialTimes()); n != 2 {
+			t.Fatalf("dials = %d, want the transient failure retried once", n)
+		}
+		second.events <- quicksilver.SessionUpdated{}
+		h.expect(t, messages.StreamTypeSessionUpdated)
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// session.started's expires_at schedules the end of the session, and a later
+// session.updated expiry replaces it.
+func TestTheSessionExpiresAtExpiresAt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, nil)
+		start := time.Now()
+		h.side.events <- quicksilver.SessionStarted{Session: &quicksilver.SessionResource{ExpiresAt: start.Add(10 * time.Second).Unix()}}
+		h.side.events <- quicksilver.SessionUpdated{Session: &quicksilver.SessionResource{ID: "s", ExpiresAt: start.Add(20 * time.Second).Unix()}}
+		h.expect(t, messages.StreamTypeSessionUpdated)
+		closed := valueOf[*messages.SessionCloseValue](t, h.expect(t, messages.StreamTypeSessionClose))
+		if elapsed := time.Since(start); elapsed != 20*time.Second || closed.Reason != livesession.CloseReasonExpired || closed.TerminalReason != messages.TerminalReasonProviderClose {
+			t.Fatalf("SESSION.CLOSE %s/%s after %v, want expired after 20s", closed.Reason, closed.TerminalReason, elapsed)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// A client delegation.created becomes DELEGATION.CREATED, with no response
+// id, its input_text as the task and the recent transcript; with an offset
+// the untimed quicksilver transcript cannot cover, it waits out the settle
+// window.
+func TestADelegationIsReportedWithItsTask(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, nil)
+		h.side.events <- quicksilver.InputTranscriptAdded{Item: quicksilver.TranscriptItem{Text: "what is the weather"}}
+		h.expect(t, messages.StreamTypeInputItemAdded)
+		h.expect(t, messages.StreamTypeTranscriptDelta)
+		offset := int64(1200)
+		start := time.Now()
+		h.side.events <- quicksilver.DelegationCreated{OffsetMS: &offset, Item: quicksilver.DelegationItem{
+			ID: "del_1", Type: quicksilver.ItemTypeDelegation, Target: quicksilver.TargetClient,
+			Content: []quicksilver.ContentPart{{Type: quicksilver.PartInputText, Text: "check the "}, {Type: quicksilver.PartOutputText, Text: "x"}, {Type: quicksilver.PartInputText, Text: "weather"}},
+		}}
+		var msg messages.StreamMessage
+		for msg = h.next(t); msg.Type != messages.StreamTypeDelegationCreated; msg = h.next(t) {
+		}
+		value := valueOf[*messages.DelegationCreatedValue](t, msg)
+		if time.Since(start) != DefaultDelegationSettle || msg.ResponseID != "" || value.ID != "del_1" || value.Task != "check the weather" || value.OffsetMS != 1200 {
+			t.Fatalf("DELEGATION.CREATED after %v: %+v (response %q)", time.Since(start), value, msg.ResponseID)
+		}
+		if len(value.Transcript) != 1 || value.Transcript[0].Text != "what is the weather" || value.Transcript[0].Speaker != messages.RoleUser {
+			t.Fatalf("transcript = %+v", value.Transcript)
+		}
+		h.side.events <- quicksilver.DelegationCreated{Item: quicksilver.DelegationItem{ID: "del_2", Type: quicksilver.ItemTypeDelegation, Target: quicksilver.TargetClient}}
+		if second := valueOf[*messages.DelegationCreatedValue](t, h.expect(t, messages.StreamTypeDelegationCreated)); second.ID != "del_2" {
+			t.Fatalf("second delegation = %+v, want it reported at once (no offset)", second)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// CONTEXT.APPEND maps onto delegation.context.append or
+// session.context.append with the Codex channels, split into chunks of at
+// most 500 bytes in order; a kind the dialect has no event for fails.
+func TestContextAppendMapsOntoTheQuicksilverAppends(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, nil)
+		id := "del_1"
+		send := func(kind messages.ContextAppendKind, delegationID *string, content string) messages.SessionSendOutcome {
+			return h.session.SendWithOutcome(t.Context(), messages.StreamMessage{
+				Type: messages.StreamTypeContextAppend, Value: &messages.ContextAppendValue{Kind: kind, DelegationID: delegationID, Content: content},
+			})
+		}
+		long := strings.Repeat("The table is booked. ", 60)
+		for _, tc := range []struct {
+			kind    messages.ContextAppendKind
+			id      *string
+			content string
+		}{
+			{messages.ContextAppendCommentary, &id, long},
+			{messages.ContextAppendThinking, &id, "Checking."},
+			{messages.ContextAppendInstructions, nil, "Be brief."},
+		} {
+			if outcome := send(tc.kind, tc.id, tc.content); !outcome.OK() {
+				t.Fatalf("CONTEXT.APPEND %s: %+v", tc.kind, outcome)
+			}
+		}
+		if outcome := send("shout", nil, "x"); outcome.OK() || !errors.Is(outcome.Err, livesession.ErrNoWireEvent) {
+			t.Fatalf("unknown kind = %+v, want ErrNoWireEvent", outcome)
+		}
+		synctest.Wait()
+		sent := h.side.sentEvents()
+		var joined strings.Builder
+		i := 0
+		for ; i < len(sent); i++ {
+			appended, ok := sent[i].(quicksilver.DelegationContextAppend)
+			if !ok || appended.Channel != quicksilver.ChannelSpeakable {
+				break
+			}
+			if appended.DelegationItemID != id || len(appended.Content[0].Text) > livesession.MaxAppendTokens {
+				t.Fatalf("chunk %d = %+v", i, appended)
+			}
+			joined.WriteString(appended.Content[0].Text + " ")
+		}
+		if i < 2 || strings.TrimSpace(joined.String()) != strings.TrimSpace(long) {
+			t.Fatalf("long result went out as %d speakable chunks, want the content split in order", i)
+		}
+		thinking, ok := sent[i].(quicksilver.DelegationContextAppend)
+		if !ok || thinking.Channel != quicksilver.ChannelCommentary || thinking.Content[0].Text != "Checking." {
+			t.Fatalf("thinking = %#v", sent[i])
+		}
+		instructions, ok := sent[i+1].(quicksilver.SessionContextAppend)
+		if !ok || instructions.Channel != "" || instructions.Content[0].Text != "Be brief." || len(sent) != i+2 {
+			t.Fatalf("instructions = %#v (%d events)", sent[i+1], len(sent))
 		}
 		if err := h.session.Close(); err != nil {
 			t.Fatal(err)
