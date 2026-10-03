@@ -6,17 +6,24 @@
 
 - `session.LiveEvent.DelegationTool` (`session.LiveDelegationTool`): the
   `delegation_tool_call` and `delegation_tool_result` events carry the tool
-  name, the arguments and (on the result) the result content, each bounded
+  name, the arguments and (on the result) the result content.
+  `LiveDelegationTool.Audited` redacts the whole values and then bounds each
   to `session.LiveDelegationToolPayloadLimit` (4 KiB) with the
-  `session.LiveDelegationToolTruncated` marker. The sessiontrace live
-  recorder adds `tool_name`, `tool_arguments` and `tool_result` to their
-  payload and redacts it as it redacts `tool_call`; the `--record-dir`
-  evidence recorder redacts the two fields with the session credentials.
+  `session.LiveDelegationToolTruncated` marker, so a credential across the
+  cut leaves no fragment. The sessiontrace live recorder
+  (`sessiontrace.LiveRecorderOptions.Credentials`) writes `tool_name`,
+  `tool_arguments` and `tool_result` that way, and so does the
+  `--record-dir` evidence recorder.
 - `livedelegation.ToolLock` and `Binding.ToolLock`: the session's
   resource-group lock. A live session with delegations locks its tools by
-  resource group for both the voice loop and its delegations: all
-  `webmcp_*`, `browser_*` and `show_page` calls share one lock, `write_file`
-  and `edit_file` another, and each other long-running tool its own.
+  resource group for both the voice loop and its delegations: every call
+  routed to the browser surface shares one lock, `write_file` and
+  `edit_file` another, and each other long-running tool its own.
+- `tools.BrowserToolRouter`: the composed tool surface reports the calls it
+  routes to the browser (the WebMCP broker's tools and the page tools a
+  dynamic broker resolves, such as `google_maps_*`), and the interactive
+  session-turn executor forwards it. The live session groups those tools by
+  this routing, not by name.
 
 - `services/livedelegation`: the GPT-Live client-delegation executor
   (docs/architecture/gpt-live-provider.md 2.5, PR 4). A live session whose
@@ -110,6 +117,11 @@
   a write into `~/.ssh` and the other credential stores under a broad
   `--allow-path`.
 
+- Security: the `--record-dir` evidence recorder redacts the session
+  credentials (raw and JSON-escaped) from every voice-loop `TOOLCALL.*` and
+  tool-result payload before spooling it. Transcript payloads are base64, so
+  the bundle's byte redaction never reached them, and a credential in a
+  voice-loop tool call or result reached the bundle.
 - Breaking (unreleased API): `livedelegation.Binding.Serialized`, a per-tool
   lock private to the delegations, is replaced by `Binding.ToolLock`, shared
   with the voice loop. Two delegations can no longer drive the browser at

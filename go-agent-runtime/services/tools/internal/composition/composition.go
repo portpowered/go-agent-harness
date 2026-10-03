@@ -226,6 +226,7 @@ type composedToolExecutor struct {
 
 var _ messages.ToolExecutor = (*composedToolExecutor)(nil)
 var _ PageSightToolRouter = (*composedToolExecutor)(nil)
+var _ public.BrowserToolRouter = (*composedToolExecutor)(nil)
 var _ public.ScreenRecordingPermissionRechecker = (*composedToolExecutor)(nil)
 
 func (e *composedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -278,6 +279,19 @@ func (e *composedToolExecutor) screenRecordingPermissionRechecker() (display.Scr
 		}
 	}
 	return nil, false
+}
+
+// IsBrowserTool reports a name routed to the broker: an advertised broker
+// tool, or, when the broker resolves dynamic tools, any name the static side
+// does not own (a page tool discovered from the selected page).
+func (e *composedToolExecutor) IsBrowserTool(name string) bool {
+	if e == nil {
+		return false
+	}
+	if route, ok := e.routes[name]; ok && !isNilToolExecutor(route.executor) {
+		return route.broker
+	}
+	return !isNilToolExecutor(e.dynamicFallback)
 }
 
 func (e *composedToolExecutor) IsPageSightTool(name string) bool {

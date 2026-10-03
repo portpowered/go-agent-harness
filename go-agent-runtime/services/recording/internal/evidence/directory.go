@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"io"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -157,6 +158,7 @@ func (r *directoryRecorder) RecordMessage(ctx context.Context, record session.Li
 		r.latch(recordingWriteError("encode stream message", err))
 		return nil
 	}
+	payload = redactToolMessage(payload, record.Message, r.options.Credentials)
 	item := directoryEvidenceItem{
 		kind: evidenceMessage, direction: record.Direction, timestamp: record.Timestamp,
 		payload: payload, bytes: int64(len(payload)) * 2,
@@ -259,18 +261,54 @@ func (r *directoryRecorder) RecordBrowserArtifact(ctx context.Context, artifact 
 	return nil
 }
 
-// redactDelegationTool replaces the session credentials in a delegation
-// tool call's arguments and result, as the trace does for tool payloads:
-// transcript payloads are base64, so the bundle's byte redaction cannot
-// reach them.
+// redactDelegationTool keeps a delegation tool call's audit payload with the
+// session credentials redacted from the whole arguments and result before
+// they are bounded, as the trace does: transcript payloads are base64, so
+// the bundle's byte redaction cannot reach them.
 func redactDelegationTool(tool *session.LiveDelegationTool, credentials []string) *session.LiveDelegationTool {
 	if tool == nil {
 		return nil
 	}
-	redacted := *tool
-	redacted.Arguments = string(redactRecordingBytes([]byte(tool.Arguments), credentials))
-	redacted.Result = string(redactRecordingBytes([]byte(tool.Result), credentials))
-	return &redacted
+	forms := credentialForms(credentials)
+	audited := tool.Audited(func(value string) string { return string(redactRecordingBytes([]byte(value), forms)) })
+	return &audited
+}
+
+// redactToolMessage redacts the session credentials from the encoded payload
+// of a tool call (its name and arguments) or a tool result before it is
+// spooled. Like the delegation tool payloads, transcript payloads are base64,
+// out of reach of the bundle's byte redaction. Each credential is replaced
+// raw and in its JSON string form, so one that JSON escapes is redacted too.
+func redactToolMessage(payload []byte, message messages.StreamMessage, credentials []string) []byte {
+	switch {
+	case len(credentials) == 0:
+		return payload
+	case message.Type == messages.StreamTypeToolCallStart || message.Type == messages.StreamTypeToolCallDelta || message.Type == messages.StreamTypeToolCallEnd:
+	case message.Role == messages.RoleTool:
+	default:
+		return payload
+	}
+	return redactRecordingBytes(payload, credentialForms(credentials))
+}
+
+// credentialForms lists each credential raw and in its JSON string form
+// when that differs, longest first, so a credential that contains another
+// is never left partly visible.
+func credentialForms(credentials []string) []string {
+	forms := make([]string, 0, 2*len(credentials))
+	for _, credential := range credentials {
+		if credential == "" {
+			continue
+		}
+		forms = append(forms, credential)
+		if encoded, err := json.Marshal(credential); err == nil {
+			if escaped := string(encoded[1 : len(encoded)-1]); escaped != credential {
+				forms = append(forms, escaped)
+			}
+		}
+	}
+	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
+	return forms
 }
 
 func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {

@@ -115,7 +115,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	if h.delegationService != nil && h.request.Delegation != nil {
 		// Delegations share the session's tools with the voice loop: both
 		// take the same resource-group locks.
-		h.toolLocks = newToolLocks(toolPolicy)
+		h.toolLocks = newToolLocks(toolPolicy, toolExecutor)
 		toolExecutor = lockedToolExecutor{inner: toolExecutor, locks: h.toolLocks}
 	}
 	h.mu.Unlock()

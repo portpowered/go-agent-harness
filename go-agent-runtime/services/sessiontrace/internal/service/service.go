@@ -23,6 +23,8 @@ const (
 	claimFileMode                    os.FileMode = 0o600
 	runtimeObservationKindToolCall               = "tool_call"
 	runtimeObservationKindToolResult             = "tool_result"
+	// traceRedactionMarker replaces a session credential in the trace.
+	traceRedactionMarker = "[REDACTED]"
 )
 
 type Service struct{}
@@ -57,25 +59,27 @@ func (*Service) Prepare(request sessiontrace.Request) (sessiontrace.Prepared, er
 	observer := &traceObserver{trace: trace, credentials: append([]string(nil), request.Credentials...)}
 	runtime := combineObservers(request.RuntimeObserver, observer)
 	return &prepared{
-		path:       path,
-		closeTrace: trace.Close,
-		binding:    wrapBinding(request.Device, observer, runtime),
-		observer:   runtime,
-		timeout:    closeTimeout(request.CloseTimeout),
-		closed:     make(chan struct{}),
+		path:        path,
+		credentials: append([]string(nil), request.Credentials...),
+		closeTrace:  trace.Close,
+		binding:     wrapBinding(request.Device, observer, runtime),
+		observer:    runtime,
+		timeout:     closeTimeout(request.CloseTimeout),
+		closed:      make(chan struct{}),
 	}, nil
 }
 
 type prepared struct {
-	path       string
-	binding    sessiontrace.DeviceBinding
-	observer   sessiontrace.RuntimeObserver
-	timeout    time.Duration
-	once       sync.Once
-	closed     chan struct{}
-	closeErr   error
-	closeTrace func() error
-	rename     func(string, string) error
+	path        string
+	credentials []string
+	binding     sessiontrace.DeviceBinding
+	observer    sessiontrace.RuntimeObserver
+	timeout     time.Duration
+	once        sync.Once
+	closed      chan struct{}
+	closeErr    error
+	closeTrace  func() error
+	rename      func(string, string) error
 }
 
 func (p *prepared) DeviceBinding() sessiontrace.DeviceBinding     { return p.binding }
@@ -87,7 +91,7 @@ func (p *prepared) WrapLiveRecorder(inner session.LiveRecorder, request session.
 		return inner
 	}
 	return NewLiveRecorder(sessiontrace.LiveRecorderOptions{
-		Inner: inner, Observer: p.observer,
+		Inner: inner, Observer: p.observer, Credentials: p.credentials,
 		InputRate: request.InputAudioSampleRate, OutputRate: request.OutputAudioSampleRate,
 	})
 }
@@ -221,9 +225,9 @@ func (o *traceObserver) ObserveSessionRuntime(observation sessiontrace.RuntimeOb
 			if secret == "" {
 				continue
 			}
-			errText = strings.ReplaceAll(errText, secret, "[REDACTED]")
+			errText = strings.ReplaceAll(errText, secret, traceRedactionMarker)
 			if runtimePayloadNeedsRedaction(observation.Kind) {
-				payload = bytes.ReplaceAll(payload, []byte(secret), []byte("[REDACTED]"))
+				payload = bytes.ReplaceAll(payload, []byte(secret), []byte(traceRedactionMarker))
 			}
 		}
 	}

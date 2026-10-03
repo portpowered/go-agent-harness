@@ -170,6 +170,9 @@ type LiveRecorderOptions struct {
 	Observer   RuntimeObserver
 	InputRate  int
 	OutputRate int
+	// Credentials are the session secrets redacted from a delegation tool
+	// call's whole arguments and result before they are bounded.
+	Credentials []string
 }
 
 type PlaybackDiagnosticsOptions struct {

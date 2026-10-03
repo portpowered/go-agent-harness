@@ -1278,19 +1278,25 @@ above):
   the live event stream, and so to the invocation recorder, as
   `delegation_tool_call` and `delegation_tool_result` events (`ItemID` is the
   delegation id, `ToolCallID` and `Text` the call id and tool name, `Error`
-  a failed call). `DelegationTool` carries the tool name, the arguments
-  (both events) and the result content (the result event), each cut to
-  4 KiB (`session.LiveDelegationToolPayloadLimit`) on a UTF-8 boundary and
-  ending with `…[truncated]` when cut. Recorders redact them as the voice
-  loop's `TOOLCALL` recording is redacted, with the session's credentials:
-  the trace redacts the `delegation_tool_*` payloads (which also name the
-  tool: `tool_name`, `tool_arguments`, `tool_result`) as it redacts
-  `tool_call` and `tool_result`, and the `--record-dir` recorder redacts the
-  two fields before it spools the event (transcript payloads are base64, out
-  of the bundle's byte redaction). A credential that straddles the 4 KiB cut
-  is redacted only in full, so its leading bytes can remain. They are a
-  distinct kind, never `TOOLCALL.*` messages, so nothing counts them as
-  provider tool calls that owe a result. The tool
+  a failed call). `DelegationTool` carries the tool name, the whole
+  arguments (both events) and the whole result content (the result event).
+  A recorder keeps `LiveDelegationTool.Audited`: the session's credentials
+  are redacted from the whole value first, and only then is it cut to 4 KiB
+  (`session.LiveDelegationToolPayloadLimit`) on a UTF-8 boundary, ending
+  with `…[truncated]`, so a credential across the cut leaves no fragment.
+  The trace's live recorder gets the credentials
+  (`LiveRecorderOptions.Credentials`) and writes `tool_name`,
+  `tool_arguments` and `tool_result`; the `--record-dir` recorder does the
+  same before it spools the event. They are a distinct kind, never
+  `TOOLCALL.*` messages, so nothing counts them as provider tool calls that
+  owe a result.
+- **Voice-loop tool payloads in the bundle.** The `--record-dir` recorder
+  also redacts the session's credentials, raw and JSON-escaped, from the
+  encoded payload of every `TOOLCALL.*` message and every tool-role message
+  (the voice loop's tool arguments and results) before spooling it.
+  Transcript payloads are base64, so the bundle's byte redaction never
+  reached them; before this, a credential in a voice-loop tool call or
+  result was written to the bundle. The tool
   executor's own diagnostics (interactive timeouts and failures) are emitted
   as for any session tool call, because it is the same executor.
 - **Progress.** Before each tool call the worker sends a `thinking` append
@@ -1304,7 +1310,14 @@ above):
   calls of one batch in parallel. A session with delegations adds
   resource-group locks (`internal/live/tool_locks.go`) that the voice loop's
   tool executor and the delegation executor (`Binding.ToolLock`) both take:
-  every `webmcp_*`, `browser_*` and `show_page` call shares one browser lock,
+  every call the session's executor routes to the browser surface shares
+  one browser lock. The executor reports that routing
+  (`tools.BrowserToolRouter`, implemented by the composed tool surface and
+  forwarded by the interactive executor): the WebMCP broker's tools and,
+  with a dynamic broker, the page tools the selected page advertises
+  (`google_maps_*` and the like), whatever their names. The stable
+  `webmcp_*`, `browser_*` and `show_page` names are in the group even for an
+  executor that does not report its routing;
   `write_file` and `edit_file` share one filesystem-write lock, and each
   other tool the interactive policy classifies as `bounded-long-running`
   (display, exec, remote operations) has its own lock. Other tools run

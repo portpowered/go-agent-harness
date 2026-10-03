@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -118,35 +117,20 @@ func (h *handle) appendDelegationContext(ctx context.Context, value *messages.Co
 // recordDelegationTool publishes a delegation's tool call as session
 // evidence, so the call is auditable like the voice loop's: the event stream
 // and the invocation recorder both receive it, tagged with the delegation
-// id, with the tool's arguments and result bounded to
-// session.LiveDelegationToolPayloadLimit each. Recorders redact them as
-// they redact TOOLCALL messages. It is a distinct kind, never a TOOLCALL
-// message, so no observer counts it as a provider tool call that owes a
-// result.
+// id, with the tool's whole arguments and result: recorders keep
+// LiveDelegationTool.Audited, redacted with the session credentials and then
+// bounded. It is a distinct kind, never a TOOLCALL message, so no observer
+// counts it as a provider tool call that owes a result.
 func (h *handle) recordDelegationTool(event livedelegation.ToolEvent) {
 	kind := session.LiveEventDelegationToolCall
-	tool := &session.LiveDelegationTool{Name: event.Call.Name, Arguments: boundDelegationToolPayload(event.Call.Arguments)}
+	tool := &session.LiveDelegationTool{Name: event.Call.Name, Arguments: event.Call.Arguments}
 	if event.Done {
 		kind = session.LiveEventDelegationToolResult
-		tool.Result = boundDelegationToolPayload(event.Response.Content)
+		tool.Result = event.Response.Content
 	}
 	h.publish(session.LiveEvent{
 		Kind: string(kind), SessionID: h.request.SessionID, Critical: true,
 		ItemID: event.DelegationID, ToolCallID: event.Call.ID, Text: event.Call.Name, Error: event.Err,
 		DelegationTool: tool,
 	}, false)
-}
-
-// boundDelegationToolPayload keeps the first LiveDelegationToolPayloadLimit
-// bytes of value, cut on a UTF-8 boundary, followed by the truncation
-// marker.
-func boundDelegationToolPayload(value string) string {
-	if len(value) <= session.LiveDelegationToolPayloadLimit {
-		return value
-	}
-	cut := session.LiveDelegationToolPayloadLimit - len(session.LiveDelegationToolTruncated)
-	for cut > 0 && !utf8.RuneStart(value[cut]) {
-		cut--
-	}
-	return value[:cut] + session.LiveDelegationToolTruncated
 }

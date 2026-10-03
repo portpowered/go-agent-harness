@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openaichatgpt/fakechatgpt"
 	live "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive"
@@ -79,9 +80,13 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 // the same delegation with --record-dir. The delegation's tool call is
 // audited like the voice loop's: the recording bundle and the trace both
 // hold the tool name, the arguments and the result, the result bounded to
-// 4 KiB with a truncation marker and the session key redacted.
+// 4 KiB with a truncation marker and the session key redacted. The key
+// appears twice, the second time across the 4 KiB cut: redaction runs on the
+// whole result before the cut, so not even its first bytes are kept.
 func TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult(t *testing.T) {
-	result := "order 42: packed; courier key " + delegationCLIKey + "; " + strings.Repeat("manifest line ", 600)
+	prefix := "order 42: packed; courier key " + delegationCLIKey + "; "
+	straddle := session.LiveDelegationToolPayloadLimit - len(session.LiveDelegationToolTruncated) - 4
+	result := prefix + strings.Repeat("m", straddle-len(prefix)) + delegationCLIKey + strings.Repeat(" manifest line", 100)
 	recordDir := filepath.Join(t.TempDir(), "bundle")
 	run := runDelegationSessionCommand(t, result, "--record-dir", recordDir)
 
@@ -100,7 +105,7 @@ func TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult(t *testi
 		if !strings.Contains(result, "order 42: packed; courier key ") || !strings.Contains(result, "REDACTED") || !strings.Contains(result, "[truncated]") {
 			t.Fatalf("%s delegation tool result = %s, want the redacted result cut with a truncation marker", name, result)
 		}
-		if strings.Contains(call+result, delegationCLIKey) || strings.Count(result, "manifest line") > 4096/len("manifest line ") {
+		if strings.Contains(call+result, delegationCLIKey[:4]) || strings.Contains(result, "manifest line") {
 			t.Fatalf("%s delegation tool records leak the key or exceed the bound:\ncall %s\nresult %s", name, call, result)
 		}
 	}

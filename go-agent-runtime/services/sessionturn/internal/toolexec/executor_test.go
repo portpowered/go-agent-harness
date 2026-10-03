@@ -224,3 +224,24 @@ func TestExecutorUsesIndependentSessionBudgets(t *testing.T) {
 		t.Fatalf("explicit timeout = %s, want override of policy", remaining)
 	}
 }
+
+// browserRouted is an inner executor that routes one page tool to the
+// browser.
+type browserRouted struct{ executorFunc }
+
+func (browserRouted) IsBrowserTool(name string) bool { return name == "google_maps_directions" }
+
+// The interactive executor forwards its inner executor's browser routing,
+// so the live session can lock a page tool with the browser's tools; an
+// inner executor that reports none routes nothing to the browser.
+func TestForwardsTheInnerBrowserRouting(t *testing.T) {
+	routed := New(sessionturn.ToolExecutorRequest{Inner: browserRouted{}, Timeout: time.Second})
+	if !routed.IsBrowserTool("google_maps_directions") || routed.IsBrowserTool("write_file") {
+		t.Fatal("want google_maps_directions routed to the browser and write_file not")
+	}
+	plain := New(sessionturn.ToolExecutorRequest{Inner: executorFunc(nil), Timeout: time.Second})
+	if plain.IsBrowserTool("google_maps_directions") {
+		t.Fatal("an inner executor without browser routing routed a tool to the browser")
+	}
+	var _ tools.BrowserToolRouter = routed
+}

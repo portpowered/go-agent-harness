@@ -23,7 +23,7 @@ func (longRunningPolicy) ClassForTool(name string) tools.InteractiveToolClass {
 // long-running tool outside the browser and filesystem groups is locked on
 // its own, so it waits only for another call of itself.
 func TestToolLockWaitEndsWithItsContext(t *testing.T) {
-	locks := newToolLocks(longRunningPolicy{})
+	locks := newToolLocks(longRunningPolicy{}, nil)
 	release, err := locks.acquire(t.Context(), "exec")
 	if err != nil {
 		t.Fatalf("acquire exec: %v", err)

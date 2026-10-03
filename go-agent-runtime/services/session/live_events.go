@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"time"
+	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -77,9 +78,9 @@ type LiveEvent struct {
 	Critical bool
 }
 
-// LiveDelegationToolPayloadLimit bounds the Arguments and Result a
-// LiveDelegationTool carries; a longer value keeps its first bytes and ends
-// with LiveDelegationToolTruncated.
+// LiveDelegationToolPayloadLimit bounds the Arguments and Result a recorder
+// keeps of a LiveDelegationTool (LiveDelegationTool.Audited); a longer value
+// keeps its first bytes and ends with LiveDelegationToolTruncated.
 const LiveDelegationToolPayloadLimit = 4 << 10
 
 // LiveDelegationToolTruncated marks a LiveDelegationTool value cut at
@@ -88,12 +89,37 @@ const LiveDelegationToolTruncated = "…[truncated]"
 
 // LiveDelegationTool is the audit payload of one delegation tool call. A
 // call event carries the arguments; a result event carries them again with
-// the result content. Values are not redacted here: recorders redact the
-// session credentials as they do for the voice loop's TOOLCALL messages.
+// the result content. The live event carries them whole, as a TOOLCALL
+// message carries its arguments: a recorder keeps Audited, which redacts the
+// whole value before it bounds it, so a credential the bound would cut in
+// two is still redacted.
 type LiveDelegationTool struct {
 	Name      string
 	Arguments string
 	Result    string
+}
+
+// Audited returns the tool with redact applied to the whole Arguments and
+// Result, each then cut to LiveDelegationToolPayloadLimit bytes on a UTF-8
+// boundary, ending with LiveDelegationToolTruncated when cut. A nil redact
+// only bounds.
+func (t LiveDelegationTool) Audited(redact func(string) string) LiveDelegationTool {
+	if redact != nil {
+		t.Arguments, t.Result = redact(t.Arguments), redact(t.Result)
+	}
+	t.Arguments, t.Result = boundDelegationToolPayload(t.Arguments), boundDelegationToolPayload(t.Result)
+	return t
+}
+
+func boundDelegationToolPayload(value string) string {
+	if len(value) <= LiveDelegationToolPayloadLimit {
+		return value
+	}
+	cut := LiveDelegationToolPayloadLimit - len(LiveDelegationToolTruncated)
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut] + LiveDelegationToolTruncated
 }
 
 // LiveLivenessFailure is the provider-neutral terminal evidence for a

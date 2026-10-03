@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
+	"strings"
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -17,6 +19,28 @@ func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecor
 		observer:   options.Observer,
 		inputRate:  options.InputRate,
 		outputRate: options.OutputRate,
+		redact:     traceRedactor(options.Credentials),
+	}
+}
+
+// traceRedactor replaces each credential, longest first, with the trace's
+// redaction marker; nil without credentials.
+func traceRedactor(credentials []string) func(string) string {
+	secrets := make([]string, 0, len(credentials))
+	for _, credential := range credentials {
+		if credential != "" {
+			secrets = append(secrets, credential)
+		}
+	}
+	if len(secrets) == 0 {
+		return nil
+	}
+	sort.SliceStable(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
+	return func(value string) string {
+		for _, secret := range secrets {
+			value = strings.ReplaceAll(value, secret, traceRedactionMarker)
+		}
+		return value
 	}
 }
 
@@ -24,6 +48,7 @@ type liveRecorder struct {
 	inner                 session.LiveRecorder
 	observer              sessiontrace.RuntimeObserver
 	inputRate, outputRate int
+	redact                func(string) string
 	sequence              atomic.Uint64
 }
 
@@ -148,12 +173,12 @@ func (r *liveRecorder) observeAudio(record session.LiveAudioRecord) error {
 }
 
 func (r *liveRecorder) observeEvent(event session.LiveEvent) {
-	// A delegation tool event names its tool and carries the bounded
-	// arguments and result; the trace observer redacts them as it redacts
-	// tool_call and tool_result payloads.
+	// A delegation tool event names its tool and carries its arguments and
+	// result, redacted whole and then bounded; the trace observer redacts the
+	// payload again as it redacts tool_call and tool_result payloads.
 	var tool session.LiveDelegationTool
 	if event.DelegationTool != nil {
-		tool = *event.DelegationTool
+		tool = event.DelegationTool.Audited(r.redact)
 	}
 	payload, marshalErr := json.Marshal(struct {
 		Sequence      uint64 `json:"sequence"`

@@ -13,8 +13,10 @@ import (
 )
 
 // The voice loop's browser call holds the session's browser lock: a
-// delegation's call of a different browser tool waits for it, while an
-// ungrouped tool and a filesystem write run at once. Two delegations'
+// delegation's call of a different browser tool waits for it, and so does a
+// page tool (google_maps_directions) that the session's executor routes to
+// the browser, whatever its name, while an ungrouped tool and a filesystem
+// write run at once. Two delegations'
 // filesystem writes take turns, and the waiting browser call runs as soon
 // as the voice loop's call ends.
 func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
@@ -32,9 +34,9 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		handle, err := service.OpenLive(t.Context(), session.LiveRequest{
 			SessionID: "tool-locks", Provider: ackProvider, OpeningPrompt: "open the shop",
 			Capabilities: &session.LiveCapabilities{
-				Executor: voiceTool,
+				Executor: pageRoutedTool{voiceTool},
 				Definitions: []messages.ToolDefinition{
-					{Name: "webmcp_open_tab"}, {Name: "webmcp_list_tabs"}, {Name: "write_file"}, {Name: "edit_file"}, {Name: "lookup_order"},
+					{Name: "webmcp_open_tab"}, {Name: "webmcp_list_tabs"}, {Name: "write_file"}, {Name: "edit_file"}, {Name: "lookup_order"}, {Name: pageTool},
 				},
 			},
 			Delegation: &livedelegation.Policy{},
@@ -58,11 +60,12 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		<-voiceTool.started
 
 		browser := acquireAsync(t, binding.ToolLock, "webmcp_list_tabs")
+		page := acquireAsync(t, binding.ToolLock, pageTool)
 		lookup := acquireAsync(t, binding.ToolLock, "lookup_order")
 		write := acquireAsync(t, binding.ToolLock, "write_file")
 		synctest.Wait()
-		if browser.held() {
-			t.Fatal("a delegation's webmcp_list_tabs ran while the voice loop's webmcp_open_tab was running")
+		if browser.held() || page.held() {
+			t.Fatalf("while the voice loop's webmcp_open_tab ran, webmcp_list_tabs held=%t, %s held=%t; want both waiting", browser.held(), pageTool, page.held())
 		}
 		if !lookup.held() || !write.held() {
 			t.Fatalf("ungrouped lookup held=%t, filesystem write held=%t; want both admitted at once", lookup.held(), write.held())
@@ -80,10 +83,19 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 
 		close(voiceTool.release)
 		synctest.Wait()
-		if !browser.held() {
-			t.Fatal("the delegation's browser call still waits after the voice loop's call ended")
+		if browser.held() == page.held() {
+			t.Fatalf("after the voice loop's call: webmcp_list_tabs held=%t, %s held=%t; want exactly one browser call admitted", browser.held(), pageTool, page.held())
 		}
-		for _, call := range []*heldLock{browser, lookup, edit} {
+		first, second := browser, page
+		if page.held() {
+			first, second = page, browser
+		}
+		first.release()
+		synctest.Wait()
+		if !second.held() {
+			t.Fatal("the second browser call still waits after the first ended")
+		}
+		for _, call := range []*heldLock{second, lookup, edit} {
 			call.release()
 		}
 		if err := handle.Close(); err != nil {
@@ -91,6 +103,15 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		}
 	})
 }
+
+// pageTool is a site's page tool: its name says nothing about the browser.
+const pageTool = "google_maps_directions"
+
+// pageRoutedTool is the session's executor; like the composed tool surface,
+// it reports the page tool as routed to the browser.
+type pageRoutedTool struct{ *releasedTool }
+
+func (pageRoutedTool) IsBrowserTool(name string) bool { return name == pageTool }
 
 // bindingCapture is a delegation service that hands the session's binding
 // to the test and runs nothing.
