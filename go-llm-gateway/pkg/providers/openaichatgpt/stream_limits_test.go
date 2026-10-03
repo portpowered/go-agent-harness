@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
@@ -29,7 +30,7 @@ func TestStreamIdleTimeoutFailsTheTurn(t *testing.T) {
 		ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 		go func() {
 			defer close(ch)
-			translateStream(reader, reader.Close, ch, DefaultStreamIdleTimeout, nil)
+			translateStream(reader, reader.Close, ch, DefaultStreamIdleTimeout, replayTarget{})
 		}()
 		// One event arrives; then the backend goes silent and never closes.
 		if _, err := writer.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"par\"}\n\n")); err != nil {
@@ -55,7 +56,7 @@ func TestStreamActivityKeepsTheIdleWatchQuiet(t *testing.T) {
 		ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 		go func() {
 			defer close(ch)
-			translateStream(reader, reader.Close, ch, time.Minute, nil)
+			translateStream(reader, reader.Close, ch, time.Minute, replayTarget{})
 		}()
 		go func() {
 			for range 3 {
@@ -83,15 +84,16 @@ func TestStreamAcceptsLinesBeyondOneMebibyte(t *testing.T) {
 		"data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"call_id\":\"call_big\",\"name\":\"f\",\"arguments\":\"{}\"}}\n\n" +
 		"data: {\"type\":\"response.completed\",\"response\":{}}\n\n"
 	replay := newReasoningReplay()
-	if err := streamError(translateFixture(bytes.NewReader([]byte(body)), replay)); err != nil {
+	if err := streamError(translateFixture(bytes.NewReader([]byte(body)), replayTarget{store: replay})); err != nil {
 		t.Fatalf("3 MiB line failed: %v", err)
 	}
-	if items := replay.before("call_big"); len(items) != 1 || !strings.Contains(string(items[0]), big) {
+	kept := replay.lookup("", models.Message{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "call_big"}}})
+	if items := kept.reasoningBefore("call_big"); len(items) != 1 || !strings.Contains(string(items[0]), big) {
 		t.Fatal("the large encrypted reasoning item was not kept for replay")
 	}
 
 	tooBig := "data: \"" + strings.Repeat("a", sseLineBytes) + "\"\n\n"
-	if err := streamError(translateFixture(strings.NewReader(tooBig))); !errors.Is(err, providers.ErrTransport) {
+	if err := streamError(translateFixture(strings.NewReader(tooBig), replayTarget{})); !errors.Is(err, providers.ErrTransport) {
 		t.Fatalf("line over the bound = %v, want a transport error", err)
 	}
 }

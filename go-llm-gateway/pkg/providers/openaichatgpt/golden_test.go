@@ -148,7 +148,7 @@ func TestRequestBodyMatchesGoldens(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request, err := buildRequest(tt.req, tt.opts)
+			request, _, err := buildRequest(tt.req, tt.opts)
 			if err != nil {
 				t.Fatalf("build request: %v", err)
 			}
@@ -201,11 +201,7 @@ func renderUsage(usage messages.TokenUsage) string {
 	return fmt.Sprintf("prompt=%d completion=%d total=%d reasoning=%d", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.ReasoningTokens)
 }
 
-func translateFixture(body io.Reader, replay ...*reasoningReplay) <-chan messages.StreamMessage {
-	var keep *reasoningReplay
-	if len(replay) > 0 {
-		keep = replay[0]
-	}
+func translateFixture(body io.Reader, keep replayTarget) <-chan messages.StreamMessage {
 	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		defer close(ch)
@@ -224,9 +220,9 @@ func translateFixture(body io.Reader, replay ...*reasoningReplay) <-chan message
 // (openai-responses-replay-messages-internal.ts:520-532).
 func TestReasoningReplayMatchesGolden(t *testing.T) {
 	replay := newReasoningReplay()
-	for range translateFixture(bytes.NewReader(readTestdata(t, "stream_reasoning_tool_call.sse")), replay) {
+	for range translateFixture(bytes.NewReader(readTestdata(t, "stream_reasoning_tool_call.sse")), replayTarget{store: replay}) {
 	}
-	request, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
 		messages.NewTextMessage(models.RoleUser, "weather in Paris?"),
 		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "call_1", Name: "get_weather", Arguments: `{"city":"Paris"}`}}},
 		{Role: models.RoleTool, ToolCallID: "call_1", ContentParts: []models.ContentPart{models.TextPart{Text: "sunny, 21C"}}},
@@ -253,9 +249,9 @@ func TestInterleavedReasoningKeepsItsOrder(t *testing.T) {
 		`data: {"type":"response.completed","response":{}}`,
 	}, "\n\n") + "\n\n"
 	replay := newReasoningReplay()
-	for range translateFixture(strings.NewReader(stream), replay) {
+	for range translateFixture(strings.NewReader(stream), replayTarget{store: replay}) {
 	}
-	request, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
 		messages.NewTextMessage(models.RoleUser, "go"),
 		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "call_a", Name: "first", Arguments: "{}"}, {ID: "call_b", Name: "second", Arguments: "{}"}}},
 		{Role: models.RoleTool, ToolCallID: "call_a", ContentParts: []models.ContentPart{models.TextPart{Text: "a"}}},
@@ -292,18 +288,194 @@ func TestInterleavedReasoningKeepsItsOrder(t *testing.T) {
 	}
 }
 
+// answerTurn sends msgs as one request through replay and translates fixture
+// as the backend's answer, returning the assistant message the loop
+// reconstructs from the stream.
+func answerTurn(t *testing.T, replay *reasoningReplay, msgs []models.Message, fixture io.Reader) models.Message {
+	t.Helper()
+	_, prefix, err := buildRequest(providers.InferenceRequest{Messages: msgs}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	var deltas []messages.StreamMessage
+	for msg := range translateFixture(fixture, replayTarget{store: replay, prefix: prefix}) {
+		deltas = append(deltas, msg)
+	}
+	return messages.ReconstructModelMessageFromDeltas(deltas)
+}
+
+// TestReasoningReplaysInItsOriginalOrder follows three turns, the way
+// OpenClaw replays an assistant turn's blocks in stream order
+// (openai-responses-replay-messages-internal.ts, the assistant branch of
+// convertResponsesMessagesWithStyle). A response shaped reasoning, message,
+// function_call goes back in that order, and the reasoning before a final
+// text-only answer goes back before that answer in the next user turn. A
+// changed system prompt does not lose either, and no reasoning carries an
+// id.
+func TestReasoningReplaysInItsOriginalOrder(t *testing.T) {
+	replay := newReasoningReplay()
+	earlierSystem := messages.NewTextMessage(models.RoleSystem, "You may use tools.")
+	user := messages.NewTextMessage(models.RoleUser, "weather in Paris?")
+	toolStep := answerTurn(t, replay, []models.Message{earlierSystem, user}, bytes.NewReader(readTestdata(t, "stream_reasoning_text_tool_call.sse")))
+	if toolStep.TextContent() != "Let me check." || len(toolStep.ToolCalls) != 1 {
+		t.Fatalf("tool step = %+v, want text and one call", toolStep)
+	}
+	result := models.Message{Role: models.RoleTool, ToolCallID: "call_1", ContentParts: []models.ContentPart{models.TextPart{Text: "sunny, 21C"}}}
+	answer := answerTurn(t, replay, []models.Message{earlierSystem, user, toolStep, result}, bytes.NewReader(readTestdata(t, "stream_reasoning_final_answer.sse")))
+	if answer.TextContent() != "It is sunny." {
+		t.Fatalf("answer = %q", answer.TextContent())
+	}
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+		messages.NewTextMessage(models.RoleSystem, "Be brief."), user, toolStep, result, answer,
+		messages.NewTextMessage(models.RoleUser, "thanks"),
+	}}, requestOptions{model: "gpt-test", sessionID: "session-fixed", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	got, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	assertJSONEqual(t, got, readTestdata(t, "request_reasoning_ordered_replay.json"))
+}
+
+// inputLabels renders a request's input as one label per item.
+func inputLabels(t *testing.T, input []any) string {
+	t.Helper()
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(encoded, &items); err != nil {
+		t.Fatalf("decode input: %v", err)
+	}
+	labels := make([]string, 0, len(items))
+	for _, item := range items {
+		label := fmt.Sprint(item["type"])
+		switch item["type"] {
+		case "reasoning":
+			label += ":" + fmt.Sprint(item["encrypted_content"])
+		case "message":
+			label += ":" + fmt.Sprint(item["role"])
+		case "function_call", "function_call_output":
+			label += ":" + fmt.Sprint(item["call_id"])
+		}
+		labels = append(labels, label)
+	}
+	return strings.Join(labels, " ")
+}
+
+func textAnswer(encrypted, text string) io.Reader {
+	return strings.NewReader(strings.Join([]string{
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","summary":[],"encrypted_content":"` + encrypted + `"}}`,
+		`data: {"type":"response.output_item.done","output_index":1,"item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + text + `"}]}}`,
+		`data: {"type":"response.completed","response":{}}`,
+	}, "\n\n") + "\n\n")
+}
+
+// TestSameAnswerTwiceKeepsEachTurnsReasoning: two text-only turns that say
+// the same words are told apart by the conversation before them.
+func TestSameAnswerTwiceKeepsEachTurnsReasoning(t *testing.T) {
+	replay := newReasoningReplay()
+	first := messages.NewTextMessage(models.RoleUser, "ready?")
+	firstAnswer := answerTurn(t, replay, []models.Message{first}, textAnswer("enc-first", "OK."))
+	second := messages.NewTextMessage(models.RoleUser, "still ready?")
+	secondAnswer := answerTurn(t, replay, []models.Message{first, firstAnswer, second}, textAnswer("enc-second", "OK."))
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+		first, firstAnswer, second, secondAnswer, messages.NewTextMessage(models.RoleUser, "go"),
+	}}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	want := "message:user reasoning:enc-first message:assistant message:user reasoning:enc-second message:assistant message:user"
+	if got := inputLabels(t, request.Input); got != want {
+		t.Fatalf("input = %s\nwant %s", got, want)
+	}
+}
+
+// TestChangedHistoryFallsBackToPerCallReasoning: when the history no longer
+// matches a kept turn (here its text was edited), a text-only turn goes back
+// without reasoning, and a tool turn keeps the reasoning of each call before
+// that call, after the text.
+func TestChangedHistoryFallsBackToPerCallReasoning(t *testing.T) {
+	replay := newReasoningReplay()
+	user := messages.NewTextMessage(models.RoleUser, "weather in Paris?")
+	toolStep := answerTurn(t, replay, []models.Message{user}, bytes.NewReader(readTestdata(t, "stream_reasoning_text_tool_call.sse")))
+	result := models.Message{Role: models.RoleTool, ToolCallID: "call_1", ContentParts: []models.ContentPart{models.TextPart{Text: "sunny, 21C"}}}
+	answer := answerTurn(t, replay, []models.Message{user, toolStep, result}, textAnswer("enc-answer", "It is sunny."))
+	toolStep.ContentParts = []models.ContentPart{models.TextPart{Text: "Checking."}}
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{user, toolStep, result, answer}}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	want := "message:user message:assistant reasoning:gAAAAencrypted-1 function_call:call_1 function_call_output:call_1 message:assistant message:user"
+	if got := inputLabels(t, request.Input); got != want {
+		t.Fatalf("input = %s\nwant %s", got, want)
+	}
+}
+
+// TestTrailingReasoningStillEndsOnAUserTurn: a turn whose reasoning came
+// after its text replays in that order, and the request still gets the
+// continuation user message.
+func TestTrailingReasoningStillEndsOnAUserTurn(t *testing.T) {
+	replay := newReasoningReplay()
+	user := messages.NewTextMessage(models.RoleUser, "hi")
+	answer := answerTurn(t, replay, []models.Message{user}, strings.NewReader(strings.Join([]string{
+		`data: {"type":"response.output_text.delta","delta":"Hello"}`,
+		`data: {"type":"response.output_item.done","output_index":1,"item":{"type":"reasoning","summary":[],"encrypted_content":"enc-late"}}`,
+		`data: {"type":"response.completed","response":{}}`,
+	}, "\n\n")+"\n\n"))
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{user, answer}}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	want := "message:user message:assistant reasoning:enc-late message:user"
+	if got := inputLabels(t, request.Input); got != want {
+		t.Fatalf("input = %s\nwant %s", got, want)
+	}
+}
+
+// TestFailedResponseKeepsNoReasoning: only a completed response is kept.
+func TestFailedResponseKeepsNoReasoning(t *testing.T) {
+	replay := newReasoningReplay()
+	user := messages.NewTextMessage(models.RoleUser, "hi")
+	answer := answerTurn(t, replay, []models.Message{user}, strings.NewReader(
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","summary":[],"encrypted_content":"enc-x"}}`+"\n\n"+
+			`data: {"type":"response.output_text.delta","delta":"Hel"}`+"\n\n"))
+	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{user, answer}}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	if got := inputLabels(t, request.Input); got != "message:user message:assistant message:user" {
+		t.Fatalf("input = %s, want no reasoning from a stream that never completed", got)
+	}
+}
+
 func TestReasoningReplayIsBounded(t *testing.T) {
 	replay := newReasoningReplay()
-	for i := range maxReplayedCalls + 1 {
-		replay.remember(fmt.Sprintf("call_%d", i), []json.RawMessage{json.RawMessage(`{}`)})
+	reasoning := replayBlock{kind: replayReasoning, reasoning: json.RawMessage(`{}`)}
+	turn := func(i int) (turnLayout, models.Message) {
+		id := fmt.Sprintf("call_%d", i)
+		return turnLayout{reasoning, {kind: replayCall, callID: id}}, models.Message{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: id}}}
 	}
-	if replay.before("call_0") != nil || replay.before(fmt.Sprintf("call_%d", maxReplayedCalls)) == nil {
-		t.Fatal("replay should drop the oldest call and keep the newest")
+	for i := range maxReplayedTurns + 1 {
+		layout, _ := turn(i)
+		replay.remember("", layout)
+	}
+	_, oldest := turn(0)
+	_, newest := turn(maxReplayedTurns)
+	if replay.lookup("", oldest) != nil || replay.lookup("", newest) == nil {
+		t.Fatal("replay should drop the oldest turn and keep the newest")
+	}
+	replay.remember("", turnLayout{{kind: replayText, text: "no reasoning"}})
+	if replay.lookup("", messages.NewTextMessage(models.RoleAssistant, "no reasoning")) != nil {
+		t.Fatal("a turn without reasoning should not be kept")
 	}
 }
 
 func TestToolResultWithoutCallIDIsRejected(t *testing.T) {
-	_, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+	_, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
 		{Role: models.RoleTool, ContentParts: []models.ContentPart{models.TextPart{Text: "orphan"}}},
 	}}, requestOptions{model: "gpt-test"})
 	if !errors.Is(err, ErrToolResultWithoutCallID) || !errors.Is(err, providers.ErrInvalidRequest) {
@@ -314,7 +486,7 @@ func TestToolResultWithoutCallIDIsRejected(t *testing.T) {
 func TestStreamTranslationMatchesGoldens(t *testing.T) {
 	for _, name := range []string{"stream_text", "stream_deltas", "stream_tool_call", "stream_failed_usage_not_included"} {
 		t.Run(name, func(t *testing.T) {
-			got := renderStream(translateFixture(bytes.NewReader(readTestdata(t, name+".sse"))))
+			got := renderStream(translateFixture(bytes.NewReader(readTestdata(t, name+".sse")), replayTarget{}))
 			if want := string(readTestdata(t, name+".golden")); got != want {
 				t.Fatalf("stream mismatch\n got:\n%s\nwant:\n%s", got, want)
 			}

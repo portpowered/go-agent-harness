@@ -1,0 +1,18 @@
+{
+  "model": "gpt-test",
+  "instructions": "Be brief.",
+  "input": [
+    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "weather in Paris?"}]},
+    {"type": "reasoning", "summary": [{"type": "summary_text", "text": "Need the weather"}], "encrypted_content": "gAAAAencrypted-1"},
+    {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Let me check.", "annotations": []}], "status": "completed"},
+    {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Paris\"}"},
+    {"type": "function_call_output", "call_id": "call_1", "output": "sunny, 21C"},
+    {"type": "reasoning", "summary": [], "encrypted_content": "gAAAAencrypted-2"},
+    {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "It is sunny.", "annotations": []}], "status": "completed"},
+    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "thanks"}]}
+  ],
+  "store": false,
+  "stream": true,
+  "include": ["reasoning.encrypted_content"],
+  "prompt_cache_key": "session-fixed"
+}

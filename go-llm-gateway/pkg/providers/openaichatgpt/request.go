@@ -98,7 +98,7 @@ type requestOptions struct {
 	model           string
 	reasoningEffort string
 	sessionID       string
-	// replay supplies reasoning items to send before earlier function calls.
+	// replay supplies the kept items of earlier model turns.
 	replay *reasoningReplay
 }
 
@@ -113,29 +113,33 @@ type requestConfig struct {
 	ReasoningEffort string `json:"reasoning_effort"`
 }
 
-// marshalRequest builds and encodes the Responses body for req.
-func marshalRequest(req providers.InferenceRequest, model, sessionID string, replay *reasoningReplay) ([]byte, error) {
+// marshalRequest builds and encodes the Responses body for req. It also
+// returns the fingerprint of req's conversation, under which the answering
+// turn's reasoning is kept.
+func marshalRequest(req providers.InferenceRequest, model, sessionID string, replay *reasoningReplay) ([]byte, string, error) {
 	var config requestConfig
 	if len(bytes.TrimSpace(req.Config)) > 0 {
 		if err := json.Unmarshal(req.Config, &config); err != nil {
-			return nil, providers.NewInvalidRequestError(ProviderName, "config", ProviderName+": model config must be a JSON object")
+			return nil, "", providers.NewInvalidRequestError(ProviderName, "config", ProviderName+": model config must be a JSON object")
 		}
 	}
-	request, err := buildRequest(req, requestOptions{model: model, reasoningEffort: strings.TrimSpace(config.ReasoningEffort), sessionID: sessionID, replay: replay})
+	request, prefix, err := buildRequest(req, requestOptions{model: model, reasoningEffort: strings.TrimSpace(config.ReasoningEffort), sessionID: sessionID, replay: replay})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
-		return nil, fmt.Errorf("%s: marshal request: %w", ProviderName, err)
+		return nil, "", fmt.Errorf("%s: marshal request: %w", ProviderName, err)
 	}
-	return body, nil
+	return body, prefix, nil
 }
 
-func buildRequest(req providers.InferenceRequest, opts requestOptions) (responsesRequest, error) {
-	instructions, input, err := conversationToInput(req.Messages, opts.replay)
+// buildRequest returns the Responses body for req and the fingerprint of
+// req's conversation.
+func buildRequest(req providers.InferenceRequest, opts requestOptions) (responsesRequest, string, error) {
+	instructions, input, prefix, err := conversationToInput(req.Messages, opts.replay)
 	if err != nil {
-		return responsesRequest{}, err
+		return responsesRequest{}, "", err
 	}
 	if instructions == "" {
 		instructions = defaultInstructions
@@ -158,16 +162,18 @@ func buildRequest(req providers.InferenceRequest, opts requestOptions) (response
 	if opts.reasoningEffort != "" {
 		body.Reasoning = &reasoning{Effort: opts.reasoningEffort, Summary: reasoningSummaryAuto}
 	}
-	return body, nil
+	return body, prefix, nil
 }
 
 // conversationToInput joins the system messages into instructions and maps
-// every other message to Responses input items. Reasoning items kept from an
-// earlier response go back right before the function call they preceded.
+// every other message to Responses input items. An assistant message whose
+// turn was kept goes back in its original item order, reasoning included.
 // Input that ends on an assistant message gets a providers.ContinuationPrompt
 // user message, so the request always ends on a user turn or tool output.
-func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string, []any, error) {
+// The returned prefix is the fingerprint of msgs.
+func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string, []any, string, error) {
 	var instructions []string
+	var prefix conversationFingerprint
 	input := make([]any, 0, len(msgs))
 	for _, msg := range msgs {
 		switch msg.Role {
@@ -178,10 +184,10 @@ func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string
 		case models.RoleUser:
 			input = append(input, userItem(msg))
 		case models.RoleAssistant:
-			input = append(input, assistantItems(msg, replay)...)
+			input = append(input, assistantItems(msg, replay.lookup(prefix.sum, msg))...)
 		case models.RoleTool:
 			if strings.TrimSpace(msg.ToolCallID) == "" {
-				return "", nil, &providers.ValidationError{
+				return "", nil, "", &providers.ValidationError{
 					Provider: ProviderName, Feature: "tool_call_id", Detail: ProviderName + ": " + ErrToolResultWithoutCallID.Error(),
 					Err: errors.Join(providers.ErrInvalidRequest, ErrToolResultWithoutCallID),
 				}
@@ -189,21 +195,30 @@ func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string
 			output := msg.TextContent()
 			input = append(input, inputItem{Type: itemTypeFunctionCallOutput, CallID: msg.ToolCallID, Output: &output})
 		}
+		if msg.Role != models.RoleSystem {
+			prefix.add(msg)
+		}
 	}
 	if endsOnAssistantMessage(input) {
 		input = append(input, userItem(models.NewTextMessage(models.RoleUser, providers.ContinuationPrompt)))
 	}
-	return strings.Join(instructions, "\n\n"), input, nil
+	return strings.Join(instructions, "\n\n"), input, prefix.sum, nil
 }
 
-// endsOnAssistantMessage reports whether the last input item is an assistant
-// message.
+// endsOnAssistantMessage reports whether the input ends on an assistant
+// message, or on reasoning replayed after one.
 func endsOnAssistantMessage(input []any) bool {
-	if len(input) == 0 {
-		return false
+	for i := len(input) - 1; i >= 0; i-- {
+		switch item := input[i].(type) {
+		case json.RawMessage:
+			continue
+		case inputItem:
+			return item.Type == itemTypeMessage && item.Role == roleAssistant
+		default:
+			return false
+		}
 	}
-	item, ok := input[len(input)-1].(inputItem)
-	return ok && item.Type == itemTypeMessage && item.Role == roleAssistant
+	return false
 }
 
 func userItem(msg models.Message) inputItem {
@@ -237,32 +252,68 @@ func imageURL(part models.ImagePart) string {
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(part.Bytes)
 }
 
-// assistantItems replays an earlier model turn: its text as a completed
-// assistant message, then each tool call as a function_call item, each
-// preceded by the reasoning items kept for that call, so an interleaved
-// response keeps its order (reasoning1, callA, reasoning2, callB).
-func assistantItems(msg models.Message, replay *reasoningReplay) []any {
+// assistantItems replays an earlier model turn. When the turn was kept
+// (turn matches msg) its items go back in their original order, OpenClaw's
+// block order: reasoning, text and function calls exactly as the model
+// produced them (reasoning1, message, callA, reasoning2, callB). Otherwise
+// the text goes first as a completed assistant message, then each function
+// call, preceded by the reasoning kept for that call, if any.
+func assistantItems(msg models.Message, turn turnLayout) []any {
+	if turn != nil && turn.matches(msg) {
+		return orderedAssistantItems(msg, turn)
+	}
 	items := make([]any, 0, len(msg.ToolCalls)+1)
 	if text := msg.TextContent(); text != "" {
-		annotations := []string{}
-		items = append(items, inputItem{
-			Type:    itemTypeMessage,
-			Role:    roleAssistant,
-			Content: []contentPart{{Type: partTypeOutputText, Text: &text, Annotations: &annotations}},
-			Status:  statusCompleted,
-		})
+		items = append(items, assistantMessageItem(text))
 	}
 	for _, call := range msg.ToolCalls {
-		arguments := call.Arguments
-		if arguments == "" {
-			arguments = "{}"
-		}
-		for _, item := range replay.before(call.ID) {
+		for _, item := range turn.reasoningBefore(call.ID) {
 			items = append(items, item)
 		}
-		items = append(items, inputItem{Type: itemTypeFunctionCall, CallID: call.ID, Name: call.Name, Arguments: &arguments})
+		items = append(items, functionCallItem(call))
 	}
 	return items
+}
+
+// orderedAssistantItems replays msg in the item order of turn, which
+// matches it.
+func orderedAssistantItems(msg models.Message, turn turnLayout) []any {
+	calls := make(map[string]models.ToolCall, len(msg.ToolCalls))
+	for _, call := range msg.ToolCalls {
+		calls[call.ID] = call
+	}
+	items := make([]any, 0, len(turn))
+	for _, block := range turn {
+		switch block.kind {
+		case replayReasoning:
+			items = append(items, block.reasoning)
+		case replayText:
+			if block.text != "" {
+				items = append(items, assistantMessageItem(block.text))
+			}
+		case replayCall:
+			items = append(items, functionCallItem(calls[block.callID]))
+		}
+	}
+	return items
+}
+
+func assistantMessageItem(text string) inputItem {
+	annotations := []string{}
+	return inputItem{
+		Type:    itemTypeMessage,
+		Role:    roleAssistant,
+		Content: []contentPart{{Type: partTypeOutputText, Text: &text, Annotations: &annotations}},
+		Status:  statusCompleted,
+	}
+}
+
+func functionCallItem(call models.ToolCall) inputItem {
+	arguments := call.Arguments
+	if arguments == "" {
+		arguments = "{}"
+	}
+	return inputItem{Type: itemTypeFunctionCall, CallID: call.ID, Name: call.Name, Arguments: &arguments}
 }
 
 // toolsToFunctions maps tool definitions to Responses function tools with

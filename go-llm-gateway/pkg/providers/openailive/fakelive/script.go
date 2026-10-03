@@ -60,7 +60,8 @@ func AwaitStarted() Step {
 }
 
 // AwaitClient waits until the connection has received count client events
-// of eventType in total.
+// of eventType in total and has answered the last of them, so a step after
+// it is written after that event's ack or error.
 func AwaitClient(eventType string, count int) Step {
 	return Step{name: fmt.Sprintf("await %d %s", count, eventType), run: func(sess *session) error {
 		return sess.waitFor(func() bool { return sess.counts[eventType] >= count })
