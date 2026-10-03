@@ -211,6 +211,7 @@ func TestAwaitClientBlocksUntilTheEventArrivesOrTheConnectionEnds(t *testing.T) 
 // counted, ahead of its ack, and overtook it in about 1 run in 370 under
 // load; many connections at once make that window easy to hit.
 func TestAwaitedStepsFollowTheAckOfTheEventTheyAwaited(t *testing.T) {
+	t.Parallel()
 	server := fakelive.New(fakelive.WithScript(
 		fakelive.AwaitClient(live.TypeInputAudioMute, 1),
 		fakelive.Send(live.Info{Code: "muted_seen", Message: "m"}),
