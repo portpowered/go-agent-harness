@@ -27,14 +27,14 @@ func (s *recordingAudioInputSender) sendAudioInput(_ context.Context, payload []
 func TestLoopAudioOutboundUsesOrderedPCMInputPolicy(t *testing.T) {
 	sender := &recordingAudioInputSender{}
 	var admitted sharedaudio.PCMFrame
-	outbound := &loopAudioOutbound{sender: sender, onAdmit: func(frame sharedaudio.PCMFrame) { admitted = frame }}
+	outbound := &loopAudioOutbound{sender: sender, policy: messages.SessionAudioInputPolicyDoNotInterrupt, onAdmit: func(frame sharedaudio.PCMFrame) { admitted = frame }}
 	want := []int16{1, -2, 32767, -32768}
 	frame := sharedaudio.PCMFrame{Samples: want, Format: sharedaudio.PCM16DeviceFormat(16000), StreamID: "capture", Sequence: 7}
 	require.NoError(t, outbound.WriteFrame(context.Background(), frame))
 	got, err := codec.DecodePCM16(sender.payload)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
-	require.Equal(t, messages.SessionAudioInputPolicyDefault, sender.policy)
+	require.Equal(t, messages.SessionAudioInputPolicyDoNotInterrupt, sender.policy)
 	require.Equal(t, want, admitted.Samples)
 	require.Equal(t, frame.StreamID, admitted.StreamID)
 	require.Equal(t, frame.Sequence, admitted.Sequence)

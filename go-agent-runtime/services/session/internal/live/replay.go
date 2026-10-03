@@ -69,7 +69,7 @@ func (i *liveInvocation) runCaptureInterruptions(ctx context.Context) error {
 			return err
 		}
 		turn := len(i.options.CaptureTurns) + index
-		if err := i.captureFiniteTurn(ctx, turn, input); err != nil {
+		if err := i.captureFiniteTurn(ctx, turn, input, messages.SessionAudioInputPolicyInterrupt); err != nil {
 			return err
 		}
 		for _, control := range controls {
@@ -102,10 +102,25 @@ func (i *liveInvocation) runCaptureTurn(ctx context.Context, index int, input de
 	if err := i.prepareCaptureTurn(ctx, index, admission); err != nil {
 		return err
 	}
-	if err := i.captureFiniteTurn(ctx, index, input); err != nil {
+	if err := i.captureFiniteTurn(ctx, index, input, scheduledTurnAudioPolicy(admission)); err != nil {
 		return err
 	}
 	return i.completeCaptureTurn(ctx, index)
+}
+
+// scheduledTurnAudioPolicy classifies scheduled turn audio for barge-in. A
+// completion-gated turn is released only after the prior response completed,
+// so it is the next turn of the conversation, never an interruption: it must
+// not cancel a response or discard the prior reply's audio that is still
+// queued for playback. Audio arrives faster than real time, so that reply
+// can still be queued when its response completes, and treating the next
+// turn as a barge-in silently dropped the reply's unplayed audio. Barge
+// admission is the explicit opt-in for interrupting turns.
+func scheduledTurnAudioPolicy(admission session.AudioTurnAdmission) messages.SessionAudioInputPolicy {
+	if admission == session.AudioTurnAdmissionBarge {
+		return messages.SessionAudioInputPolicyInterrupt
+	}
+	return messages.SessionAudioInputPolicyDoNotInterrupt
 }
 
 func (i *liveInvocation) completeCaptureTurn(ctx context.Context, index int) error {
@@ -140,7 +155,7 @@ func (i *liveInvocation) prepareCaptureTurn(ctx context.Context, index int, admi
 	return nil
 }
 
-func (i *liveInvocation) captureFiniteTurn(ctx context.Context, index int, input devices.FileInput) error {
+func (i *liveInvocation) captureFiniteTurn(ctx context.Context, index int, input devices.FileInput, policy messages.SessionAudioInputPolicy) error {
 	request := i.options.DeviceRequest
 	request.CaptureEnabled = true
 	request.PlaybackEnabled = false
@@ -158,7 +173,7 @@ func (i *liveInvocation) captureFiniteTurn(ctx context.Context, index int, input
 		closeErr := device.Close()
 		return errors.Join(fmt.Errorf("open finite capture turn %d: device service returned no capture port", index+1), closeErr)
 	}
-	packet, packetErr := newFiniteTurnOutbound(i.captureOutbound())
+	packet, packetErr := newFiniteTurnOutbound(i.captureOutbound(policy))
 	pumpErr := packetErr
 	if pumpErr == nil {
 		pumpErr = ports.Capture.Pump(ctx, packet)
@@ -253,10 +268,13 @@ type sessionAudioInputSender interface {
 
 type loopAudioOutbound struct {
 	sender  sessionAudioInputSender
+	policy  messages.SessionAudioInputPolicy
 	onAdmit func(sharedaudio.PCMFrame)
 }
 
-func (i *liveInvocation) captureOutbound() sharedaudio.OutboundMedia {
+// captureOutbound admits local capture with policy, the barge-in intent of
+// its source.
+func (i *liveInvocation) captureOutbound(policy messages.SessionAudioInputPolicy) sharedaudio.OutboundMedia {
 	if i == nil {
 		return nil
 	}
@@ -264,7 +282,7 @@ func (i *liveInvocation) captureOutbound() sharedaudio.OutboundMedia {
 	if !ok || sender == nil {
 		return i.endpoints.Outbound
 	}
-	return &loopAudioOutbound{sender: sender, onAdmit: i.captureAdmitted}
+	return &loopAudioOutbound{sender: sender, policy: policy, onAdmit: i.captureAdmitted}
 }
 
 // sendAudioInput keeps local capture on the model runner's ordered ingress;
@@ -335,7 +353,7 @@ func (o *loopAudioOutbound) WriteFrame(ctx context.Context, frame sharedaudio.PC
 	if len(frame.Samples) == 0 {
 		return sharedaudio.ErrSessionMediaEmptyFrame
 	}
-	if err := o.sender.sendAudioInput(ctx, codec.EncodePCM16(frame.Samples), messages.SessionAudioInputPolicyDefault); err != nil {
+	if err := o.sender.sendAudioInput(ctx, codec.EncodePCM16(frame.Samples), o.policy); err != nil {
 		return fmt.Errorf("admit ordered audio input: %w", err)
 	}
 	if o.onAdmit != nil {

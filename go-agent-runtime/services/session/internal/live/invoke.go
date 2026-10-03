@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -244,7 +245,8 @@ func (i *liveInvocation) startCapturePump(ctx context.Context) {
 		i.handle.Cancel(errors.New("live provider has no audio input path"))
 		return
 	}
-	target := i.captureOutbound()
+	// A live capture device is the speaker: its audio may interrupt.
+	target := i.captureOutbound(messages.SessionAudioInputPolicyInterrupt)
 	i.startPump(ctx, "capture", func(ctx context.Context) error {
 		return i.ports.Capture.Pump(ctx, target)
 	})
