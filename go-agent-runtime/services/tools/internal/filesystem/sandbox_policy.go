@@ -11,19 +11,39 @@ import (
 	"syscall"
 )
 
-func (r *sandboxFs) executeRead(path string, fn func(root *os.Root, relPath string) error) error {
-	rootPath, relPath, err := r.resolveRead(path)
+func (r *sandboxFs) executeRead(path string, fn func(guard *openGuard, relPath string) error) error {
+	return r.withGuard(path, false, fn)
+}
+
+// withGuard runs one operation: the path pre-check, then fn with an
+// open-time guard beneath the scope root. The pre-check refuses reads,
+// writes, appends, edits and creates of protected system and credential
+// locations before resolving the scope, so a broad root cannot expose
+// ~/.ssh/id_rsa or plant ~/.ssh/authorized_keys. Both share one snapshot of the
+// protected identities. afterPolicyCheck is the test seam between the check
+// and the open.
+func (r *sandboxFs) withGuard(path string, write bool, fn func(guard *openGuard, relPath string) error) error {
+	protected := snapshotProtectedIdentities(r.protectedRoots())
+	denied := r.protectedReadDenial
+	if write {
+		denied = r.protectedWriteDenial
+	}
+	if r.isProtectedIn(path, protected) {
+		return denied()
+	}
+	rootPath, relPath, err := r.resolve(path)
 	if err != nil {
 		return err
 	}
-
+	if r.afterPolicyCheck != nil {
+		r.afterPolicyCheck(path)
+	}
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return fmt.Errorf("failed to open workspace: %w", err)
 	}
 	defer closeSandboxRoot(root)
-
-	return fn(root, relPath)
+	return fn(newOpenGuard(root, protected, r.protectedRoots(), denied), relPath)
 }
 
 func (r *sandboxFs) resolve(path string) (string, string, error) {
@@ -82,28 +102,33 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 	return "", "", newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalOutsidePermittedRoots, fmt.Sprintf("path escapes workspace: %s", path))
 }
 
-func (r *sandboxFs) resolveRead(path string) (string, string, error) {
-	if r.isProtected(path) {
-		denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveRead, ErrFilesystemAccessDenied.Error())
-		return "", "", fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemRead)
-	}
-	return r.resolve(path)
+func (r *sandboxFs) protectedReadDenial() error {
+	denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveRead, ErrFilesystemAccessDenied.Error())
+	return fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemRead)
 }
 
+func (r *sandboxFs) protectedWriteDenial() error {
+	denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveWrite, ErrFilesystemAccessDenied.Error())
+	return fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemWrite)
+}
+
+// protectedRoots is the policy's protected roots, or the platform defaults
+// for a legacy restricted tool built without them.
+func (r *sandboxFs) protectedRoots() []string {
+	if len(r.protectedReadRoots) == 0 {
+		return normalizeProtectedReadRoots(platformProtectedReadRoots())
+	}
+	return r.protectedReadRoots
+}
+
+// authorizeRead is the read pre-check alone: it refuses a protected path
+// before resolving the scope.
 func (r *sandboxFs) authorizeRead(path string) error {
-	_, _, err := r.resolveRead(path)
-	return err
-}
-
-// resolveWrite refuses writes, appends, edits and creates into protected
-// system and credential locations before resolving the scope, so a broad
-// root cannot be used to plant a credential such as ~/.ssh/authorized_keys.
-func (r *sandboxFs) resolveWrite(path string) (string, string, error) {
 	if r.isProtected(path) {
-		denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveWrite, ErrFilesystemAccessDenied.Error())
-		return "", "", fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemWrite)
+		return r.protectedReadDenial()
 	}
-	return r.resolve(path)
+	_, _, err := r.resolve(path)
+	return err
 }
 
 // isProtected reports whether path, lexically or after resolving symlinks,
@@ -111,6 +136,10 @@ func (r *sandboxFs) resolveWrite(path string) (string, string, error) {
 // folds case per component, and any filesystem that names a protected root
 // through another spelling is caught by comparing file identity.
 func (r *sandboxFs) isProtected(path string) bool {
+	return r.isProtectedIn(path, snapshotProtectedIdentities(r.protectedRoots()))
+}
+
+func (r *sandboxFs) isProtectedIn(path string, protected *protectedIdentities) bool {
 	roots, err := r.rootPaths()
 	if err != nil || len(roots) == 0 {
 		return false
@@ -124,16 +153,13 @@ func (r *sandboxFs) isProtected(path string) bool {
 	if resolved, err := canonicalizeExistingPath(candidate); err == nil {
 		comparisonCandidate = resolved
 	}
-	protectedRoots := r.protectedReadRoots
-	if len(protectedRoots) == 0 {
-		protectedRoots = normalizeProtectedReadRoots(platformProtectedReadRoots())
-	}
+	protectedRoots := r.protectedRoots()
 	for _, protectedRoot := range protectedRoots {
 		if isWithinProtectedRoot(candidate, protectedRoot) || isWithinProtectedRoot(comparisonCandidate, protectedRoot) {
 			return true
 		}
 	}
-	return hasProtectedAncestor(comparisonCandidate, protectedRoots)
+	return protected.containsAncestorOf(comparisonCandidate)
 }
 
 // caseInsensitivePaths reports whether the platform's default filesystems
@@ -181,27 +207,7 @@ func splitPathComponents(path string) []string {
 // catches every spelling a case-insensitive or case-folding filesystem
 // accepts, on any platform.
 func hasProtectedAncestor(candidate string, protectedRoots []string) bool {
-	rootInfos := make([]os.FileInfo, 0, len(protectedRoots))
-	for _, protectedRoot := range protectedRoots {
-		if info, err := os.Stat(protectedRoot); err == nil {
-			rootInfos = append(rootInfos, info)
-		}
-	}
-	if len(rootInfos) == 0 {
-		return false
-	}
-	for current := filepath.Clean(candidate); ; current = filepath.Dir(current) {
-		if info, err := os.Stat(current); err == nil {
-			for _, rootInfo := range rootInfos {
-				if os.SameFile(info, rootInfo) {
-					return true
-				}
-			}
-		}
-		if filepath.Dir(current) == current {
-			return false
-		}
-	}
+	return snapshotProtectedIdentities(protectedRoots).containsAncestorOf(candidate)
 }
 
 // canonicalizeExistingPath resolves the existing portion of a path and then
@@ -316,9 +322,12 @@ func isSandboxAccessDenied(err error) bool {
 
 func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 	var content []byte
-	err := r.executeRead(path, func(root *os.Root, relPath string) error {
-		fileContent, err := root.ReadFile(relPath)
+	err := r.executeRead(path, func(guard *openGuard, relPath string) error {
+		fileContent, err := guard.readFile(relPath)
 		if err != nil {
+			if errors.Is(err, ErrFilesystemAccessDenied) {
+				return err
+			}
 			if os.IsNotExist(err) || errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("failed to read file: file not found: %w", err)
 			}
@@ -334,102 +343,15 @@ func (r *sandboxFs) ReadFile(path string) ([]byte, error) {
 }
 
 func (r *sandboxFs) WriteFile(path string, data []byte) error {
-	return r.execute(path, func(root *os.Root, relPath string) error {
-		return writeFileWithinRoot(root, relPath, data)
+	return r.execute(path, func(guard *openGuard, relPath string) error {
+		return guard.writeFile(relPath, data)
 	})
-}
-
-func writeFileWithinRoot(root *os.Root, relPath string, data []byte) error {
-	handled, err := writeExistingSymlink(root, relPath, data)
-	if err != nil || handled {
-		return err
-	}
-	dir := filepath.Dir(relPath)
-	if err := makeSandboxParent(root, dir); err != nil {
-		return err
-	}
-	if err := validateSandboxWriteTarget(root, relPath); err != nil {
-		return err
-	}
-	return writeSandboxAtomically(root, relPath, dir, data)
-}
-
-func writeExistingSymlink(root *os.Root, relPath string, data []byte) (bool, error) {
-	// Stat the target before creating the temporary file. Besides keeping
-	// authorization ahead of side effects, this makes an existing symlink
-	// to an external target fail closed instead of being replaced by an
-	// otherwise-safe rename.
-	_, err := root.Stat(relPath)
-	if err != nil {
-		if os.IsNotExist(err) || errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
-		if isSandboxAccessDenied(err) {
-			return false, fmt.Errorf("failed to authorize file: access denied: %w", err)
-		}
-		return false, nil
-	}
-	lstat, err := root.Lstat(relPath)
-	if err != nil {
-		return false, fmt.Errorf("failed to authorize existing target: %w", err)
-	}
-	if lstat.Mode()&os.ModeSymlink == 0 {
-		return false, nil
-	}
-	if err := root.WriteFile(relPath, data, sandboxFileMode); err != nil {
-		if isSandboxAccessDenied(err) {
-			return true, fmt.Errorf("failed to write file: access denied: %w", err)
-		}
-		return true, fmt.Errorf("failed to write file: %w", err)
-	}
-	return true, nil
-}
-
-func makeSandboxParent(root *os.Root, dir string) error {
-	if dir == "." || dir == "/" {
-		return nil
-	}
-	if err := root.MkdirAll(dir, sandboxDirectoryMode); err != nil {
-		if isSandboxAccessDenied(err) {
-			return fmt.Errorf("failed to create parent directories: access denied: %w", err)
-		}
-		return fmt.Errorf("failed to create parent directories: %w", err)
-	}
-	return nil
-}
-
-func writeSandboxAtomically(root *os.Root, relPath, dir string, data []byte) error {
-	// Keep the staging file short and in the destination directory. The
-	// root-owned operations preserve workspace confinement while retaining
-	// write-then-rename atomicity.
-	tmpFile, tmpRelPath, err := createSandboxWriteTempFile(root, dir)
-	if err != nil {
-		return fmt.Errorf("failed to write to temp file: %w", err)
-	}
-	defer removeSandboxFileIfPresent(root, tmpRelPath)
-	if err := writeAndCloseTempFile(tmpFile, data); err != nil {
-		return fmt.Errorf("failed to write to temp file: %w", err)
-	}
-	if err := root.Rename(tmpRelPath, relPath); err != nil {
-		removeSandboxFileIfPresent(root, tmpRelPath)
-		if isSandboxAccessDenied(err) {
-			return fmt.Errorf("failed to rename temp file over target: access denied: %w", err)
-		}
-		return fmt.Errorf("failed to rename temp file over target: %w", err)
-	}
-	return nil
-}
-
-func removeSandboxFileIfPresent(root *os.Root, path string) {
-	if err := root.Remove(path); err != nil && !os.IsNotExist(err) {
-		return
-	}
 }
 
 func (r *sandboxFs) ReadDir(path string) ([]os.DirEntry, error) {
 	var entries []os.DirEntry
-	err := r.executeRead(path, func(root *os.Root, relPath string) error {
-		dirEntries, err := fs.ReadDir(root.FS(), filepath.ToSlash(relPath))
+	err := r.executeRead(path, func(guard *openGuard, relPath string) error {
+		dirEntries, err := guard.readDir(relPath)
 		if err != nil {
 			return err
 		}

@@ -117,38 +117,15 @@ func writeAndCloseTempFile(file *os.File, data []byte) error {
 	return nil
 }
 
-func validateSandboxWriteTarget(root *os.Root, path string) error {
-	if _, err := root.Lstat(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to write to temp file: %w", err)
-	}
-	return nil
-}
-
-func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, error) {
-	for range writeFileTempCreateTries {
-		name, err := newWriteFileTempName()
-		if err != nil {
-			return nil, "", err
-		}
-		relPath := filepath.Join(dir, name)
-		file, err := root.OpenFile(relPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, sandboxFileMode)
-		if err == nil {
-			return file, relPath, nil
-		}
-		if os.IsExist(err) {
-			continue
-		}
-		return nil, "", err
-	}
-	return nil, "", fmt.Errorf("could not allocate a unique temporary filename after %d attempts", writeFileTempCreateTries)
-}
-
 // sandboxFs is a sandboxed fileSystem that operates within a strictly defined workspace using os.Root.
 type sandboxFs struct {
 	workspace            string
 	additionalWorkspaces []string
 	protectedReadRoots   []string
 	enforceCanonical     bool
+	// afterPolicyCheck, when set, runs between the path pre-check and the
+	// os.Root open. Tests use it to swap a symlink in that window.
+	afterPolicyCheck func(path string)
 }
 
 func (r *sandboxFs) filesystemWorkDir() string {
@@ -158,19 +135,8 @@ func (r *sandboxFs) filesystemWorkDir() string {
 	return r.workspace
 }
 
-func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
-	rootPath, relPath, err := r.resolveWrite(path)
-	if err != nil {
-		return err
-	}
-
-	root, err := os.OpenRoot(rootPath)
-	if err != nil {
-		return fmt.Errorf("failed to open workspace: %w", err)
-	}
-	defer closeSandboxRoot(root)
-
-	return fn(root, relPath)
+func (r *sandboxFs) execute(path string, fn func(guard *openGuard, relPath string) error) error {
+	return r.withGuard(path, true, fn)
 }
 
 func removeFileIfPresent(path string) {

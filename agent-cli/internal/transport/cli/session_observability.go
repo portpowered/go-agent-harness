@@ -162,6 +162,7 @@ func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request service
 		ModelCatalog:        c.liveModelCatalog(),
 		BindImagePreparer:   livehost.BindImagePreparer,
 		OpenImages:          livehost.OpenImages,
+		DecodeImages:        livehost.DecodeImages,
 	})
 }
 

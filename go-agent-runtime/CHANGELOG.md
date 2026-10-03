@@ -80,6 +80,22 @@
 
 ### Changed
 
+- **Breaking** `services/tools`: `ImagePartPreparer` changes from
+  `func([]string) ([]messages.ImagePart, error)` to
+  `func([]tools.ImageSource) ([]messages.ImagePart, error)`, and the new
+  `tools.ImageSource{Path, Bytes}` carries each image read_image has read.
+  read_image now reads the image itself, under the filesystem policy and its
+  open-time protection check, and hands the preparer the bytes. Migration: a
+  preparer validates and converts `Bytes` and must never read `Path` again
+  (`Path` only names the image in messages); re-reading it would reopen the
+  check-then-open race the change closes.
+- `services/tools` filesystem tools (read_file, list_dir, read_image,
+  write_file, append_file, edit_file) enforce protected system and credential
+  locations at open time as well as in the path pre-check, so a symlink
+  swapped in between the check and the open can no longer redirect a read or
+  a write into `~/.ssh` and the other credential stores under a broad
+  `--allow-path`.
+
 - HTTP recordings drop the `chatgpt-account-id` request header, as they
   already drop `Authorization` and cookies.
 - Security: a broad scope root such as `--allow-path /` or a parent of the

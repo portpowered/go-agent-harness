@@ -165,7 +165,7 @@ func TestFilesystemPolicyReturnsInvalidScopeRefusalWhenPolicyIsMissing(t *testin
 
 func TestPolicyBackedReadImageWithoutPolicyRefusesBeforePreparer(t *testing.T) {
 	called := false
-	tool := NewReadImageToolWithPolicy(nil, func([]string) ([]messages.ImagePart, error) {
+	tool := NewReadImageToolWithPolicy(nil, func([]ImageSource) ([]messages.ImagePart, error) {
 		called = true
 		return []messages.ImagePart{{Bytes: []byte("MUST-NOT-READ"), MediaType: imagePNGMediaType}}, nil
 	})

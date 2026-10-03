@@ -89,7 +89,7 @@ func assertHomeCredentialRefused(t *testing.T, policy *FilesystemPolicy, key str
 		t.Fatalf("list_dir leaked the credential directory: %q", got)
 	}
 	preparerCalled := false
-	msgs, err = NewReadImageToolWithPolicy(policy, func([]string) ([]messages.ImagePart, error) {
+	msgs, err = NewReadImageToolWithPolicy(policy, func([]ImageSource) ([]messages.ImagePart, error) {
 		preparerCalled = true
 		return nil, nil
 	}).Execute(ctx, map[string]any{"path": key})

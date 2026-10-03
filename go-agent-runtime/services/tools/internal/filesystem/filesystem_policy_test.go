@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -116,7 +117,7 @@ func TestFilesystemPolicy_ProtectsCredentialReadsAndDoesNotOverrideOrdinaryReads
 	}
 
 	imagePreparerCalled := false
-	imageTool := NewReadImageToolWithPolicy(policy, func([]string) ([]messages.ImagePart, error) {
+	imageTool := NewReadImageToolWithPolicy(policy, func([]ImageSource) ([]messages.ImagePart, error) {
 		imagePreparerCalled = true
 		return []messages.ImagePart{{Bytes: []byte("credential image bytes"), MediaType: imagePNGMediaType}}, nil
 	})
@@ -158,7 +159,7 @@ func TestReadImageToolWithPolicy_RejectsProtectedPathBeforePreparer(t *testing.T
 	}
 
 	called := false
-	tool := NewReadImageToolWithPolicy(policy, func([]string) ([]messages.ImagePart, error) {
+	tool := NewReadImageToolWithPolicy(policy, func([]ImageSource) ([]messages.ImagePart, error) {
 		called = true
 		return []messages.ImagePart{{Bytes: []byte("secret image bytes"), MediaType: imagePNGMediaType}}, nil
 	})
@@ -195,9 +196,9 @@ func TestReadImageToolWithPolicy_PreservesOrdinaryImageResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFilesystemPolicy: %v", err)
 	}
-	tool := NewReadImageToolWithPolicy(policy, func(paths []string) ([]messages.ImagePart, error) {
-		if len(paths) != 1 || paths[0] != imagePath {
-			t.Fatalf("preparer paths = %#v, want %q", paths, imagePath)
+	tool := NewReadImageToolWithPolicy(policy, func(sources []ImageSource) ([]messages.ImagePart, error) {
+		if len(sources) != 1 || sources[0].Path != imagePath || !bytes.Equal(sources[0].Bytes, imageBytes) {
+			t.Fatalf("preparer sources = %#v, want %q and its bytes", sources, imagePath)
 		}
 		return []messages.ImagePart{{Bytes: append([]byte(nil), imageBytes...), MediaType: imagePNGMediaType}}, nil
 	})

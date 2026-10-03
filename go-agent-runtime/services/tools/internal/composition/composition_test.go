@@ -244,8 +244,10 @@ func TestComposedExecutorBindsSessionImagePreparer(t *testing.T) {
 	if !ok {
 		t.Fatal("composed executor does not expose session image preparation binding")
 	}
-	bound := binder.WithSessionImagePreparer(func(paths []string) ([]messages.ImagePart, error) {
-		preparedPaths = append([]string(nil), paths...)
+	bound := binder.WithSessionImagePreparer(func(sources []runtimeTools.ImageSource) ([]messages.ImagePart, error) {
+		for _, source := range sources {
+			preparedPaths = append(preparedPaths, source.Path)
+		}
 		return nil, nil
 	})
 	if _, err := bound.Execute(context.Background(), messages.ToolCall{ID: "image-call", Name: runtimeTools.ReadImageToolID}); err != nil {
@@ -277,7 +279,7 @@ type imageBindingExecutor struct {
 func (e *imageBindingExecutor) Execute(_ context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
 	e.recorder.calls++
 	if e.preparer != nil {
-		if _, err := e.preparer([]string{"fixture.png"}); err != nil {
+		if _, err := e.preparer([]runtimeTools.ImageSource{{Path: "fixture.png"}}); err != nil {
 			return messages.ToolCallResponse{}, err
 		}
 	}

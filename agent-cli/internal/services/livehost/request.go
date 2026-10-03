@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/buildinfo"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -35,10 +36,11 @@ type RequestDependencies struct {
 	Capabilities        func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error)
 	// ModelCatalog supplies realtime model capabilities for image admission.
 	ModelCatalog runtimeProviders.ModelCatalog
-	// BindImagePreparer binds read_image to open, which already enforces the
-	// session model's image-input capability.
-	BindImagePreparer func(executor messages.ToolExecutor, open ImageOpener) messages.ToolExecutor
+	// BindImagePreparer binds read_image to decode, which already enforces
+	// the session model's image-input capability.
+	BindImagePreparer func(executor messages.ToolExecutor, decode ImageDecoder) messages.ToolExecutor
 	OpenImages        ImageOpener
+	DecodeImages      ImageDecoder
 }
 
 // BuildRequest resolves one CLI request at the host boundary. It performs
@@ -106,10 +108,11 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 			return requestInputs{}, err
 		}
 	}
-	openImages := guardImageOpener(func() imageCapability {
+	capability := sync.OnceValue(func() imageCapability {
 		return resolveImageCapability(provider, model, request.ConfigDir, deps.ModelCatalog)
-	}, deps.OpenImages)
-	capabilities, err := buildCapabilities(ctx, loaded, request, deps, openImages)
+	})
+	openImages := guardImageOpener(capability, deps.OpenImages)
+	capabilities, err := buildCapabilities(ctx, loaded, request, deps, guardImageDecoder(capability, deps.DecodeImages))
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -351,7 +354,7 @@ func resolveCredentialReference(apiKey string, resolve func(string) string) stri
 	return resolve(apiKey)
 }
 
-func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies, openImages ImageOpener) (*runtimeSession.LiveCapabilities, error) {
+func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies, decodeImages ImageDecoder) (*runtimeSession.LiveCapabilities, error) {
 	if deps.Capabilities == nil {
 		return nil, nil
 	}
@@ -360,7 +363,7 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 		return nil, err
 	}
 	if capabilities != nil && deps.BindImagePreparer != nil {
-		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor, openImages)
+		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor, decodeImages)
 	}
 	// The interactive latency policy is outermost so each call's deadline
 	// covers image preparation as well as the tool itself.
