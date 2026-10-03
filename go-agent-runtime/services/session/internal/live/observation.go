@@ -84,6 +84,9 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 		}
 		h.observeFirstTurn(ctx, msg)
 		h.observeRateLimit(loop, msg)
+		if msg.Type == messages.StreamTypeDelegationCreated {
+			h.submitDelegation(msg)
+		}
 	}
 	continuationErr, toolContinuationComplete := h.observeToolLifecycle(msg)
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.

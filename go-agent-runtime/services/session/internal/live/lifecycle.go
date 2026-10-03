@@ -273,6 +273,11 @@ type finishState struct {
 
 func (h *handle) finishWhenStopped() {
 	state := h.captureFinishState()
+	// The loop and the provider have stopped: cancel the delegations still
+	// running and join their workers before the terminal is published.
+	if err := h.closeDelegations(); err != nil && state.runErr == nil {
+		state.runErr = err
+	}
 	if state.userCancellation() {
 		h.markUserCancellation()
 		h.finish(nil)

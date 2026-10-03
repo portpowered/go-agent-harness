@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -71,6 +72,10 @@ type requestInputs struct {
 	replayFinish    bool
 	turnCapture     bool
 	openImages      ImageOpener
+	delegation      *livedelegation.Policy
+	// taskInstructions are the session instructions without the voice
+	// model's delegation guidance: the delegation backend's task rules.
+	taskInstructions string
 }
 
 func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -108,10 +113,20 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 	if err != nil {
 		return requestInputs{}, err
 	}
+	var delegation *livedelegation.Policy
+	if inspection == nil {
+		// A replay never reaches a live backend; replaying delegations is
+		// PR 6 of gpt-live-provider.md.
+		delegation = delegationPolicy(delegationInputs{
+			loaded: loaded, configDir: request.ConfigDir, voiceProvider: provider, voiceAPIKey: apiKey, voiceBaseURL: baseURL,
+			credentialReference: deps.CredentialReference,
+		})
+	}
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
 		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), openImages: openImages,
 		chatGPTAuthPath: chatGPTAuthPath(provider, model, request.ConfigDir),
+		delegation:      delegation,
 	}, nil
 }
 
@@ -136,7 +151,8 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	replayPlan, requestPrompt, promptPresent := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
 	inputRate, outputRate := replayRates(replayPlan, request, inspection)
 	turnCapture := inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn
-	inputs.instructions = instructions
+	inputs.instructions = withDelegationGuidance(instructions, inputs.provider, inputs.model)
+	inputs.taskInstructions = instructions
 	inputs.requestPrompt = requestPrompt
 	inputs.promptPresent = promptPresent
 	inputs.openingParts = openingParts
@@ -295,6 +311,11 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// SESSION.CLOSE, which may follow multiple output responses.
 		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+	}
+	if inputs.delegation != nil {
+		policy := *inputs.delegation
+		policy.Instructions = inputs.taskInstructions
+		result.Delegation = &policy
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result

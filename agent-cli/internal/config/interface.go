@@ -203,6 +203,25 @@ type SessionConfig struct {
 	OutputDevice       string                           `koanf:"output_device" yaml:"output_device"`
 	VAD                *SessionVADConfig                `koanf:"vad" yaml:"vad"`
 	InputTranscription *SessionInputTranscriptionConfig `koanf:"input_transcription" yaml:"input_transcription"`
+	// Delegation configures the backend that answers a live provider's
+	// client delegations (GPT-Live hands reasoning and tool work to it).
+	Delegation *SessionDelegationConfig `koanf:"delegation" yaml:"delegation,omitempty"`
+}
+
+// SessionDelegationConfig selects the delegation backend and its limits.
+// An empty Provider selects openai-chatgpt when a ChatGPT login exists and
+// otherwise model.provider (openai when that is a voice-only provider). An
+// empty Model selects the provider's default: for openai-chatgpt,
+// model.openai_chatgpt.model or else the account's default model. Zero
+// limits select the runtime defaults (2 concurrent delegations, 8 backend
+// turns, 120 seconds and 200000 tokens per delegation).
+type SessionDelegationConfig struct {
+	Provider           string `koanf:"provider" yaml:"provider,omitempty"`
+	Model              string `koanf:"model" yaml:"model,omitempty"`
+	MaxConcurrency     int    `koanf:"max_concurrency" yaml:"max_concurrency,omitempty"`
+	MaxTurns           int    `koanf:"max_turns" yaml:"max_turns,omitempty"`
+	MaxDurationSeconds int    `koanf:"max_duration_seconds" yaml:"max_duration_seconds,omitempty"`
+	MaxTokens          int    `koanf:"max_tokens" yaml:"max_tokens,omitempty"`
 }
 
 // SessionVADConfig contains the provider-side turn detection policy

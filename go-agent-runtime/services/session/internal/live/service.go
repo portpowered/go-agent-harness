@@ -6,6 +6,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
@@ -47,6 +48,7 @@ type Dependencies struct {
 	Scheduler         platformclock.Scheduler
 	RuntimeObserver   sessiontrace.RuntimeObserver
 	Tick              func() uint64
+	Delegations       livedelegation.Service
 }
 type Service struct {
 	inferencerFactory session.LiveInferencerFactory
@@ -58,6 +60,7 @@ type Service struct {
 	scheduler         platformclock.Scheduler
 	runtimeObserver   sessiontrace.RuntimeObserver
 	tick              func() uint64
+	delegations       livedelegation.Service
 }
 
 func New(deps Dependencies) *Service {
@@ -75,6 +78,7 @@ func New(deps Dependencies) *Service {
 		scheduler:         deps.Scheduler,
 		runtimeObserver:   deps.RuntimeObserver,
 		tick:              deps.Tick,
+		delegations:       deps.Delegations,
 	}
 }
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
@@ -96,6 +100,7 @@ func (s *Service) openLive(ctx context.Context, request session.LiveRequest, rec
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
 	h.runtimeTrace = observations.NewInvocationTrace(s.runtimeObserver, recorder, s.clock, s.tick)
+	h.delegationService = s.delegations
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -214,6 +219,8 @@ type handle struct {
 	toolMu                                           sync.Mutex
 	toolContinuations                                map[string]*liveToolContinuation
 	continuationErr                                  error
+	delegationService                                livedelegation.Service
+	delegations                                      livedelegation.Executor
 }
 
 func (h *handle) observeRuntimeMessage(msg messages.StreamMessage) {

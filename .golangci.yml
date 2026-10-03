@@ -162,6 +162,7 @@ linters:
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording
             - github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay

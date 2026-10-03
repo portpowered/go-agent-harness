@@ -4,6 +4,41 @@
 
 ### Added
 
+- `services/livedelegation`: the GPT-Live client-delegation executor
+  (docs/architecture/gpt-live-provider.md 2.5, PR 4). A live session whose
+  `session.LiveRequest.Delegation` names a backend hands every
+  `DELEGATION.CREATED` to a bounded worker pool outside the voice loop's
+  ToolRunner (default limit 2; work beyond it queues and is never dropped).
+  Each delegation runs a nested turn-based agent loop on the backend
+  provider with the session's own tools, under the session's capability
+  surface and tool policy; tools the interactive policy treats as
+  long-running are serialized per tool. The task is the provider's task
+  text, or else its transcript window, plus the recent session history.
+  The result is sent back as `CONTEXT.APPEND` commentary with the delegation
+  id, and each tool call as a quiet `thinking` progress note. A backend
+  error or a spent budget (turns, tokens, time on the injected clock;
+  defaults 8 turns, 200000 tokens, 2 minutes) is answered with a short
+  spoken failure, because GPT-Live never times a delegation out. The backend
+  is told to keep results short; the provider splits an over-long append.
+  Delegations run on the session lifetime: a user interrupt cancels none of
+  them, the session end cancels and joins all of them, and
+  `Executor.Cancel` is there for task revisions. Delegations never become
+  loop tool calls and never request a response.
+- Delegation failures are spoken only as a category; the detail goes to
+  `livedelegation/wire.Dependencies.Logger`. A backend whose build failed is
+  rebuilt at the next delegation with the credential resolved the first time.
+  `livedelegation.Backend.Unconfigured` lets a host report a backend it cannot
+  run (for example, no text model); each delegation is then answered with a
+  spoken failure and the reason is logged.
+- `session.LiveEventDelegationToolCall` and
+  `session.LiveEventDelegationToolResult`: each session tool call a
+  delegation makes is published on the live event stream and to the
+  invocation recorder, tagged with the delegation id (`ItemID`).
+- `session.LiveRequest.Delegation` (`*livedelegation.Policy`) and
+  `wire.LiveDependencies.Delegations`: the backend and limits of one session
+  and the executor service of the live session owner. Without both, a
+  delegation stays unanswered as before.
+
 - Recording evidence and replay captures decode the new `DELEGATION.CREATED`
   and `CONTEXT.APPEND` stream messages instead of rejecting them as unknown.
   The live session, liveness, session-duration, browser-conversation and
