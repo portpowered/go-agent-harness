@@ -130,6 +130,6 @@ func (r *run) loopOptions(spent *budget) []agentloop.Option {
 	if r.e.binding.Tools == nil || len(definitions) == 0 {
 		return append(options, agentloop.WithToolExecutionDisabled())
 	}
-	tools := delegationTools{inner: r.e.binding.Tools, gate: r.e.tools, progress: r.sendProgress, observe: r.observeTool}
+	tools := delegationTools{inner: r.e.binding.Tools, lock: r.e.binding.ToolLock, progress: r.sendProgress, observe: r.observeTool}
 	return append(options, agentloop.WithToolExecutor(tools), agentloop.WithTools(definitions))
 }

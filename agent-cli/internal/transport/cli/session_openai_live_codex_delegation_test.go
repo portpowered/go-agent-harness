@@ -72,7 +72,7 @@ func TestSessionCommandAnswersCodexRouteDelegationsOnTheChatGPTLogin(t *testing.
 	answered := make(chan quicksilver.DelegationContextAppend, 1)
 	go delegateAfterFirstTurn(t, ctx, voice, delegationID, answered)
 
-	tool := &recordingLookupTool{}
+	tool := &recordingLookupTool{content: defaultLookupResult}
 	capabilities := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
 			Executor:    tool,

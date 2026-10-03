@@ -37,6 +37,26 @@ func ChatGPTSignedIn(configDir string) bool {
 	return !errors.Is(err, chatgptauth.ErrNotLoggedIn)
 }
 
+// ChatGPTLoginSecrets returns the secret tokens (access, refresh and ID) of
+// the ChatGPT sign-in under configDir, for evidence redaction; none without a
+// usable sign-in.
+func ChatGPTLoginSecrets(configDir string) []string {
+	if strings.TrimSpace(configDir) == "" {
+		return nil
+	}
+	credential, err := chatgptauth.NewFileStore(ChatGPTAuthStorePath(configDir)).Load()
+	if err != nil {
+		return nil
+	}
+	var secrets []string
+	for _, token := range []string{credential.AccessToken, credential.RefreshToken, credential.IDToken} {
+		if strings.TrimSpace(token) != "" {
+			secrets = append(secrets, token)
+		}
+	}
+	return secrets
+}
+
 // DefaultOpenAILiveModel is the model an openai-live session uses when none
 // is given: the credential found picks it, the ChatGPT sign-in first.
 func DefaultOpenAILiveModel(configDir string) string {

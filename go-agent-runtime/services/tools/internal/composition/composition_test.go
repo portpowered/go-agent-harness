@@ -320,3 +320,40 @@ func (e *compositionExecutor) Execute(_ context.Context, call messages.ToolCall)
 }
 
 var _ messages.ToolExecutor = (*compositionExecutor)(nil)
+
+// dynamicBroker is a broker executor that resolves page tools discovered at
+// call time.
+type dynamicBroker struct{ compositionExecutor }
+
+func (*dynamicBroker) ResolvesDynamicTools() bool { return true }
+
+// The composed surface reports the browser's tools by their route, not by
+// name: the broker's advertised tools and, with a dynamic broker, a page
+// tool such as google_maps_directions that only the selected page
+// advertises. A static tool is never a browser tool, and without a dynamic
+// broker an unknown name is not either.
+func TestComposedSurfaceReportsBrowserToolsByTheirRoute(t *testing.T) {
+	compose := func(broker messages.ToolExecutor) runtimeTools.BrowserToolRouter {
+		t.Helper()
+		surface, err := composition.ComposeToolSurface(
+			&compositionExecutor{}, []messages.ToolDefinition{{Name: "write_file"}},
+			broker, []messages.ToolDefinition{{Name: "webmcp_list_tabs"}},
+		)
+		if err != nil {
+			t.Fatalf("ComposeToolSurface: %v", err)
+		}
+		router, ok := surface.Executor.(runtimeTools.BrowserToolRouter)
+		if !ok {
+			t.Fatalf("composed executor %T does not report browser routing", surface.Executor)
+		}
+		return router
+	}
+	dynamic := compose(&dynamicBroker{})
+	if !dynamic.IsBrowserTool("webmcp_list_tabs") || !dynamic.IsBrowserTool("google_maps_directions") || dynamic.IsBrowserTool("write_file") {
+		t.Fatal("dynamic broker: want webmcp_list_tabs and google_maps_directions routed to the browser, write_file not")
+	}
+	static := compose(&compositionExecutor{})
+	if !static.IsBrowserTool("webmcp_list_tabs") || static.IsBrowserTool("google_maps_directions") {
+		t.Fatal("static broker: want only its advertised tools routed to the browser")
+	}
+}

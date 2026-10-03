@@ -213,17 +213,18 @@ func TestRejectedAppendStopsProgressNotes(t *testing.T) {
 	})
 }
 
-// A tool call waiting for a serialized tool fails when its delegation ends.
-func TestSerializedToolCallFailsWhenItsDelegationEnds(t *testing.T) {
-	gate := newToolGate(func(string) bool { return true })
-	release, err := gate.acquire(t.Context(), "browser")
+// A tool call waiting for its resource-group lock fails when its delegation
+// ends, without running.
+func TestLockedToolCallFailsWhenItsDelegationEnds(t *testing.T) {
+	lock := groupLock(func(string) bool { return true })
+	release, err := lock(t.Context(), "browser")
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
 	defer release()
 	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(errCancelled)
-	tools := delegationTools{gate: gate, inner: toolFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
+	tools := delegationTools{lock: lock, inner: toolFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
 		t.Fatal("the tool ran without its lock")
 		return messages.ToolCallResponse{}, nil
 	})}

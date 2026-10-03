@@ -299,9 +299,9 @@ func TestUnavailableBackendIsAnsweredAsAFailure(t *testing.T) {
 	}
 }
 
-// A serialized tool runs one call at a time across delegations; another
-// tool runs concurrently.
-func TestSerializedToolsRunOneCallAtATime(t *testing.T) {
+// A tool under the session's resource-group lock runs one call at a time
+// across delegations; a tool the lock admits at once runs concurrently.
+func TestLockedToolsRunOneCallAtATime(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		serial   bool
@@ -347,7 +347,7 @@ func peakBrowserCalls(t *testing.T, serial bool) int {
 	executor := open(t, t.Context(), b, livedelegation.Binding{
 		Append: sent.append, Tools: tool,
 		Definitions: func() []messages.ToolDefinition { return []messages.ToolDefinition{{Name: "browser"}} },
-		Serialized:  func(name string) bool { return serial && name == "browser" },
+		ToolLock:    groupLock(func(name string) bool { return serial && name == "browser" }),
 	}, nil)
 	for _, id := range []string{"a", "b"} {
 		if err := executor.Submit(delegation(id, "use the browser "+id)); err != nil {
@@ -372,18 +372,19 @@ func (f toolFunc) Execute(ctx context.Context, call messages.ToolCall) (messages
 	return f(ctx, call)
 }
 
-// A delegation waiting for a serialized tool stops waiting when it is
-// cancelled.
-func TestToolGateWaitEndsWithTheDelegation(t *testing.T) {
-	gate := newToolGate(func(string) bool { return true })
-	release, err := gate.acquire(t.Context(), "browser")
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer release()
-	ctx, cancel := context.WithCancelCause(t.Context())
-	cancel(errCancelled)
-	if _, err := gate.acquire(ctx, "browser"); !errors.Is(err, errCancelled) {
-		t.Fatalf("acquire after cancel = %v, want the cancel cause", err)
+// groupLock is a resource-group lock with one group: the tools grouped
+// reports.
+func groupLock(grouped func(string) bool) livedelegation.ToolLock {
+	lock := make(chan struct{}, 1)
+	return func(ctx context.Context, name string) (func(), error) {
+		if !grouped(name) {
+			return func() {}, nil
+		}
+		select {
+		case lock <- struct{}{}:
+			return func() { <-lock }, nil
+		case <-ctx.Done():
+			return nil, context.Cause(ctx)
+		}
 	}
 }

@@ -184,7 +184,10 @@ func TestALostSidebandRedialsWithBackoffAndFlushesHeldEvents(t *testing.T) {
 	})
 }
 
-// A send that fails is held and sent again once the sideband is back.
+// A send that fails is held and sent again once the sideband is back. The
+// failed write alone reconnects: the sideband's read side stays healthy, so
+// the transport aborts it rather than wait for a read error that never
+// comes.
 func TestAFailedSendIsHeldForTheReconnect(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		second := newFakeControl()
@@ -193,7 +196,6 @@ func TestAFailedSendIsHeldForTheReconnect(t *testing.T) {
 		if err := h.conn.WriteMessage(1, []byte(`{"type":"session.context.append","content":[{"type":"input_text","text":"x"}]}`)); err != nil {
 			t.Fatal(err)
 		}
-		h.side.events <- errors.New("connection reset")
 		wait(time.Second)
 		if sent := second.sentEvents(); len(sent) != 1 {
 			t.Fatalf("events on the new sideband = %v, want the failed one", sent)
@@ -509,6 +511,33 @@ func TestTheSessionExpiresAtExpiresAt(t *testing.T) {
 		closed := valueOf[*messages.SessionCloseValue](t, h.expect(t, messages.StreamTypeSessionClose))
 		if elapsed := time.Since(start); elapsed != 20*time.Second || closed.Reason != livesession.CloseReasonExpired || closed.TerminalReason != messages.TerminalReasonProviderClose {
 			t.Fatalf("SESSION.CLOSE %s/%s after %v, want expired after 20s", closed.Reason, closed.TerminalReason, elapsed)
+		}
+		if err := h.session.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// Every session.updated that carries expires_at resets the session's one
+// expiry timer: fifty updates leave one armed timer, and the session expires
+// at the last expiry reported.
+func TestRepeatedExpiriesResetOneTimer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		timers := &timerCount{}
+		h := newHarnessOn(t, nil, timers)
+		start := time.Now()
+		const updates = 50
+		for i := range updates {
+			h.side.events <- quicksilver.SessionUpdated{Session: &quicksilver.SessionResource{ID: "s", ExpiresAt: start.Add(time.Duration(10+i) * time.Second).Unix()}}
+			h.expect(t, messages.StreamTypeSessionUpdated)
+		}
+		synctest.Wait()
+		if armed := timers.armedTimers(); armed != 1 {
+			t.Fatalf("armed expiry timers after %d updates = %d, want one", updates, armed)
+		}
+		closed := valueOf[*messages.SessionCloseValue](t, h.expect(t, messages.StreamTypeSessionClose))
+		if elapsed, want := time.Since(start), time.Duration(10+updates-1)*time.Second; elapsed != want || closed.Reason != livesession.CloseReasonExpired {
+			t.Fatalf("SESSION.CLOSE %s after %v, want expired after %v", closed.Reason, elapsed, want)
 		}
 		if err := h.session.Close(); err != nil {
 			t.Fatal(err)

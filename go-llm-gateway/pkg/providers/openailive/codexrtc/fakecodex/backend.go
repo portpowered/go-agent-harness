@@ -100,6 +100,12 @@ func WithSidebandDrop() Option { return func(b *Backend) { b.dropSideband = true
 // events, like a peer that hangs, until Backend.Close.
 func WithSidebandStall() Option { return func(b *Backend) { b.stallSideband = true } }
 
+// WithStalledSidebands makes the first n sidebands stop reading after the
+// scripted events, like WithSidebandStall, while the backend can still send
+// on them: the client's writes fail and its reads stay healthy. Later
+// sidebands read normally.
+func WithStalledSidebands(n int) Option { return func(b *Backend) { b.stalledSidebands = n } }
+
 // Backend is the fake. It serves one call; later calls replace it.
 type Backend struct {
 	token, accountID string
@@ -112,6 +118,7 @@ type Backend struct {
 	script           []quicksilver.Event
 	dropSideband     bool
 	stallSideband    bool
+	stalledSidebands int
 	stop             chan struct{}
 	stopOnce         sync.Once
 	upgrader         websocket.Upgrader
@@ -478,6 +485,7 @@ func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 	b.mu.Lock()
 	b.sideband = side
 	b.sidebands++
+	stall := b.stallSideband || b.sidebands <= b.stalledSidebands
 	b.notifyLocked()
 	b.mu.Unlock()
 	for _, event := range b.script {
@@ -491,7 +499,7 @@ func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 	if b.dropSideband {
 		return
 	}
-	if b.stallSideband {
+	if stall {
 		<-b.stop
 		return
 	}

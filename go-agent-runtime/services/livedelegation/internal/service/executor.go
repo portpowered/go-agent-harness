@@ -29,7 +29,6 @@ type executor struct {
 	binding livedelegation.Binding
 	backend *backendBuilder
 	limits  livedelegation.Limits
-	tools   *toolGate
 	logger  logging.Logger
 
 	mu      sync.Mutex
@@ -45,7 +44,6 @@ func newExecutor(ctx context.Context, binding livedelegation.Binding, backend *b
 	return &executor{
 		ctx: sessionCtx, stop: stop, binding: binding, backend: backend, logger: logger,
 		limits:  effectiveLimits(binding.Policy.Limits),
-		tools:   newToolGate(binding.Serialized),
 		running: make(map[uint64]*job),
 	}
 }

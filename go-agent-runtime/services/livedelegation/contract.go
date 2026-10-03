@@ -101,22 +101,28 @@ type ToolEvent struct {
 	Err          error
 }
 
+// ToolLock admits one tool call into the resource group of toolName and
+// returns its release. It waits until the group is free, or returns ctx's
+// cause when ctx ends first. An ungrouped tool is admitted at once.
+type ToolLock func(ctx context.Context, toolName string) (release func(), err error)
+
 // Binding connects one executor to its live session. Tools is the session's
 // own tool executor, already restricted to the session's tool surface and
 // policy, and Definitions samples that surface at each delegation. Append
 // delivers one CONTEXT.APPEND to the provider and reports whether it was
 // admitted. History samples the session's conversation so short replies
-// stay resolvable. Serialized reports the tools that are not safe to run
-// concurrently; each such tool runs one call at a time across every
-// delegation of the session. OnTool, when set, observes every tool call a
-// delegation makes. Scheduler measures time budgets; nil selects the host
-// clock.
+// stay resolvable. ToolLock, when set, is the session's resource-group lock
+// for tools that share host state; the session's own voice loop takes the
+// same lock, so a delegation's browser call never overlaps another
+// delegation's or the voice loop's. OnTool, when set, observes every tool
+// call a delegation makes. Scheduler measures time budgets; nil selects the
+// host clock.
 type Binding struct {
 	SessionID   string
 	Policy      Policy
 	Tools       messages.ToolExecutor
 	Definitions func() []messages.ToolDefinition
-	Serialized  func(toolName string) bool
+	ToolLock    ToolLock
 	History     func() []messages.Message
 	Append      func(context.Context, *messages.ContextAppendValue) error
 	OnTool      func(ToolEvent)

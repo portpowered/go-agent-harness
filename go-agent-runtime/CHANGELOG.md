@@ -4,6 +4,27 @@
 
 ### Added
 
+- `session.LiveEvent.DelegationTool` (`session.LiveDelegationTool`): the
+  `delegation_tool_call` and `delegation_tool_result` events carry the tool
+  name, the arguments and (on the result) the result content.
+  `LiveDelegationTool.Audited` redacts the whole values and then bounds each
+  to `session.LiveDelegationToolPayloadLimit` (4 KiB) with the
+  `session.LiveDelegationToolTruncated` marker, so a credential across the
+  cut leaves no fragment. The sessiontrace live recorder
+  (`sessiontrace.LiveRecorderOptions.Credentials`) writes `tool_name`,
+  `tool_arguments` and `tool_result` that way, and so does the
+  `--record-dir` evidence recorder.
+- `livedelegation.ToolLock` and `Binding.ToolLock`: the session's
+  resource-group lock. A live session with delegations locks its tools by
+  resource group for both the voice loop and its delegations: every call
+  routed to the browser surface shares one lock, `write_file` and
+  `edit_file` another, and each other long-running tool its own.
+- `tools.BrowserToolRouter`: the composed tool surface reports the calls it
+  routes to the browser (the WebMCP broker's tools and the page tools a
+  dynamic broker resolves, such as `google_maps_*`), and the interactive
+  session-turn executor forwards it. The live session groups those tools by
+  this routing, not by name.
+
 - `services/livedelegation`: the GPT-Live client-delegation executor
   (docs/architecture/gpt-live-provider.md 2.5, PR 4). A live session whose
   `session.LiveRequest.Delegation` names a backend hands every
@@ -95,7 +116,26 @@
   swapped in between the check and the open can no longer redirect a read or
   a write into `~/.ssh` and the other credential stores under a broad
   `--allow-path`.
-
+- Security: the `--record-dir` evidence recorder redacts the session
+  credentials from every voice-loop `TOOLCALL.START`/`TOOLCALL.END` and
+  tool-result payload, and from recorded event error text, before spooling
+  them. Transcript payloads are base64, so the bundle's byte redaction never
+  reached them, and a credential in a voice-loop tool call or result reached
+  the bundle. With credentials configured, a streamed `TOOLCALL.DELTA` keeps
+  no argument text in the bundle or the trace, since a credential split
+  across two deltas escapes any per-message redaction; `TOOLCALL.END` keeps
+  the whole arguments, redacted.
+- Security: every form go-agent-loop's `transcript.CredentialForms` lists
+  is redacted: raw, JSON-escaped, URL-query-escaped, and base64 (standard
+  and URL, standalone and embedded at each byte alignment). A credential
+  shorter than 8 bytes is never redacted, by the bundle or the trace. The bundle recorder and the trace (its
+  payloads, error text and delegation tool payloads) both redact all of
+  them.
+- Breaking (unreleased API): `livedelegation.Binding.Serialized`, a per-tool
+  lock private to the delegations, is replaced by `Binding.ToolLock`, shared
+  with the voice loop. Two delegations can no longer drive the browser at
+  once through different browser tools, nor alongside the voice loop's own
+  browser call.
 - HTTP recordings drop the `chatgpt-account-id` request header, as they
   already drop `Authorization` and cookies.
 - Security: a broad scope root such as `--allow-path /` or a parent of the

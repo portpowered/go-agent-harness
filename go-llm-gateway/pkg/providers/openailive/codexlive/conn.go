@@ -44,10 +44,13 @@ type mediaPeer interface {
 	Close() error
 }
 
-// control is one sideband connection (codexrtc.Sideband).
+// control is one sideband connection (codexrtc.Sideband). Abort drops it as
+// a lost transport: the blocked Receive returns a non-close error, so the
+// reader reconnects.
 type control interface {
 	Send(event quicksilver.Event) error
 	Receive() (quicksilver.Event, error)
+	Abort(cause error) error
 	Close() error
 }
 
@@ -93,9 +96,9 @@ type conn struct {
 	pending        []quicksilver.Event
 	closeRequested bool
 	ended          bool
-	// expiry counts scheduled expiries; only the latest one ends the
-	// session.
-	expiry int
+	// expiry resets the session's one expiry timer to a later expires_at;
+	// nil until the backend reports the first.
+	expiry chan time.Time
 }
 
 var _ transport.Conn = (*conn)(nil)
@@ -219,8 +222,10 @@ func (c *conn) writeAudio(encoded string) error {
 }
 
 // sendControl sends event on the current sideband, or holds it until the
-// sideband is back. A failed send is held too: the reader sees the same
-// failure and reconnects.
+// sideband is back. A failed send is held too, and the sideband is aborted:
+// its write side is broken for good (gorilla fails every later write) while
+// its read side may stay healthy, so only the abort makes the reader see a
+// loss and reconnect.
 func (c *conn) sendControl(event quicksilver.Event) {
 	c.mu.Lock()
 	if _, closing := event.(quicksilver.SessionClose); closing {
@@ -242,6 +247,9 @@ func (c *conn) sendControl(event quicksilver.Event) {
 		}
 		c.holdLocked(event)
 		c.mu.Unlock()
+		if abortErr := side.Abort(err); abortErr != nil {
+			c.logger.Debug("openai live codex: abort sideband", logging.Field{Key: "error", Value: abortErr})
+		}
 	}
 }
 
@@ -365,25 +373,44 @@ func sessionExpiry(event quicksilver.Event) int64 {
 }
 
 // scheduleExpiry ends the session as expired at expiresAt, as OpenClaw
-// schedules its session lease from session.started. A later expiry the
-// backend reports replaces an earlier one.
+// schedules its session lease from session.started. The session has one
+// expiry timer, owned by one worker: a later expiry the backend reports
+// resets that timer instead of starting another worker.
 func (c *conn) scheduleExpiry(expiresAt int64) {
 	at := time.Unix(expiresAt, 0)
 	c.mu.Lock()
-	c.expiry++
-	generation := c.expiry
-	c.mu.Unlock()
-	c.start(func() {
-		if !c.sleep(at.Sub(c.clock.Now())) {
+	defer c.mu.Unlock()
+	if c.expiry == nil {
+		c.expiry = make(chan time.Time, 1)
+		reset := c.expiry
+		c.start(func() { c.expire(at, reset) })
+		return
+	}
+	// Only the latest expiry matters: replace one the worker has not taken.
+	select {
+	case <-c.expiry:
+	default:
+	}
+	c.expiry <- at
+}
+
+// expire runs the expiry timer: it ends the session at the current expiry,
+// resetting the timer whenever a new one arrives on reset.
+func (c *conn) expire(at time.Time, reset <-chan time.Time) {
+	timer := c.clock.NewTimer(at.Sub(c.clock.Now()))
+	defer func() { timer.Stop() }()
+	for {
+		select {
+		case <-timer.C():
+			c.end(endedFrame{Reason: livesession.CloseReasonExpired})
+			return
+		case at = <-reset:
+			timer.Stop()
+			timer = c.clock.NewTimer(at.Sub(c.clock.Now()))
+		case <-c.done:
 			return
 		}
-		c.mu.Lock()
-		current := generation == c.expiry
-		c.mu.Unlock()
-		if current {
-			c.end(endedFrame{Reason: livesession.CloseReasonExpired})
-		}
-	})
+	}
 }
 
 func (c *conn) sidebandLost(ctx context.Context, side control, err error) {

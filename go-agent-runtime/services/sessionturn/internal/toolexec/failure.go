@@ -26,6 +26,16 @@ func (p presentation) displayTool(name string) bool {
 	return p.DisplayTool != nil && p.DisplayTool(name)
 }
 
+// IsBrowserTool forwards the wrapped executor's browser routing, so a host
+// can group the browser's tools behind this executor.
+func (e *Executor) IsBrowserTool(name string) bool {
+	if e == nil || e.inner == nil {
+		return false
+	}
+	router, ok := e.inner.(tools.BrowserToolRouter)
+	return ok && router.IsBrowserTool(name)
+}
+
 func (e *Executor) pageSightTool(call messages.ToolCall) bool {
 	if e == nil || e.inner == nil {
 		return false

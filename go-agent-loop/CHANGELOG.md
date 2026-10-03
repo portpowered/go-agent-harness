@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- `transcript.CredentialForms` and `transcript.RedactCredentialForms`: the
+  forms a credential can take in encoded evidence (raw, JSON-escaped,
+  URL-query-escaped, and base64 in the standard and URL alphabets), longest
+  first, and their replacement with a marker. Base64 is listed standalone
+  (padded and unpadded) and embedded in a longer stream at each of the three
+  byte alignments (HTTP Basic, for example), less the one or two characters
+  at each end that also encode a neighbouring byte, so an embedded match
+  leaves those few characters of the credential. The runtime's recording
+  bundle and session trace redact tool payloads with them before encoding.
+- `transcript.MinRedactableCredentialLength` (8) and
+  `transcript.RedactableCredentials`: a credential shorter than 8 bytes once
+  trimmed (a dummy local key such as "x", "none" or "ollama"), and any form
+  shorter than 8 characters, is never redacted, because redacting it would
+  rewrite ordinary text and base64 audio.
+
 ### Removed
 
 Redundant alias forwarders were deleted. Each one has a direct replacement

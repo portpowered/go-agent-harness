@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
@@ -17,13 +18,26 @@ func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecor
 		observer:   options.Observer,
 		inputRate:  options.InputRate,
 		outputRate: options.OutputRate,
+		redact:     traceRedactor(options.Credentials),
 	}
+}
+
+// traceRedactor replaces each credential, in every form
+// transcript.CredentialForms lists, with the trace's redaction marker; nil
+// without credentials.
+func traceRedactor(credentials []string) func(string) string {
+	forms := transcript.CredentialForms(credentials)
+	if len(forms) == 0 {
+		return nil
+	}
+	return func(value string) string { return transcript.RedactCredentialForms(value, forms, traceRedactionMarker) }
 }
 
 type liveRecorder struct {
 	inner                 session.LiveRecorder
 	observer              sessiontrace.RuntimeObserver
 	inputRate, outputRate int
+	redact                func(string) string
 	sequence              atomic.Uint64
 }
 
@@ -80,7 +94,7 @@ func (r *liveRecorder) Finalize(ctx context.Context, runErr error) error {
 }
 
 func (r *liveRecorder) observeMessage(record session.LiveRecord) {
-	payload, marshalErr := json.Marshal(record.Message)
+	payload, marshalErr := json.Marshal(traceMessage(record.Message, r.redact != nil))
 	clean := marshalErr == nil
 	if marshalErr != nil {
 		payload = nil
@@ -148,6 +162,13 @@ func (r *liveRecorder) observeAudio(record session.LiveAudioRecord) error {
 }
 
 func (r *liveRecorder) observeEvent(event session.LiveEvent) {
+	// A delegation tool event names its tool and carries its arguments and
+	// result, redacted whole and then bounded; the trace observer redacts the
+	// payload again as it redacts tool_call and tool_result payloads.
+	var tool session.LiveDelegationTool
+	if event.DelegationTool != nil {
+		tool = event.DelegationTool.Audited(r.redact)
+	}
 	payload, marshalErr := json.Marshal(struct {
 		Sequence      uint64 `json:"sequence"`
 		Kind          string `json:"kind"`
@@ -156,10 +177,16 @@ func (r *liveRecorder) observeEvent(event session.LiveEvent) {
 		ResponseID    string `json:"response_id,omitempty"`
 		ItemID        string `json:"item_id,omitempty"`
 		ToolCallID    string `json:"tool_call_id,omitempty"`
+		ToolName      string `json:"tool_name,omitempty"`
+		ToolArguments string `json:"tool_arguments,omitempty"`
+		ToolResult    string `json:"tool_result,omitempty"`
 		State         string `json:"state,omitempty"`
 		Reason        string `json:"reason,omitempty"`
 		Dropped       uint64 `json:"dropped,omitempty"`
-	}{event.Sequence, event.Kind, event.SessionID, event.ParticipantID, event.ResponseID, event.ItemID, event.ToolCallID, event.State, event.Reason, event.Dropped})
+	}{
+		event.Sequence, event.Kind, event.SessionID, event.ParticipantID, event.ResponseID, event.ItemID, event.ToolCallID,
+		tool.Name, tool.Arguments, tool.Result, event.State, event.Reason, event.Dropped,
+	})
 	if event.Kind == string(session.LiveEventTerminal) {
 		return
 	}
@@ -209,4 +236,20 @@ func traceErrorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// traceMessage is the message the trace keeps. With credentials to redact, a
+// streamed TOOLCALL.DELTA keeps no argument text: a credential can be split
+// across two deltas where the per-payload redaction never sees it whole,
+// and TOOLCALL.END carries the whole arguments.
+func traceMessage(message messages.StreamMessage, redacting bool) messages.StreamMessage {
+	if !redacting || message.Type != messages.StreamTypeToolCallDelta {
+		return message
+	}
+	if delta, ok := message.Value.(*messages.ToolCallDeltaValue); ok && delta != nil {
+		blanked := *delta
+		blanked.PartialJSON = ""
+		message.Value = &blanked
+	}
+	return message
 }

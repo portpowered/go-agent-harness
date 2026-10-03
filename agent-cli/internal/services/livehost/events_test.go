@@ -143,3 +143,65 @@ func TestRecordAndReplayPreferTheAPIKeyModel(t *testing.T) {
 		t.Fatalf("replay --model gpt-live-1-codex = %v, want the refusal", err)
 	}
 }
+
+// The credentials a session's evidence is redacted with cover every secret
+// the session can use. On the gpt-live-1-codex route the ChatGPT sign-in's
+// access, refresh and ID tokens; on an API-key route the voice key and the
+// delegation backend's own key (here OpenRouter's, from
+// session.delegation.provider), the ChatGPT tokens of an openai-chatgpt
+// delegation backend, and every other configured key.
+func TestCredentialValuesCoverEverySessionSecret(t *testing.T) {
+	configDir := t.TempDir()
+	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(configDir)).Save(chatgptauth.Credential{
+		AccessToken: "chatgpt-access", RefreshToken: "chatgpt-refresh", IDToken: "chatgpt-id", AccountID: "acct",
+		ExpiresAt: time.Now().Add(time.Hour), LastRefresh: time.Now(),
+	}); err != nil {
+		t.Fatalf("save ChatGPT login: %v", err)
+	}
+	cfg := openAIConfig(config.ProviderOpenAI)
+	cfg.Model.OpenRouter = &config.OpenAIConfig{Model: "router-model", APIKey: "sk-router"}
+	cfg.Model.Claude = &config.ClaudeConfig{APIKey: "sk-claude"}
+	cfg.Tools.Web.Brave.APIKey = "brave-key"
+	cfg.Session = &config.SessionConfig{Delegation: &config.SessionDelegationConfig{Provider: config.ProviderOpenRouter}}
+
+	for name, request := range map[string]serviceSession.Request{
+		"codex route":   {Provider: config.ProviderOpenAILive, Model: config.OpenAILiveChatGPTModel, ModelProvided: true, ConfigDir: configDir, LoadedConfig: &cfg},
+		"API-key route": {Provider: config.ProviderOpenAILive, Model: config.OpenAILiveAPIKeyModel, ModelProvided: true, ConfigDir: configDir, LoadedConfig: &cfg},
+	} {
+		t.Run(name, func(t *testing.T) {
+			values, err := CredentialValues(request)
+			if err != nil {
+				t.Fatalf("CredentialValues: %v", err)
+			}
+			got := strings.Join(values, " ")
+			for _, want := range []string{"chatgpt-access", "chatgpt-refresh", "chatgpt-id", "sk-openai", "sk-router", "sk-claude", "brave-key"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("credentials = %q, want %q among them", values, want)
+				}
+			}
+		})
+	}
+}
+
+// Rendered failures leave a dummy local key ("x", "ollama") alone: it is no
+// secret, and redacting it would rewrite the message. A real key is
+// redacted, and CredentialValues never lists a dummy key.
+func TestRunRedactorLeavesDummyKeysAlone(t *testing.T) {
+	redactor := newRunRedactor(serviceSession.Request{APIKey: "x"}, func(serviceSession.Request) ([]string, error) {
+		return []string{"ollama", "sk-real-local-key"}, nil
+	})
+	if got := redactor.text("x: ollama refused sk-real-local-key"); got != "x: ollama refused "+redactedMarker {
+		t.Fatalf("rendered = %q, want only the real key redacted", got)
+	}
+	cfg := config.Config{Model: config.ModelConfig{Provider: config.ProviderLocal, Local: &config.OpenAIConfig{Model: "llama", APIKey: "ollama"}}}
+	cfg.Model.OpenAI = &config.OpenAIConfig{APIKey: "x"}
+	values, err := CredentialValues(serviceSession.Request{Provider: config.ProviderOpenAILive, Model: config.OpenAILiveAPIKeyModel, ModelProvided: true, APIKey: "sk-live-real", ConfigDir: t.TempDir(), LoadedConfig: &cfg})
+	if err != nil {
+		t.Fatalf("CredentialValues: %v", err)
+	}
+	for _, value := range values {
+		if value == "x" || value == "ollama" {
+			t.Fatalf("credentials = %q, want no dummy key", values)
+		}
+	}
+}

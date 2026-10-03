@@ -213,6 +213,15 @@ type DynamicToolRouter interface {
 	ResolvesDynamicTools() bool
 }
 
+// BrowserToolRouter identifies calls routed to the browser surface: the
+// WebMCP broker's own tools and the page tools discovered from the selected
+// page, whatever their names. They drive one browser's tabs and pages, so a
+// host serializes them as one resource. Executors that wrap a router forward
+// it.
+type BrowserToolRouter interface {
+	IsBrowserTool(name string) bool
+}
+
 // PageSightToolRouter identifies calls routed to selected page sight. Hosts
 // use this to keep page calls away from physical display permission handling.
 type PageSightToolRouter interface {
