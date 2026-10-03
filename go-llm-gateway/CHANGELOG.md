@@ -223,7 +223,9 @@
   turn. Replayed reasoning still carries no `id`. The provider keeps each
   completed turn's items for the life of the `Provider`, keyed by the first
   call_id or, for a text-only answer, by its text and a fingerprint of the
-  non-system conversation before it; a history that no longer matches the
+  whole conversation before it (system prompts, text, image URLs or byte
+  digests, tool calls), so conversations sharing one `Provider` (a
+  session's delegations) never replay each other's reasoning; a history that no longer matches the
   kept turn falls back to text first and each call's reasoning before it.
   Only a response that completes without error is kept.
 - `fakelive`: a step after `AwaitClient` is now written after the server's

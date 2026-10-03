@@ -195,9 +195,7 @@ func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string
 			output := msg.TextContent()
 			input = append(input, inputItem{Type: itemTypeFunctionCallOutput, CallID: msg.ToolCallID, Output: &output})
 		}
-		if msg.Role != models.RoleSystem {
-			prefix.add(msg)
-		}
+		prefix.add(msg)
 	}
 	if endsOnAssistantMessage(input) {
 		input = append(input, userItem(models.NewTextMessage(models.RoleUser, providers.ContinuationPrompt)))

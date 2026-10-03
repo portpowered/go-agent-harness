@@ -118,8 +118,9 @@ func (l turnLayout) reasoningBefore(callID string) []json.RawMessage {
 
 // turnKey names the assistant message a turn produced. A message with
 // function calls is named by its first call_id, which the backend makes
-// unique. A text-only message is named by its text and the conversation
-// before it (prefix), so two turns that said the same words stay apart.
+// unique. A text-only message is named by its text and the fingerprint of
+// the whole conversation before it (prefix), so two turns that said the
+// same words stay apart.
 func turnKey(prefix, text string, callIDs []string) string {
 	if len(callIDs) > 0 {
 		return "call:" + callIDs[0]
@@ -163,11 +164,14 @@ func (r *reasoningReplay) lookup(prefix string, msg models.Message) turnLayout {
 	return r.turns[turnKey(prefix, msg.TextContent(), ids)]
 }
 
-// conversationFingerprint chains the non-system messages of a conversation
-// into one hash, so the text-only turn that answered a conversation can be
-// found again when that conversation comes back as the prefix of a later
-// request. System messages are left out because instructions may change
-// between turns without changing what the model answered.
+// conversationFingerprint chains every message of a conversation, system
+// prompts included, into one hash, so the text-only turn that answered a
+// conversation can be found again when that conversation comes back as the
+// prefix of a later request. One Provider can serve several conversations at
+// once (a session's delegations each run their own on the session's backend
+// Provider), so everything the model saw is covered: role, text, image
+// digests, tool calls and tool_call_id. Conversations that differ only in an
+// image or in their instructions never share reasoning.
 type conversationFingerprint struct {
 	sum string
 }
@@ -177,6 +181,7 @@ type fingerprintedMessage struct {
 	Prefix     string   `json:"p"`
 	Role       string   `json:"r"`
 	Text       string   `json:"t"`
+	Images     []string `json:"m,omitempty"`
 	Calls      []string `json:"c,omitempty"`
 	ToolCallID string   `json:"i,omitempty"`
 }
@@ -186,12 +191,31 @@ func (f *conversationFingerprint) add(msg models.Message) {
 	for _, call := range msg.ToolCalls {
 		calls = append(calls, call.ID)
 	}
-	encoded, err := json.Marshal(fingerprintedMessage{Prefix: f.sum, Role: string(msg.Role), Text: msg.TextContent(), Calls: calls, ToolCallID: msg.ToolCallID})
+	encoded, err := json.Marshal(fingerprintedMessage{Prefix: f.sum, Role: string(msg.Role), Text: msg.TextContent(), Images: imageDigests(msg), Calls: calls, ToolCallID: msg.ToolCallID})
 	if err != nil {
 		return
 	}
 	sum := sha256.Sum256(encoded)
 	f.sum = hex.EncodeToString(sum[:])
+}
+
+// imageDigests names each image of msg by its URL or by its media type and
+// the SHA-256 of its bytes.
+func imageDigests(msg models.Message) []string {
+	var digests []string
+	for _, part := range msg.ContentParts {
+		image, ok := part.(models.ImagePart)
+		if !ok {
+			continue
+		}
+		if len(image.Bytes) == 0 {
+			digests = append(digests, "url:"+image.URL)
+			continue
+		}
+		sum := sha256.Sum256(image.Bytes)
+		digests = append(digests, "bytes:"+image.MediaType+":"+hex.EncodeToString(sum[:]))
+	}
+	return digests
 }
 
 // replayedReasoning is the reasoning input item sent back: summary and

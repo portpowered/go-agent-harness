@@ -309,24 +309,23 @@ func answerTurn(t *testing.T, replay *reasoningReplay, msgs []models.Message, fi
 // (openai-responses-replay-messages-internal.ts, the assistant branch of
 // convertResponsesMessagesWithStyle). A response shaped reasoning, message,
 // function_call goes back in that order, and the reasoning before a final
-// text-only answer goes back before that answer in the next user turn. A
-// changed system prompt does not lose either, and no reasoning carries an
-// id.
+// text-only answer goes back before that answer in the next user turn. No
+// reasoning carries an id.
 func TestReasoningReplaysInItsOriginalOrder(t *testing.T) {
 	replay := newReasoningReplay()
-	earlierSystem := messages.NewTextMessage(models.RoleSystem, "You may use tools.")
+	system := messages.NewTextMessage(models.RoleSystem, "Be brief.")
 	user := messages.NewTextMessage(models.RoleUser, "weather in Paris?")
-	toolStep := answerTurn(t, replay, []models.Message{earlierSystem, user}, bytes.NewReader(readTestdata(t, "stream_reasoning_text_tool_call.sse")))
+	toolStep := answerTurn(t, replay, []models.Message{system, user}, bytes.NewReader(readTestdata(t, "stream_reasoning_text_tool_call.sse")))
 	if toolStep.TextContent() != "Let me check." || len(toolStep.ToolCalls) != 1 {
 		t.Fatalf("tool step = %+v, want text and one call", toolStep)
 	}
 	result := models.Message{Role: models.RoleTool, ToolCallID: "call_1", ContentParts: []models.ContentPart{models.TextPart{Text: "sunny, 21C"}}}
-	answer := answerTurn(t, replay, []models.Message{earlierSystem, user, toolStep, result}, bytes.NewReader(readTestdata(t, "stream_reasoning_final_answer.sse")))
+	answer := answerTurn(t, replay, []models.Message{system, user, toolStep, result}, bytes.NewReader(readTestdata(t, "stream_reasoning_final_answer.sse")))
 	if answer.TextContent() != "It is sunny." {
 		t.Fatalf("answer = %q", answer.TextContent())
 	}
 	request, _, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
-		messages.NewTextMessage(models.RoleSystem, "Be brief."), user, toolStep, result, answer,
+		system, user, toolStep, result, answer,
 		messages.NewTextMessage(models.RoleUser, "thanks"),
 	}}, requestOptions{model: "gpt-test", sessionID: "session-fixed", replay: replay})
 	if err != nil {
@@ -391,6 +390,73 @@ func TestSameAnswerTwiceKeepsEachTurnsReasoning(t *testing.T) {
 	want := "message:user reasoning:enc-first message:assistant message:user reasoning:enc-second message:assistant message:user"
 	if got := inputLabels(t, request.Input); got != want {
 		t.Fatalf("input = %s\nwant %s", got, want)
+	}
+}
+
+// TestConversationsThatDifferOnlyInWhatTheModelSawDoNotShareReasoning: one
+// Provider serves several conversations at once (each delegation of a
+// session runs its own on the session's backend Provider). Two
+// conversations that give the same answer text after different images or
+// different instructions must each replay only their own reasoning.
+func TestConversationsThatDifferOnlyInWhatTheModelSawDoNotShareReasoning(t *testing.T) {
+	ask := func(parts ...models.ContentPart) models.Message {
+		return models.Message{Role: models.RoleUser, ContentParts: append([]models.ContentPart{models.TextPart{Text: "what is this?"}}, parts...)}
+	}
+	system := func(text string) models.Message { return messages.NewTextMessage(models.RoleSystem, text) }
+	tests := []struct {
+		name          string
+		first, second []models.Message
+	}{
+		{
+			name:   "image bytes",
+			first:  []models.Message{ask(models.ImagePart{Bytes: []byte{1, 2, 3}, MediaType: "image/png"})},
+			second: []models.Message{ask(models.ImagePart{Bytes: []byte{4, 5, 6}, MediaType: "image/png"})},
+		},
+		{
+			name:   "image url",
+			first:  []models.Message{ask(models.ImagePart{URL: "https://example.test/cat.jpg"})},
+			second: []models.Message{ask(models.ImagePart{URL: "https://example.test/dog.jpg"})},
+		},
+		{
+			name:   "image present or not",
+			first:  []models.Message{ask(models.ImagePart{URL: "https://example.test/cat.jpg"})},
+			second: []models.Message{ask()},
+		},
+		{
+			name:   "system prompt",
+			first:  []models.Message{system("You are a vet."), ask()},
+			second: []models.Message{system("You are a zoologist."), ask()},
+		},
+		{
+			name:   "system prompt present or not",
+			first:  []models.Message{system("You are a vet."), ask()},
+			second: []models.Message{ask()},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			replay := newReasoningReplay()
+			firstAnswer := answerTurn(t, replay, tt.first, textAnswer("enc-first", "A cat."))
+			secondAnswer := answerTurn(t, replay, tt.second, textAnswer("enc-second", "A cat."))
+			for _, conversation := range []struct {
+				msgs   []models.Message
+				answer models.Message
+				want   string
+			}{
+				{tt.first, firstAnswer, "enc-first"},
+				{tt.second, secondAnswer, "enc-second"},
+			} {
+				msgs := append(append([]models.Message(nil), conversation.msgs...), conversation.answer, messages.NewTextMessage(models.RoleUser, "sure?"))
+				request, _, err := buildRequest(providers.InferenceRequest{Messages: msgs}, requestOptions{model: "gpt-test", replay: replay})
+				if err != nil {
+					t.Fatalf("build request: %v", err)
+				}
+				want := "message:user reasoning:" + conversation.want + " message:assistant message:user"
+				if got := inputLabels(t, request.Input); got != want {
+					t.Fatalf("input = %s\nwant %s", got, want)
+				}
+			}
+		})
 	}
 }
 
