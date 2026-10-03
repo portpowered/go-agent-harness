@@ -1,0 +1,135 @@
+{
+  "schema": "audio-runtime-c143-recovery-report-v1",
+  "project": "audio-runtime",
+  "task": "audio-runtime-c143-recover-c109-browser-retirement-integration",
+  "contractRevision": "audio-runtime-v1",
+  "admission": {
+    "status": "admitted",
+    "verification": "project-control.py verify-work --type task --name audio-runtime-c143-recover-c109-browser-retirement-integration",
+    "logicalBranch": "codex/audio-runtime-c143-recover-c109-browser-retirement-integration",
+    "logicalWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c143-recover-c109-browser-retirement-integration",
+    "logicalWorktreeHead": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "logicalBranchMatchesManifest": true,
+    "physicalAdoptedBranch": "codex/audio-runtime-c109-characterize-browser-retirement-integration",
+    "physicalAdoptedWorktree": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c109-characterize-browser-retirement-integration",
+    "preservedCheckpoint": "b4e9042f8bb0c2a12274d72b7fd8546753ef20b6",
+    "preservedCheckpointTree": "c4722ad2abaeca307e06534bc10447f62fe9c214",
+    "pullRequest": 495
+  },
+  "ancestry": {
+    "baseline": "3194edd97aed588f7cdf2f8c58a69ac21da4c9ad",
+    "startupIntegration": "8bdafc7f947a3a2c9856220abdc539437035bd21",
+    "acceptedMain": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+    "fetchedOriginMain": "4a1c399ccbb3d780be95eb04316e84b8f11a6646",
+    "originMainFetched": true,
+    "originMainAlreadyIntegrated": true,
+    "noHostCheckoutMergeOrReset": true
+  },
+  "preservation": {
+    "logicalPrdSha256": "475af01e945061e410df8ad474ef3dae25e7f99f424b386345db28c4f20bd07c",
+    "logicalProgressSha256": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d",
+    "adoptedPrdSha256": "f1eaa40a10fa41b812fac9b33b2943f1d1e7ec1386986928e4e3d262a52bc603",
+    "adoptedProgressSha256": "4ce380ea1a579cdf16b6e3b6706db47daa31a83899d9228d37a00e066e89941d",
+    "c61": {
+      "commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "tree": "8d9ce4cb0b0654ac021b42651d9f69f6614922a2",
+      "status": []
+    },
+    "c83": {
+      "commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "tree": "1bebaaa7ed3e47b4db24b82571000cd8e08b3048",
+      "status": []
+    },
+    "predecessorsUnchangedAfterChecks": true,
+    "c109HistoricalNamespacePreserved": true,
+    "sharedRegistriesUnchanged": true,
+    "productionAndTestSourceUnchanged": true
+  },
+  "freshEvidence": {
+    "analyzer": {
+      "required": {
+        "order": ["c61", "c83"],
+        "status": "passed",
+        "finalTree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+        "runManifestSha256": "3909ce32cd110fa0420b19ecdc828b31fd59e7954d329cf6370777688970e4b1",
+        "reportSha256": "aeb85a6e6a57929d03ee4effcf3a3a31f2c262efe529079a0081cea244282176",
+        "provenanceSha256": "09340911349a54585c95eaa37b66582d9e2c91ff442f24b3d80c35ea28bceaa6",
+        "ledgerSha256": "2f313ce46d1aa43423438c18e7337ab9f3ef8c491b5d68504df506fd48974454",
+        "sequenceSha256": "5ff0b283d1d138e29f031eb3cca96d0743be27077950981bab2768c175cd4aad"
+      },
+      "control": {
+        "order": ["c83", "c61"],
+        "status": "passed",
+        "finalTree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+        "runManifestSha256": "d40f27e6b725d2174d17fd5bee56343f833f432fca72e559c765e3ba1454105b",
+        "reportSha256": "adc8f146025c2d5b4e5c70769e45e0e42e9f051c3d2add0a99b2717e5315fd07",
+        "provenanceSha256": "09340911349a54585c95eaa37b66582d9e2c91ff442f24b3d80c35ea28bceaa6",
+        "ledgerSha256": "2f313ce46d1aa43423438c18e7337ab9f3ef8c491b5d68504df506fd48974454",
+        "sequenceSha256": "5ff0b283d1d138e29f031eb3cca96d0743be27077950981bab2768c175cd4aad"
+      },
+      "testAnalyze": {
+        "status": "passed",
+        "tests": 8,
+        "elapsedSeconds": 10.287
+      },
+      "verification": {
+        "status": "passed",
+        "checks": 8,
+        "negativeFixtures": 19,
+        "callerTreeMutation": "rejected-as-required",
+        "sha256": "03d30f46ee5e3c7ebeb9668f5023e4cbc4f23e4e121d3adae3e542ce41fe07e1"
+      },
+      "negativeControls": {
+        "changedSha": "rejected-as-required: changed C61 SHA",
+        "incompletePublicReport": "rejected-as-required: public check set is incomplete or does not match command_set"
+      }
+    },
+    "public": {
+      "browserAudioTool": {
+        "status": "passed",
+        "checks": "18/18",
+        "elapsedSeconds": 255.581,
+        "childTimeoutSeconds": 90,
+        "aggregateTimeoutSeconds": 300,
+        "reportSha256": "9857005e91aa2eefe407ecd6e3c304c918690b02cfbbc762193f45e7af8da045",
+        "syntheticTree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+        "credentialFree": true,
+        "processGroupsClean": true,
+        "observableEffects": ["PROBE_TOOL_MARKER_9182", "strict replay continuation"],
+        "recordedPcmBytes": 4800,
+        "renderedPcmBytes": 3244
+      },
+      "malformedOrCanceled": {
+        "status": "passed",
+        "checks": "3/3",
+        "elapsedSeconds": 35.456,
+        "childTimeoutSeconds": 60,
+        "aggregateTimeoutSeconds": 180,
+        "reportSha256": "4ca06c940443a04687a9b252a6c57d609d8a3ede647a597b399aaf6deb5165fc",
+        "syntheticTree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+        "credentialFree": true,
+        "processGroupsClean": true,
+        "negativeControl": true
+      },
+      "freshReportsValidated": true,
+      "browserServiceNormalRaceDiscovery": 3,
+      "externalConsumerDiscoveryPerRun": 1,
+      "nomicrophoneCrossModuleCoverage": "passed",
+      "accumulatedSessionRegressions": "normal, coverage, race passed"
+    }
+  },
+  "historicalFailureRouting": {
+    "preserved": true,
+    "providerAudioTerminalDrainOwner": "C79/provider-audio",
+    "c109DidNotRepairOrRelabelExternalFailures": true,
+    "hardwareAndAcousticProof": "out-of-scope; not claimed"
+  },
+  "delivery": {
+    "executorEvidenceOnly": true,
+    "scriptCiGreen": false,
+    "independentReview": false,
+    "guardedMerge": false,
+    "verticalProbe": false,
+    "projectAcceptance": false
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "base": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+  "base_tree": "dded566273b27f7146c4e630a0f23fb9402198da",
+  "cleanup": {
+    "temporary_root_removed": true,
+    "worktree_remove_command": "git worktree remove --force <temporary-worktree>",
+    "worktree_remove_status": "passed",
+    "worktree_removed": true
+  },
+  "final_head": "3b2152d478f6ad3dde8c18b1b37aea4d3fff6554",
+  "final_status": [],
+  "final_tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156",
+  "merges": [
+    {
+      "command": "git merge --no-ff --no-commit 22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "commit": "29ff830f1059750d66ca57fbd78bf6618ec1da5b",
+      "commit_command": "git commit --no-verify -m C109 control merge c83",
+      "conflict_kind": "none",
+      "conflict_resolution": "not-needed",
+      "conflicted_paths": [],
+      "conflicts": [],
+      "evidence_ids": [
+        "control-merge-01"
+      ],
+      "exit_code": 0,
+      "expected_commit": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "label": "c83",
+      "output": "Automatic merge went well; stopped before committing as requested\n",
+      "output_sha256": "96bb6a194a796153cbd0c640642866371219451832063763d544b942a8d97c4e",
+      "parents": [
+        "29ff830f1059750d66ca57fbd78bf6618ec1da5b",
+        "d4766c3dbbf2c198142047ead4449d58dd47d485",
+        "22cc6769aaf06d1e2c1275b064cc7ec29de3e371"
+      ],
+      "post_status": [],
+      "pre_merge_head": "d4766c3dbbf2c198142047ead4449d58dd47d485",
+      "ref": "22cc6769aaf06d1e2c1275b064cc7ec29de3e371",
+      "resolution": {
+        "owner": "C109/none",
+        "status": "not-needed"
+      },
+      "status": "passed",
+      "step": 1,
+      "tree": "e5ffb7315ac10dcbafb6af69224c9fafddbf376e"
+    },
+    {
+      "command": "git merge --no-ff --no-commit 8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "commit": "3b2152d478f6ad3dde8c18b1b37aea4d3fff6554",
+      "commit_command": "git commit --no-verify -m C109 control merge c61",
+      "conflict_kind": "none",
+      "conflict_resolution": "not-needed",
+      "conflicted_paths": [],
+      "conflicts": [],
+      "evidence_ids": [
+        "control-merge-02"
+      ],
+      "exit_code": 0,
+      "expected_commit": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "label": "c61",
+      "output": "Auto-merging agent-cli/internal/services/internal/agentruntime/session_browser_scenario_runner.go\nAutomatic merge went well; stopped before committing as requested\n",
+      "output_sha256": "348c940344b5b0b530e259652607e9c342e74910a1962ae1762db0277cd99361",
+      "parents": [
+        "3b2152d478f6ad3dde8c18b1b37aea4d3fff6554",
+        "29ff830f1059750d66ca57fbd78bf6618ec1da5b",
+        "8e8177c031a7b3b9322d712af19970e13fa7a1bc"
+      ],
+      "post_status": [],
+      "pre_merge_head": "29ff830f1059750d66ca57fbd78bf6618ec1da5b",
+      "ref": "8e8177c031a7b3b9322d712af19970e13fa7a1bc",
+      "resolution": {
+        "owner": "C109/none",
+        "status": "not-needed"
+      },
+      "status": "passed",
+      "step": 2,
+      "tree": "4d8e93ae0e74db403fdb02c70db9cf849c590156"
+    }
+  ],
+  "order": [
+    "c83",
+    "c61"
+  ],
+  "role": "control",
+  "schema": "audio-runtime-c109-merge-rehearsal-v2",
+  "worktree_path_recorded": "temporary path intentionally omitted from normalized evidence"
+}

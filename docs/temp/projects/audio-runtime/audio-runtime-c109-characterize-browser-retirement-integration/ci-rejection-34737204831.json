@@ -1,0 +1,113 @@
+{
+  "schema": "audio-runtime-c109-ci-rejection-v1",
+  "project": "audio-runtime",
+  "contractRevision": "audio-runtime-v1",
+  "task": "audio-runtime-c109-characterize-browser-retirement-integration",
+  "factorySession": "~default",
+  "factoryServer": "http://127.0.0.1:7439",
+  "pullRequest": 495,
+  "candidateHead": "0c31a7b01581a1fed95fecabed97558762d3e32a",
+  "ci": {
+    "runId": 34737204831,
+    "status": "completed",
+    "conclusion": "failure",
+    "mergeCheckout": "085d5bc7ba037d3856d7885943f2f6e90f43ae6a",
+    "logEvidence": {
+      "runJsonSha256": "783f665d71f3ac9637fb80a282339772f9814912003a6a3e376933ad52f33ad2",
+      "coverageJobId": 103670624526,
+      "coverageLogSha256": "c01341f84e87a6128b00cee7b51804a567bbdd22c1f73bc7febd5ba7170f9906",
+      "hermeticJobId": 103670624582,
+      "hermeticLogSha256": "3d7723795c0140782fb2212ee827cffa2358315f9e7c5ef523429af4beacd045"
+    },
+    "checks": {
+      "CI (coverage)": "failure",
+      "CI (WebMCP Chrome)": "success",
+      "CI (hermetic)": "failure",
+      "CI (macOS audio release)": "success",
+      "CI (race)": "success",
+      "CI (static)": "success",
+      "CI (integration)": "success",
+      "CI (Windows audio portable)": "success",
+      "CI (unit)": "success"
+    }
+  },
+  "failures": [
+    {
+      "job": "CI (coverage)",
+      "jobId": 103670624526,
+      "classification": "out-of-scope-inherited",
+      "signature": {
+        "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
+        "test": "TestManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose",
+        "file": "agent-cli/internal/webmcp/chrome/managed_lifecycle_test.go",
+        "line": 15,
+        "message": "TempDir RemoveAll cleanup: unlinkat .../browser-profile: directory not empty",
+        "command": "go test ./... -tags=nomicrophone -timeout 480s -coverpkg=github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/..."
+      },
+      "sourceUnchangedFromOriginMain": true,
+      "localCausalControl": {
+        "command": "cd agent-cli && CGO_ENABLED=0 go test ./internal/webmcp/chrome -tags=nomicrophone -run ^TestManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose$ -count=10 -timeout=180s -coverpkg=./internal/webmcp/chrome",
+        "status": "passed",
+        "repetitions": 10,
+        "elapsedSeconds": 0.315
+      },
+      "ownership": "outside C109; route to the existing WebMCP/browser lifecycle owner",
+      "action": "not modified, waived, relabeled, or claimed repaired by C109"
+    },
+    {
+      "job": "CI (hermetic)",
+      "jobId": 103670624582,
+      "classification": "out-of-scope-inherited",
+      "signature": {
+        "package": "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/sessions",
+        "test": "TestCancellingOneMidRunSessionLeavesOthersUndisturbed",
+        "file": "go-agent-loop/test/functional/sessions/session_cancel_isolation_test.go",
+        "line": 22,
+        "message": "concurrent run did not finish within 2m0s (stuck sessions likely)",
+        "suiteSummary": "discovered=95 executed=95 passed=55 failed=40",
+        "command": "make test-hermetic"
+      },
+      "sourceUnchangedFromOriginMain": true,
+      "localCausalControl": {
+        "command": "cd go-agent-loop && go test ./test/functional/sessions -run ^TestCancellingOneMidRunSessionLeavesOthersUndisturbed$ -count=1 -timeout=180s",
+        "status": "passed",
+        "elapsedSeconds": 4.253
+      },
+      "ownership": "outside C109; route to the existing agent-loop session-cancellation owner",
+      "action": "not modified, waived, relabeled, or claimed repaired by C109"
+    }
+  ],
+  "c109Evidence": {
+    "ownedDiffOnly": "docs/temp/projects/audio-runtime/audio-runtime-c109-characterize-browser-retirement-integration/",
+    "sourceDiffAgainstOriginMain": "none outside the owned evidence directory",
+    "analyzerRegression": "test_analyze.py: 2 passed",
+    "verifier": {
+      "command": "verify.py --mode all --write /tmp/c109-verification-0c31.json",
+      "status": "passed",
+      "negativeFixtures": 20,
+      "checks": 8
+    },
+    "publicControls": {
+      "browserAudioTool": {
+        "command": "run_public_checks.py --case browser-audio-tool --child-timeout 90 --aggregate-timeout 300",
+        "status": "passed",
+        "reportSha256": "0778f9135680da99ecf223affd1e951b87be9bd14485c7fec82255fce42ee76d",
+        "checks": 18,
+        "elapsedSeconds": 275.219
+      },
+      "malformedOrCanceled": {
+        "command": "run_public_checks.py --case malformed-or-canceled --child-timeout 60 --aggregate-timeout 180",
+        "status": "passed",
+        "reportSha256": "57785072236b330a1f0d39b21e69e8b857a2c2af6baa746df17bbee0525d5449",
+        "checks": 3,
+        "elapsedSeconds": 33.239
+      }
+    }
+  },
+  "decision": {
+    "c109OwnedRepairRemaining": false,
+    "ciGreen": false,
+    "candidateAcceptance": "not claimed",
+    "nextAction": "Preserve this exact external-failure evidence, route both failures to their existing owners, and retain C109 through the same task until the script gate can accept a candidate without changing peer paths."
+  }
+}
