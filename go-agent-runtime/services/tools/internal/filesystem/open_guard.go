@@ -16,6 +16,13 @@ import (
 // renames into is compared by identity (device and inode, or the Windows file
 // index) with the protected roots. The pre-check stays for its clear refusal
 // messages; the guard is authoritative.
+//
+// Limitation: a hard link to a file inside a protected directory (made, say,
+// as ~/work/key for ~/.ssh/id_rsa) is the same file under an unprotected
+// name and stays readable, as before the guard. Telling it apart needs the
+// file's other names; refusing every file with more than one link would
+// also refuse ordinary hard-linked files (package-manager stores, backups),
+// so the guard does not.
 
 // protectedEntry is an existing directory that holds a protected root, and the
 // protected root's name in it. It lets the guard refuse to create a protected
@@ -23,6 +30,9 @@ import (
 type protectedEntry struct {
 	parent os.FileInfo
 	name   string
+	// existed records that the protected root itself existed at the
+	// snapshot, so its identity is already among the roots.
+	existed bool
 }
 
 // protectedIdentities is a snapshot, by file identity, of the protected roots
@@ -32,6 +42,7 @@ type protectedIdentities struct {
 	paths   []string
 	roots   []os.FileInfo
 	entries []protectedEntry
+	existed map[string]bool
 	built   bool
 	// pending lists protected roots whose parent directory was missing when
 	// the entries were built; refresh re-checks only these.
@@ -39,7 +50,7 @@ type protectedIdentities struct {
 }
 
 func snapshotProtectedIdentities(protectedRoots []string) *protectedIdentities {
-	snapshot := &protectedIdentities{paths: protectedRoots}
+	snapshot := &protectedIdentities{paths: protectedRoots, existed: make(map[string]bool, len(protectedRoots))}
 	for _, path := range protectedRoots {
 		snapshot.addRoot(path)
 	}
@@ -47,7 +58,12 @@ func snapshotProtectedIdentities(protectedRoots []string) *protectedIdentities {
 }
 
 func (p *protectedIdentities) addRoot(path string) {
-	if info, err := os.Stat(path); err == nil && !p.isRoot(info) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	p.existed[path] = true
+	if !p.isRoot(info) {
 		p.roots = append(p.roots, info)
 	}
 }
@@ -67,7 +83,7 @@ func (p *protectedIdentities) addEntries(paths []string) {
 			p.pending = append(p.pending, path)
 			continue
 		}
-		p.entries = append(p.entries, protectedEntry{parent: parent, name: filepath.Base(path)})
+		p.entries = append(p.entries, protectedEntry{parent: parent, name: filepath.Base(path), existed: p.existed[path]})
 	}
 }
 
@@ -93,16 +109,20 @@ func (p *protectedIdentities) isRoot(info os.FileInfo) bool {
 // isEntry reports whether name in the directory parent is a protected root.
 // Names fold case on case-insensitive platforms, where ~/.SSH is ~/.ssh.
 func (p *protectedIdentities) isEntry(parent os.FileInfo, name string) bool {
-	if !p.built {
-		p.built = true
-		p.addEntries(p.paths)
-	}
+	p.buildEntries()
 	return slices.ContainsFunc(p.entries, func(entry protectedEntry) bool {
 		if entry.name != name && (!caseInsensitivePaths() || !strings.EqualFold(entry.name, name)) {
 			return false
 		}
 		return os.SameFile(entry.parent, parent)
 	})
+}
+
+func (p *protectedIdentities) buildEntries() {
+	if !p.built {
+		p.built = true
+		p.addEntries(p.paths)
+	}
 }
 
 // containsAncestorOf reports whether path or an existing ancestor of it is a

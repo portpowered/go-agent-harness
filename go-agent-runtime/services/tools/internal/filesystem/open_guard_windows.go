@@ -19,13 +19,22 @@ import (
 // handle's final path (GetFinalPathNameByHandle) and by file identity. The
 // kernel resolves the final path for the object the handle refers to, so a
 // symlink or junction swapped in before the open cannot hide a protected
-// location, and reads and list_dir are decided at open time. Writes check the
-// parent directory, the staged temporary file and a written-through target
-// by handle before any data reaches them. Limitation: the parent directories
-// are created and the staged file is renamed by root-relative path (os.Root
-// has no handle-relative rename), so a junction swapped in after the staged
-// file's check and before the rename can still move the rename; the window is
-// one system call wide.
+// location: read_file, read_image and list_dir are decided at open time.
+//
+// Writes are only partly decided at open time; the gaps are path-based
+// because os.Root has no handle-relative mkdir or rename:
+//   - Missing parent directories are created by root.MkdirAll, by path,
+//     before any handle check. A junction swapped in before it can create
+//     empty directories inside a protected location; the parent-directory
+//     handle check that follows then refuses the write, but the directories
+//     stay.
+//   - The staged temporary file is checked by handle when it is created.
+//     The rename window then spans writing the data, closing the file and
+//     root.Rename resolving both paths again: a junction swapped in on the
+//     destination's parent path anywhere in that window redirects the
+//     rename into the protected location.
+//   - A write through an existing symlink opens the target, checks its
+//     handle, and only then truncates and writes, so it has no window.
 
 func (g *openGuard) readFile(rel string) ([]byte, error) {
 	file, err := g.openChecked(rel)

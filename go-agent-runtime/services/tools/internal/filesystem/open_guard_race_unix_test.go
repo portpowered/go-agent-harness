@@ -307,6 +307,43 @@ func TestOpenTimeGuard_WriteFileCreatesNoMissingProtectedRoot(t *testing.T) {
 	}
 }
 
+// A protected root that does not exist when the operation snapshots the
+// protected identities, and is created and swapped in afterwards, is still
+// refused: a directory by its name in the walked parent, a file by its name
+// in its verified directory.
+func TestOpenTimeGuard_RefusesAProtectedRootCreatedAfterTheSnapshot(t *testing.T) {
+	for _, test := range []struct {
+		name, target, path, created string
+	}{
+		{name: "directory", target: swapLinkToSSH, path: swapReadPath, created: filepath.Join(".ssh", "id_rsa")},
+		{name: "file", target: swapLinkToHome, path: "work/benign/.netrc", created: ".netrc"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f := newSwapFixture(t)
+			if err := os.RemoveAll(f.ssh); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(f.swapped, ".netrc"), []byte("benign netrc"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			tool := NewReadFileToolWithPolicy(f.policy)
+			swap, _ := f.swapOn(t, 1, test.target)
+			setSwapSeam(t, tool, func(path string) {
+				created := filepath.Join(f.home, test.created)
+				if err := os.MkdirAll(filepath.Dir(created), 0o700); err != nil {
+					t.Errorf("create the protected root: %v", err)
+				}
+				if err := os.WriteFile(created, []byte(swapSecretKey), 0o600); err != nil {
+					t.Errorf("create the credential: %v", err)
+				}
+				swap(path)
+			})
+			msgs := mustToolExecute(t, tool, map[string]any{"path": test.path})
+			requireProtectedRefusal(t, msgs, FilesystemRefusalSensitiveRead, swapSecretKey)
+		})
+	}
+}
+
 // The pre-check hands the guard a canonical path, so the guard meets a
 // symlink only when one is swapped in. Called directly, it keeps os.Root's
 // symlink behavior: in-root links are followed, a write through a link to an

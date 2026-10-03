@@ -167,7 +167,7 @@ func (g *openGuard) verifyAncestors(dir *os.File) error {
 	}
 	return withDirFd(dir, func(fd int) error {
 		var current unix.Stat_t
-		if err := unix.Fstat(fd, &current); err != nil {
+		if err := retryEINTR(func() error { return unix.Fstat(fd, &current) }); err != nil {
 			return err
 		}
 		base := fd
@@ -179,23 +179,60 @@ func (g *openGuard) verifyAncestors(dir *os.File) error {
 			if current.Dev == scopeStat.Dev && current.Ino == scopeStat.Ino {
 				return nil
 			}
-			parentFd, err := unix.Openat(base, "..", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+			var parentFd int
+			err := retryEINTR(func() error {
+				var openErr error
+				parentFd, openErr = unix.Openat(base, "..", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+				return openErr
+			})
 			if err != nil {
 				return err
 			}
 			closeOwnedFd(base, fd)
 			base = parentFd
 			var parent unix.Stat_t
-			if err := unix.Fstat(base, &parent); err != nil {
+			if err := retryEINTR(func() error { return unix.Fstat(base, &parent) }); err != nil {
 				return err
 			}
 			if parent.Dev == current.Dev && parent.Ino == current.Ino {
 				return nil // the filesystem root: a directory moved out of the scope
 			}
+			if g.isProtectedEntryAt(base, &parent, &current) {
+				return g.denied()
+			}
 			current = parent
 		}
 		return g.denied()
 	})
+}
+
+// isProtectedEntryAt reports whether child is, by name in parent, a
+// protected root. It catches a protected root created after the snapshot (a
+// new ~/.ssh swapped in mid-operation), which identity alone would miss; only
+// directories that hold protected roots are looked up, by fstatat.
+func (g *openGuard) isProtectedEntryAt(parentFd int, parent, child *unix.Stat_t) bool {
+	for _, name := range g.protected.entryNamesUnder(parent) {
+		var entry unix.Stat_t
+		err := retryEINTR(func() error { return unix.Fstatat(parentFd, name, &entry, 0) })
+		if err == nil && entry.Dev == child.Dev && entry.Ino == child.Ino {
+			return true
+		}
+	}
+	return false
+}
+
+// entryNamesUnder lists the names of the protected roots in the directory
+// parent that did not exist at the snapshot; the ones that did are already
+// matched by identity.
+func (p *protectedIdentities) entryNamesUnder(parent *unix.Stat_t) []string {
+	p.buildEntries()
+	var names []string
+	for _, entry := range p.entries {
+		if entryStat, ok := entry.parent.Sys().(*syscall.Stat_t); ok && !entry.existed && entryStat.Dev == parent.Dev && entryStat.Ino == parent.Ino {
+			names = append(names, entry.name)
+		}
+	}
+	return names
 }
 
 // isRootStat is isRoot for a raw stat result.
@@ -227,6 +264,12 @@ func (g *openGuard) openLeaf(rel string, flag int) (*os.File, error) {
 		}
 		dir, err := g.openVerifiedDir(dirRel)
 		if err != nil {
+			return nil, err
+		}
+		// A protected root created after the snapshot (~/.netrc) is refused
+		// by its name in the verified directory.
+		if err := g.refuseProtectedEntry(dir, name); err != nil {
+			closeGuardFile(dir)
 			return nil, err
 		}
 		file, err := openAt(dir, name, flag|unix.O_NOFOLLOW)
@@ -414,13 +457,11 @@ func withDirFd(dir *os.File, call func(fd int) error) error {
 func openAt(dir *os.File, name string, flag int) (*os.File, error) {
 	var opened int
 	err := withDirFd(dir, func(fd int) error {
-		var openErr error
-		for {
+		return retryEINTR(func() error {
+			var openErr error
 			opened, openErr = unix.Openat(fd, name, flag|unix.O_CLOEXEC, sandboxFileMode)
-			if !errors.Is(openErr, unix.EINTR) {
-				return openErr
-			}
-		}
+			return openErr
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -431,7 +472,7 @@ func openAt(dir *os.File, name string, flag int) (*os.File, error) {
 func lstatAt(dir *os.File, name string) error {
 	var stat unix.Stat_t
 	err := withDirFd(dir, func(fd int) error {
-		return unix.Fstatat(fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW)
+		return retryEINTR(func() error { return unix.Fstatat(fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW) })
 	})
 	if err != nil {
 		return &fs.PathError{Op: "fstatat", Path: name, Err: err}
@@ -442,7 +483,7 @@ func lstatAt(dir *os.File, name string) error {
 func isSymlinkAt(dir *os.File, name string) bool {
 	var stat unix.Stat_t
 	err := withDirFd(dir, func(fd int) error {
-		return unix.Fstatat(fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW)
+		return retryEINTR(func() error { return unix.Fstatat(fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW) })
 	})
 	return err == nil && stat.Mode&unix.S_IFMT == unix.S_IFLNK
 }
@@ -451,9 +492,11 @@ func readlinkAt(dir *os.File, name string) (string, error) {
 	buffer := make([]byte, unix.PathMax)
 	var size int
 	err := withDirFd(dir, func(fd int) error {
-		var readErr error
-		size, readErr = unix.Readlinkat(fd, name, buffer)
-		return readErr
+		return retryEINTR(func() error {
+			var readErr error
+			size, readErr = unix.Readlinkat(fd, name, buffer)
+			return readErr
+		})
 	})
 	if err != nil {
 		return "", err
@@ -462,15 +505,31 @@ func readlinkAt(dir *os.File, name string) (string, error) {
 }
 
 func mkdirAt(dir *os.File, name string, mode uint32) error {
-	return withDirFd(dir, func(fd int) error { return unix.Mkdirat(fd, name, mode) })
+	return withDirFd(dir, func(fd int) error {
+		return retryEINTR(func() error { return unix.Mkdirat(fd, name, mode) })
+	})
 }
 
 func renameAt(dir *os.File, from, to string) error {
-	return withDirFd(dir, func(fd int) error { return unix.Renameat(fd, from, fd, to) })
+	return withDirFd(dir, func(fd int) error {
+		return retryEINTR(func() error { return unix.Renameat(fd, from, fd, to) })
+	})
 }
 
 func removeAt(dir *os.File, name string) {
-	if err := withDirFd(dir, func(fd int) error { return unix.Unlinkat(fd, name, 0) }); err != nil {
+	if err := withDirFd(dir, func(fd int) error {
+		return retryEINTR(func() error { return unix.Unlinkat(fd, name, 0) })
+	}); err != nil {
 		return
+	}
+}
+
+// retryEINTR repeats a system call interrupted by a signal, as the os
+// package does for its own calls.
+func retryEINTR(call func() error) error {
+	for {
+		if err := call(); !errors.Is(err, unix.EINTR) {
+			return err
+		}
 	}
 }
