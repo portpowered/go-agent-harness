@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
+	livedelegationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation/wire"
 	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -29,8 +31,10 @@ func provideLiveService(
 	clockSource Clock,
 	runtimeObserver SessionRuntimeObserver,
 	credentialVault *liveCredentialVault,
+	delegations livedelegation.Service,
 ) session.LiveService {
 	return sessionwire.NewLiveService(sessionwire.LiveDependencies{
+		Delegations:       delegations,
 		InferencerFactory: newLiveInferencerFactory(providerService, recordingService, toolDefs, sessionInferencer, credentialVault, transportDialer),
 		ToolExecutor:      toolExecutor,
 		ToolDefinitions:   append([]messages.ToolDefinition(nil), toolDefs...),
@@ -38,6 +42,19 @@ func provideLiveService(
 		Scheduler:         liveScheduler(clockSource),
 		RuntimeObserver:   runtimeObserver,
 		Tick:              liveTick(clockSource),
+	})
+}
+
+// provideLiveDelegationService runs GPT-Live client delegations on a
+// backend built by the provider service. A backend's API key travels as a
+// one-time credential reference, resolved like the voice session's.
+func provideLiveDelegationService(providerService runtimeproviders.Service, clockSource Clock, credentialVault *liveCredentialVault) livedelegation.Service {
+	return livedelegationwire.NewService(livedelegationwire.Dependencies{
+		Providers: providerService,
+		Credentials: func(_ context.Context, reference string) (string, error) {
+			return resolveLiveCredential(reference, credentialVault)
+		},
+		Scheduler: liveScheduler(clockSource),
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimedeviceswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
+	runtimeLiveDelegationWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
@@ -66,6 +67,9 @@ func newTestSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFl
 		InferencerFactory: testLiveInferencerFactory(deps, providerService, recordingService, credentials),
 		Clock:             clockSource.Now,
 		Scheduler:         clockSource,
+		Delegations: runtimeLiveDelegationWire.NewService(runtimeLiveDelegationWire.Dependencies{
+			Providers: providerService, Credentials: credentials.take, Scheduler: clockSource,
+		}),
 	})
 	return NewSessionCommandWithLive(
 		askFlags, globalFlags, nil,

@@ -328,6 +328,7 @@ var CliSet = wire.NewSet( //nolint:gochecknoglobals // Wire resolves provider se
 	provideProviderModelCatalog,
 	provideLiveCredentialVault,
 	provideLiveCredentialReference,
+	provideLiveDelegationService,
 	provideLiveService,
 	provideFileDeviceService,
 	provideLiveReplayService,

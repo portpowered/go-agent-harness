@@ -26,6 +26,10 @@ func CloneLiveRequest(request session.LiveRequest) session.LiveRequest {
 		binding.Definitions = CloneToolDefinitions(binding.Definitions)
 		request.Capabilities = &binding
 	}
+	if request.Delegation != nil {
+		policy := *request.Delegation
+		request.Delegation = &policy
+	}
 	if request.ReplayPlan != nil {
 		plan := *request.ReplayPlan
 		plan.AudioTurns = make([]session.LiveReplayAudioTurn, len(request.ReplayPlan.AudioTurns))

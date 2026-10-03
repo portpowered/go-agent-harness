@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
 
 // LiveRequest contains normalized settings for a continuous bidirectional
@@ -66,6 +67,11 @@ type LiveRequest struct {
 	// owners use it when a request-scoped browser/tool factory must run before
 	// OpenLive; the handle takes ownership of Close.
 	Capabilities *LiveCapabilities
+	// Delegation selects the backend that answers the provider's client
+	// delegations (DELEGATION.CREATED), when the live service has a
+	// delegation executor. Nil leaves delegations unanswered by this
+	// session, as for providers that never delegate.
+	Delegation *livedelegation.Policy
 	// Replay carries explicit capture/replay policy to the provider factory.
 	// The session service never discovers files or creates host paths from it.
 	Replay LiveReplayPolicy

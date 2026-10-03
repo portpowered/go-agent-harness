@@ -3,6 +3,7 @@ package wire
 
 import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live"
@@ -25,6 +26,9 @@ type LiveDependencies struct {
 	Scheduler         platformclock.Scheduler
 	RuntimeObserver   sessiontrace.RuntimeObserver
 	Tick              func() uint64
+	// Delegations optionally runs the client delegations of sessions whose
+	// request carries a delegation policy. Nil leaves them unanswered.
+	Delegations livedelegation.Service
 }
 
 // NewLiveService assembles the continuous session role. It does not connect a
@@ -40,6 +44,7 @@ func NewLiveService(deps LiveDependencies) session.LiveService {
 		Scheduler:         deps.Scheduler,
 		RuntimeObserver:   deps.RuntimeObserver,
 		Tick:              deps.Tick,
+		Delegations:       deps.Delegations,
 	})
 }
 

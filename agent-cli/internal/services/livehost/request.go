@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -71,6 +72,7 @@ type requestInputs struct {
 	replayFinish    bool
 	turnCapture     bool
 	openImages      ImageOpener
+	delegation      *livedelegation.Policy
 }
 
 func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -108,10 +110,20 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 	if err != nil {
 		return requestInputs{}, err
 	}
+	var delegation *livedelegation.Policy
+	if inspection == nil {
+		// A replay never reaches a live backend; replaying delegations is
+		// PR 6 of gpt-live-provider.md.
+		delegation = delegationPolicy(delegationInputs{
+			loaded: loaded, configDir: request.ConfigDir, voiceProvider: provider, voiceAPIKey: apiKey,
+			credentialReference: deps.CredentialReference,
+		})
+	}
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
 		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), openImages: openImages,
 		chatGPTAuthPath: chatGPTAuthPath(provider, model, request.ConfigDir),
+		delegation:      delegation,
 	}, nil
 }
 
@@ -295,6 +307,11 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		// SESSION.CLOSE, which may follow multiple output responses.
 		FinishAfterResponse: !request.WaitForClose && !inputs.turnCapture && (inputs.promptPresent || hasAudioInput(request) || len(inputs.openingParts) > 0 || inputs.replayFinish || request.AudioOutputPath != ""),
 		ExpectedResponses:   replayExpectedResponses(request, inputs, inputs.promptPresent, inputs.openingParts, inputs.openingResponse),
+	}
+	if inputs.delegation != nil {
+		policy := *inputs.delegation
+		policy.Instructions = inputs.instructions
+		result.Delegation = &policy
 	}
 	appendToolNames(&result, inputs.capabilities)
 	return result

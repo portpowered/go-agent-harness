@@ -1245,6 +1245,66 @@ continuation and interrupt handling would still need special cases.
   never as `commentary`. A failed or over-budget delegation sends a short
   `commentary` stating the failure, so GPT-Live does not wait forever.
 
+**PR 4 as built** (recorded where it differs from or refines the plan
+above):
+
+- **Where it lives.** `go-agent-runtime/services/livedelegation` (contract),
+  `internal/service` (pool, nested loop, budgets, tool gate) and `wire`. The
+  live session owner takes the service as
+  `wire.LiveDependencies.Delegations`, and a session opts in with
+  `session.LiveRequest.Delegation` (backend and limits). The handle opens one
+  executor per session on its run context (`internal/live/delegation.go`),
+  hands it every `DELEGATION.CREATED` it observes, and closes it (cancel and
+  join) once the loop's workers have stopped, before the terminal is
+  published. The executor is provider-agnostic: it reads only
+  `DelegationCreatedValue`, so the codex route (`gpt-live-1-codex`, which
+  sends `Task`) needs nothing more.
+- **Budgets and failures moved forward from PR 5.** Turns (backend
+  inferences, default 8), tokens (reported usage, default 200000; checked
+  before each further inference, so the turn that crosses it completes) and
+  wall time on the injected clock (default 2 minutes) are enforced per
+  delegation. A backend error, a spent budget, or an empty answer each
+  becomes a short `commentary`. The splitting safety net is the provider's
+  (PR 3); the backend prompt asks for at most about 300 words.
+- **Progress.** Before each tool call the worker sends a `thinking` append
+  ("Delegated task in progress: running the X tool."). If an append is
+  rejected, the worker sends no more progress for that delegation.
+- **Appends are acknowledged.** A worker's `CONTEXT.APPEND` goes through the
+  session's ordered ingress with the same admission acknowledgement as a
+  live control, so a provider without the channel is a reported failure,
+  not a silent drop. A rejected append is not retried.
+- **Tool concurrency (Q11).** The session's tool executor already runs the
+  calls of one batch in parallel. The executor additionally serializes, per
+  tool name, the tools the session's interactive policy classifies as
+  `bounded-long-running` (browser, display and remote operations, which share
+  host state); `fast/read` tools run concurrently. With no policy nothing is
+  serialized.
+- **Prompt.** The 1.10.1 prefix, with the session's composed instructions as
+  the task instructions. The user turn is `Task` when present, otherwise the
+  transcript window, followed by the last 12 user and assistant messages of
+  the session history.
+- **Not yet built (still PR 5).** Task revisions: `Executor.Cancel` exists
+  and drops a queued or stops a running delegation without answering it, but
+  nothing calls it yet, and there is no stale-result `thinking` path. Session
+  end cancels running work at once; results still in flight are dropped, not
+  drained.
+- **Backend selection (Q8), in the CLI.** `session.delegation.provider` and
+  `.model` when set; otherwise `openai-chatgpt` (model
+  `model.openai_chatgpt.model`, else the account's default) when
+  `<config-dir>/auth/chatgpt.json` exists; otherwise `model.provider`, or
+  `openai` when that is a voice-only provider (its key is then the GPT-Live
+  key). `session.delegation.max_concurrency`, `max_turns`,
+  `max_duration_seconds` and `max_tokens` override the limits. API keys
+  travel as one-time credential references, never in the live request. The
+  backend is built at the first delegation, so a session that never
+  delegates never needs a backend login. A `--replay` session gets no
+  delegation backend (replaying delegations is PR 6).
+- **Where the behaviour tests live.** `agent-cli/internal/services/livehost`
+  (`delegation_session_test.go`), because the architecture policy forbids a
+  runtime package, tests included, from composing service `wire` packages.
+  They run the real live session service and `openailive` against `fakelive`
+  with a scripted backend on synctest's virtual clock.
+
 ## 2.6 Event mapping onto the harness session contract
 
 ### 2.6.1 Inbound (server to `StreamMessage`)
@@ -1464,10 +1524,11 @@ PR 3a (`openai-chatgpt` text provider, the delegation backend):
 - `go-agent-runtime/services/providers/internal/service/service.go` (`buildConfiguredProvider`) and `models.go`: the `openai-chatgpt` provider name. Its models come from the account's list, not the static catalog.
 - `agent-cli/internal/config/{interface,overrides,loading}.go` and `services/session_host.go` (`resolvedProvider`): `ProviderOpenAIChatGPT = "openai-chatgpt"`, which reads the auth store at `<config-dir>/auth/chatgpt.json`; `yui ask`/`yui chat --provider openai-chatgpt`.
 
-PR 4 (client-delegation executor):
+PR 4 (client-delegation executor), as built:
 
-- `go-agent-runtime/services/livedelegation/...` (service, worker pool, nested `agentloop`, wire).
-- `go-agent-runtime/services/session/internal/live/observation.go`: route `DELEGATION.CREATED` to the executor.
+- `go-agent-runtime/services/livedelegation/{contract.go,internal/service,wire}`: service, worker pool, nested `agentloop`, budgets, tool gate and wire.
+- `go-agent-runtime/services/session/{live_request.go,wire/live.go}` and `internal/live/{delegation,start,observation,lifecycle,service}.go`: `LiveRequest.Delegation`, `LiveDependencies.Delegations`, and the handle routing `DELEGATION.CREATED` to the executor, acknowledging its appends, and closing it at session end.
+- `agent-cli/internal/services/livehost/{delegation,request}.go`, `internal/config/{interface,overrides}.go` and `internal/wire/live_service.go`: backend selection, `session.delegation` config, and the CLI composition.
 
 PR 6 (replay):
 
@@ -1558,10 +1619,12 @@ no wall-clock sleeps.
        running delegation cancels nothing in the executor, and the result is
        still delivered;
      - session end cancels running workers after the graceful close.
+   - **PR 4 also covers** (moved forward from PR 5): a backend error and an
+     over-budget delegation (turns, tokens, time) each send a failure
+     commentary, and an over-long result reaches GPT-Live as several appends
+     of at most 500 tokens.
    - **PR 5:**
-     - a stale-revision result is sent as `thinking`, not `commentary`;
-     - an over-budget delegation sends its failure commentary;
-     - an over-long result is split into appends of at most 500 tokens.
+     - a stale-revision result is sent as `thinking`, not `commentary`.
 6. **Replay fixtures (PR 6).** Version-2 `.session.json` captures with
    `provider.name: "openai-live"`, sealed with `SealSessionCapture`. They
    cover a greeting, a delegation during speech with a commentary result, an
@@ -1580,7 +1643,7 @@ no wall-clock sleeps.
 | **3** | `DELEGATION.CREATED` and `CONTEXT.APPEND` stream types: kept out of response state and reconstruction, `DELEGATION.CREATED` added to `MustDeliver`, both registered in the three capture decoders and every exhaustive switch, and their `openailive` mappings. Plus the transcript ring, the settle window, and an optional greeting. | New vocabulary that other providers decline. |
 | **3a** | The `openai-chatgpt` text provider: Responses over `chatgpt.com/backend-api/codex/responses` on the ChatGPT login (`chatgpt-oauth.md` 2 and 4.4). It is the default delegation backend when a ChatGPT login exists (Q8). | `yui ask`/`yui chat` and the delegation backend run on the ChatGPT login with no API key. |
 | **4** | Client delegation (2.4): the `livedelegation` asynchronous executor: worker pool, nested `agentloop`, observer hookup, result and progress appends, session-scoped lifetime. | Tools work through the harness backend, concurrently and independently of speech and interrupts. |
-| **5** | Task revisions and `Cancel(delegationID)`, stale-result handling, budgets and failure commentary, result splitting, mute and unmute. | Hardening on top of PR 4. |
+| **5** | Task revisions (callers of `Cancel(delegationID)`), stale-result handling, mute and unmute. Budgets, failure commentary and result splitting landed in PR 4 and PR 3. | Hardening on top of PR 4. |
 | **6** | Replay and recording support (`replay/internal/strict/runtime.go`), synthetic fixtures, and the opt-in smoke test. | Regression coverage. |
 | **7** (optional) | The delegation mode not chosen in 2.4, if it is still wanted. A Responses design must avoid the hazards in 2.6.3. | Only if Q3 asks for both modes. |
 | **8** (optional) | Sideband attach, WebRTC session creation, `store` and fork. | Only if a browser or telephony host needs them. |

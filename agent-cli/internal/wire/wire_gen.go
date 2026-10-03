@@ -85,7 +85,8 @@ func assembleAgentCLI(ctx context.Context, toolExecutor messages.ToolExecutor, t
 	dependencies := wire4.NewDependencies(providersSessionService, modelCatalog, clockSource)
 	selfplayService := wire4.NewService(dependencies)
 	wireLiveCredentialVault := provideLiveCredentialVault()
-	liveService := provideLiveService(providersSessionService, recordingService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, runtimeObserver, wireLiveCredentialVault)
+	livedelegationService := provideLiveDelegationService(providersService, clockSource, wireLiveCredentialVault)
+	liveService := provideLiveService(providersSessionService, recordingService, toolExecutor, toolDefs, sessionInferencer, transportDialer, clockSource, runtimeObserver, wireLiveCredentialVault, livedelegationService)
 	devicesService := wire5.NewService(deviceRegistry, audioioService)
 	sessiontraceService := provideSessionTraceService()
 	fileDeviceService := provideFileDeviceService(clockSource, audioioService, sessiontraceService)
@@ -388,6 +389,7 @@ var CliSet = wire6.NewSet(
 	provideProviderModelCatalog,
 	provideLiveCredentialVault,
 	provideLiveCredentialReference,
+	provideLiveDelegationService,
 	provideLiveService,
 	provideFileDeviceService,
 	provideLiveReplayService,

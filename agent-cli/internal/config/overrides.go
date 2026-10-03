@@ -49,6 +49,10 @@ func copySessionConfig(s *SessionConfig) *SessionConfig {
 		}
 		out.InputTranscription = &transcription
 	}
+	if s.Delegation != nil {
+		delegation := *s.Delegation
+		out.Delegation = &delegation
+	}
 	return &out
 }
 

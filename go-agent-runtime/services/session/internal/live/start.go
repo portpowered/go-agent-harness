@@ -45,6 +45,9 @@ func (h *handle) startLoop(runCtx context.Context) error {
 	if h.captureInterruptionsEnabled() && watchEvents == nil {
 		return errors.New("capture interruptions require browser invocation events")
 	}
+	if err := h.openDelegations(runCtx, loop, toolExecutor); err != nil {
+		return err
+	}
 	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil
 }
