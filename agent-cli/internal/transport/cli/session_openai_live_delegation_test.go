@@ -130,7 +130,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	if len(commentary) != 1 || commentary[0].DelegationID == nil || *commentary[0].DelegationID != delegationID || commentary[0].Content != "Order 42 ships tomorrow." {
 		t.Fatalf("commentary appends = %+v, want the backend's answer for %s", commentary, delegationID)
 	}
-	assertBackendUsedTheLogin(t, backend)
+	assertBackendUsedTheLogin(t, backend, chatGPTTestToken)
 	if errs := fake.Errors(); len(errs) != 0 {
 		t.Fatalf("fake GPT-Live errors: %v", errs)
 	}
@@ -138,7 +138,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 
 // assertBackendUsedTheLogin checks that both backend turns ran on the
 // ChatGPT login with the account's default model and offered the tool.
-func assertBackendUsedTheLogin(t *testing.T, backend *fakechatgpt.Server) {
+func assertBackendUsedTheLogin(t *testing.T, backend *fakechatgpt.Server, token string) {
 	t.Helper()
 	turns := 0
 	for _, req := range backend.Requests() {
@@ -155,7 +155,7 @@ func assertBackendUsedTheLogin(t *testing.T, backend *fakechatgpt.Server) {
 		if err := json.Unmarshal(req.Body, &body); err != nil {
 			t.Fatalf("decode responses request: %v", err)
 		}
-		if req.Header.Get("Authorization") != "Bearer "+chatGPTTestToken || body.Model != "gpt-account-default" {
+		if req.Header.Get("Authorization") != "Bearer "+token || body.Model != "gpt-account-default" {
 			t.Fatalf("backend request model %q auth %q, want the account default on the ChatGPT login", body.Model, req.Header.Get("Authorization"))
 		}
 		if len(body.Tools) != 1 || body.Tools[0].Name != "lookup_order" {

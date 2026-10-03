@@ -1303,7 +1303,17 @@ above):
   (`delegation_session_test.go`), because the architecture policy forbids a
   runtime package, tests included, from composing service `wire` packages.
   They run the real live session service and `openailive` against `fakelive`
-  with a scripted backend on synctest's virtual clock.
+  with a scripted backend on synctest's virtual clock. Both routes are
+  covered end to end by in-process CLI tests on the ChatGPT login with
+  `fakechatgpt` as the backend: `gpt-live-1` against `fakelive`, and
+  `gpt-live-1-codex` against `fakecodex` (host clock, since its pion peer
+  cannot join a bubble), where the delegation carries `Task` and the answer
+  arrives as `delegation.context.append` on the `speakable` channel (progress
+  `thinking` maps to the codex `commentary` channel).
+- **Session instructions are unchanged.** The executor sets no voice-session
+  instructions, so describing the codex channels to the voice model
+  (`commentary` is silent background, `speakable` is the answer to deliver,
+  as OpenClaw does) remains a follow-up for the codex session prompt.
 
 ## 2.6 Event mapping onto the harness session contract
 
