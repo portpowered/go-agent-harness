@@ -15,10 +15,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openaichatgpt/fakechatgpt"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexlive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexrtc/fakecodex"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/quicksilver"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openaichatgpt/fakechatgpt"
 )
 
 // TestSessionCommandAnswersCodexRouteDelegationsOnTheChatGPTLogin is the
@@ -42,7 +42,7 @@ func TestSessionCommandAnswersCodexRouteDelegationsOnTheChatGPTLogin(t *testing.
 	reasoning := fakechatgpt.New(fakecodex.DefaultToken, fakecodex.DefaultAccountID)
 	reasoning.SetModels(`{"models":[{"slug":"gpt-account-default","visibility":"list","priority":1}]}`)
 	reasoning.Enqueue(
-		fakechatgpt.ToolCallReply("call_order", "lookup_order", `{"order":"42"}`),
+		fakechatgpt.ToolCallReply("call_order", lookupOrderTool, `{"order":"42"}`),
 		fakechatgpt.TextReply("Order 42 ships tomorrow."),
 	)
 	reasoningServer := httptest.NewServer(reasoning)
@@ -76,7 +76,7 @@ func TestSessionCommandAnswersCodexRouteDelegationsOnTheChatGPTLogin(t *testing.
 	capabilities := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
 			Executor:    tool,
-			Definitions: []messages.ToolDefinition{{Name: "lookup_order", Description: "Look up an order by number."}},
+			Definitions: []messages.ToolDefinition{{Name: lookupOrderTool, Description: "Look up an order by number."}},
 		}, nil
 	}
 	globalFlags := flags.NewGlobalFlags()
@@ -98,7 +98,7 @@ func TestSessionCommandAnswersCodexRouteDelegationsOnTheChatGPTLogin(t *testing.
 		t.Fatalf("session --model gpt-live-1-codex: %v\nstdout=%q\nstderr=%q\nvoice errors=%v", err, stdout.String(), stderr.String(), voice.Errors())
 	}
 
-	if calls := tool.snapshot(); len(calls) != 1 || calls[0].Name != "lookup_order" {
+	if calls := tool.snapshot(); len(calls) != 1 || calls[0].Name != lookupOrderTool {
 		t.Fatalf("tool calls = %+v, want one lookup_order", calls)
 	}
 	select {

@@ -22,6 +22,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/fakelive"
 )
 
+// lookupOrderTool is the session tool the delegation tests' backend calls.
+const lookupOrderTool = "lookup_order"
+
 // recordingLookupTool is the session's lookup_order tool.
 type recordingLookupTool struct {
 	mu    sync.Mutex
@@ -62,7 +65,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	backend := fakechatgpt.New(chatGPTTestToken, chatGPTTestAccount)
 	backend.SetModels(`{"models":[{"slug":"gpt-account-default","visibility":"list","priority":1}]}`)
 	backend.Enqueue(
-		fakechatgpt.ToolCallReply("call_order", "lookup_order", `{"order":"42"}`),
+		fakechatgpt.ToolCallReply("call_order", lookupOrderTool, `{"order":"42"}`),
 		fakechatgpt.TextReply("Order 42 ships tomorrow."),
 	)
 	server := httptest.NewServer(backend)
@@ -99,7 +102,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	capabilities := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
 			Executor:    tool,
-			Definitions: []messages.ToolDefinition{{Name: "lookup_order", Description: "Look up an order by number."}},
+			Definitions: []messages.ToolDefinition{{Name: lookupOrderTool, Description: "Look up an order by number."}},
 		}, nil
 	}
 
@@ -118,7 +121,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 		t.Fatalf("session --provider openai-live: %v\nstdout=%q\nstderr=%q\nfake errors=%v", err, stdout.String(), stderr.String(), fake.Errors())
 	}
 
-	if calls := tool.snapshot(); len(calls) != 1 || calls[0].Name != "lookup_order" || calls[0].Arguments != `{"order":"42"}` {
+	if calls := tool.snapshot(); len(calls) != 1 || calls[0].Name != lookupOrderTool || calls[0].Arguments != `{"order":"42"}` {
 		t.Fatalf("tool calls = %+v, want one lookup_order for order 42", calls)
 	}
 	var commentary []live.CommentaryAppend
@@ -158,7 +161,7 @@ func assertBackendUsedTheLogin(t *testing.T, backend *fakechatgpt.Server, token 
 		if req.Header.Get("Authorization") != "Bearer "+token || body.Model != "gpt-account-default" {
 			t.Fatalf("backend request model %q auth %q, want the account default on the ChatGPT login", body.Model, req.Header.Get("Authorization"))
 		}
-		if len(body.Tools) != 1 || body.Tools[0].Name != "lookup_order" {
+		if len(body.Tools) != 1 || body.Tools[0].Name != lookupOrderTool {
 			t.Fatalf("backend tools = %+v, want the session's lookup_order", body.Tools)
 		}
 	}
