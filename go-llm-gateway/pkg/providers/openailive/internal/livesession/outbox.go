@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"context"
@@ -29,7 +29,7 @@ type outboxEntry struct {
 // drains to session.closed even after the reader has stopped reading.
 
 // emitLocked queues msgs. Callers hold mu.
-func (s *liveSession) emitLocked(msgs ...messages.StreamMessage) {
+func (s *Session) emitLocked(msgs ...messages.StreamMessage) {
 	for _, msg := range msgs {
 		s.enqueueLocked(outboxEntry{msg: msg})
 	}
@@ -37,14 +37,14 @@ func (s *liveSession) emitLocked(msgs ...messages.StreamMessage) {
 
 // emitTerminalLocked queues a terminal message after everything before it.
 // Callers hold mu.
-func (s *liveSession) emitTerminalLocked(msg messages.StreamMessage) {
+func (s *Session) emitTerminalLocked(msg messages.StreamMessage) {
 	s.enqueueLocked(outboxEntry{msg: msg, terminal: true})
 }
 
 // enqueueLocked hands one entry to the pump. After the pump has drained and
 // exited (the session ended), the entry is written at once without waiting,
 // so a terminal record emitted late is never stranded. Callers hold mu.
-func (s *liveSession) enqueueLocked(entry outboxEntry) {
+func (s *Session) enqueueLocked(entry outboxEntry) {
 	if s.pumpExited {
 		s.deliverNow(entry)
 		return
@@ -54,7 +54,7 @@ func (s *liveSession) enqueueLocked(entry outboxEntry) {
 	s.wakePump()
 }
 
-func (s *liveSession) wakePump() {
+func (s *Session) wakePump() {
 	select {
 	case s.pumpWake <- struct{}{}:
 	default:
@@ -64,7 +64,7 @@ func (s *liveSession) wakePump() {
 // pump delivers the outbox in order until the session ends, then delivers
 // whatever is still queued without waiting. closing ends when the close
 // handshake starts.
-func (s *liveSession) pump(closing context.Context) {
+func (s *Session) pump(closing context.Context) {
 	for {
 		s.mu.Lock()
 		batch := s.outbox
@@ -91,7 +91,7 @@ func (s *liveSession) pump(closing context.Context) {
 
 // deliver writes one entry: a terminal record always, an ordinary one with
 // backpressure until closing ends, then only if it fits.
-func (s *liveSession) deliver(closing context.Context, entry outboxEntry) {
+func (s *Session) deliver(closing context.Context, entry outboxEntry) {
 	s.publishRTCMedia(entry.msg)
 	if entry.terminal {
 		s.base.WriteTerminal(entry.msg)
@@ -106,7 +106,7 @@ func (s *liveSession) deliver(closing context.Context, entry outboxEntry) {
 }
 
 // deliverNow writes one entry without waiting.
-func (s *liveSession) deliverNow(entry outboxEntry) {
+func (s *Session) deliverNow(entry outboxEntry) {
 	s.publishRTCMedia(entry.msg)
 	if entry.terminal {
 		s.base.WriteTerminal(entry.msg)
@@ -116,7 +116,7 @@ func (s *liveSession) deliverNow(entry outboxEntry) {
 }
 
 // drainOutbox delivers what is left after the session ended, without waiting.
-func (s *liveSession) drainOutbox() {
+func (s *Session) drainOutbox() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, entry := range s.outbox {
@@ -128,7 +128,7 @@ func (s *liveSession) drainOutbox() {
 	s.signalDrained()
 }
 
-func (s *liveSession) signalDrained() {
+func (s *Session) signalDrained() {
 	select {
 	case s.drained <- struct{}{}:
 	default:
@@ -137,7 +137,7 @@ func (s *liveSession) signalDrained() {
 
 // awaitBacklog waits until at most limit messages are queued, the close
 // handshake starts (when stopOnClose is set) or the session ends.
-func (s *liveSession) awaitBacklog(limit int, stopOnClose bool) {
+func (s *Session) awaitBacklog(limit int, stopOnClose bool) {
 	closing := s.closing
 	if !stopOnClose {
 		closing = nil

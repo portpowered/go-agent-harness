@@ -23,8 +23,10 @@ const (
 func TestOpenAILiveAdmitsOnlyCataloguedModels(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
 	for _, provider := range []string{providers.OpenAILiveProvider, " OpenAI-Live "} {
-		if err := service.ValidateSessionModel(provider, " gpt-live-1 "); err != nil {
-			t.Fatalf("ValidateSessionModel(%q, gpt-live-1) = %v, want admitted", provider, err)
+		for _, model := range []string{" gpt-live-1 ", "gpt-live-1-codex"} {
+			if err := service.ValidateSessionModel(provider, model); err != nil {
+				t.Fatalf("ValidateSessionModel(%q, %q) = %v, want admitted", provider, model, err)
+			}
 		}
 	}
 	for _, model := range []string{providers.OpenAIRealtimeDefaultModel, "gpt-live-2", "anything"} {
@@ -33,18 +35,25 @@ func TestOpenAILiveAdmitsOnlyCataloguedModels(t *testing.T) {
 		if !errors.As(err, &unsupported) || !errors.Is(err, providers.ErrUnsupportedRealtimeModel) {
 			t.Fatalf("ValidateSessionModel(openai-live, %q) = %v, want a typed rejection", model, err)
 		}
-		if unsupported.Provider != openAILiveProviderLabel || !reflect.DeepEqual(unsupported.SupportedModels, []string{providers.OpenAILive1Model}) {
+		if unsupported.Provider != openAILiveProviderLabel || !reflect.DeepEqual(unsupported.SupportedModels, liveModelIDs()) {
 			t.Fatalf("rejection = %+v, want the OpenAI Live catalog", unsupported)
 		}
 	}
 }
 
-func TestOpenAIRealtimeDoesNotAdmitTheLiveModel(t *testing.T) {
+// liveModelIDs is the openai-live catalog.
+func liveModelIDs() []string {
+	return []string{providers.OpenAILive1Model, providers.OpenAILiveCodexModel}
+}
+
+func TestOpenAIRealtimeDoesNotAdmitTheLiveModels(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	err := service.ValidateSessionModel("openai", providers.OpenAILive1Model)
-	var unsupported *providers.UnsupportedRealtimeModelError
-	if !errors.As(err, &unsupported) || unsupported.Provider != openAIProviderLabel || slices.Contains(unsupported.SupportedModels, providers.OpenAILive1Model) {
-		t.Fatalf("ValidateSessionModel(openai, gpt-live-1) = %v, want rejection by the Realtime catalog", err)
+	for _, model := range liveModelIDs() {
+		err := service.ValidateSessionModel("openai", model)
+		var unsupported *providers.UnsupportedRealtimeModelError
+		if !errors.As(err, &unsupported) || unsupported.Provider != openAIProviderLabel || slices.Contains(unsupported.SupportedModels, model) {
+			t.Fatalf("ValidateSessionModel(openai, %s) = %v, want rejection by the Realtime catalog", model, err)
+		}
 	}
 }
 
@@ -57,10 +66,12 @@ func TestOpenAILiveCatalogDescribesADuplexClientDelegationModel(t *testing.T) {
 	if !ok || model != want {
 		t.Fatalf("LookupRealtimeModel = %+v, %v; want %+v", model, ok, want)
 	}
-	if models := service.RealtimeModels(providers.OpenAILiveProvider); len(models) != 1 || models[0] != want {
+	codex := want
+	codex.ID = providers.OpenAILiveCodexModel
+	if models := service.RealtimeModels(providers.OpenAILiveProvider); len(models) != 2 || models[0] != want || models[1] != codex {
 		t.Fatalf("RealtimeModels(openai-live) = %+v", models)
 	}
-	if ids := service.SupportedRealtimeModelIDs(providers.OpenAILiveProvider); !reflect.DeepEqual(ids, []string{providers.OpenAILive1Model}) {
+	if ids := service.SupportedRealtimeModelIDs(providers.OpenAILiveProvider); !reflect.DeepEqual(ids, liveModelIDs()) {
 		t.Fatalf("SupportedRealtimeModelIDs(openai-live) = %v", ids)
 	}
 	for _, realtime := range service.RealtimeModels("openai") {

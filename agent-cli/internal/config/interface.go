@@ -17,9 +17,9 @@ const (
 	ProviderLocal      = "local"
 	ProviderFal        = "fal"
 	ProviderGrok       = "grok"
-	// ProviderOpenAILive is the OpenAI GPT-Live voice-session provider
-	// (model gpt-live-1). It has no config block of its own: it uses the
-	// model.openai API key and base URL.
+	// ProviderOpenAILive is the OpenAI GPT-Live voice-session provider. It
+	// has no config block of its own: gpt-live-1 uses the model.openai API
+	// key and base URL, and gpt-live-1-codex the ChatGPT sign-in.
 	ProviderOpenAILive = "openai-live"
 	// ProviderOpenAIChatGPT is the Responses API over the ChatGPT Codex
 	// backend, signed with the `yui auth chatgpt` login instead of an API key.

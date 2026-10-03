@@ -184,12 +184,12 @@ func resolvedProvider(cfg config.Config, configDir string) (session.ProviderConf
 		provider.Model, provider.APIKey, provider.BaseURL = cfg.Model.Fal.Model, cfg.Model.Fal.APIKey, cfg.Model.Fal.BaseURL
 		provider.Fal = &session.FalProviderConfig{Model: provider.Model, APIKey: provider.APIKey, BaseURL: provider.BaseURL}
 	case config.ProviderOpenAILive:
-		// GPT-Live uses the OpenAI API key and base URL; it has no model
-		// block of its own.
-		if cfg.Model.OpenAI == nil {
-			return session.ProviderConfig{}, fmt.Errorf("model.provider is %s but model.openai is not set", config.ProviderOpenAILive)
+		// GPT-Live has no model block of its own: gpt-live-1 uses the OpenAI
+		// API key and base URL, and gpt-live-1-codex the ChatGPT sign-in, so
+		// model.openai is optional. The live host resolves the credential.
+		if cfg.Model.OpenAI != nil {
+			provider.APIKey, provider.BaseURL = cfg.Model.OpenAI.APIKey, cfg.Model.OpenAI.BaseURL
 		}
-		provider.APIKey, provider.BaseURL = cfg.Model.OpenAI.APIKey, cfg.Model.OpenAI.BaseURL
 	case config.ProviderGrok:
 		if cfg.Model.Grok == nil {
 			return session.ProviderConfig{}, fmt.Errorf("model.provider is grok but model.grok is not set")

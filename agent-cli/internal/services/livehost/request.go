@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/buildinfo"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/interactive"
@@ -57,6 +58,7 @@ type requestInputs struct {
 	model           string
 	baseURL         string
 	credentialRef   string
+	chatGPTAuthPath string
 	instructions    string
 	capabilities    *runtimeSession.LiveCapabilities
 	requestPrompt   string
@@ -109,6 +111,7 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
 		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), openImages: openImages,
+		chatGPTAuthPath: chatGPTAuthPath(provider, model, request.ConfigDir),
 	}, nil
 }
 
@@ -258,6 +261,8 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		BaseURL:             inputs.baseURL,
 		RealtimeURL:         realtimeEndpoint(inputs.provider, inputs.baseURL),
 		CredentialReference: inputs.credentialRef,
+		ChatGPTAuthPath:     inputs.chatGPTAuthPath,
+		ClientVersion:       buildinfo.Version(),
 		Instructions:        inputs.instructions,
 		OpeningPrompt:       inputs.requestPrompt, OpeningPromptPresent: inputs.promptPresent,
 		OpeningContentParts: inputs.openingParts, OpeningMessageResponse: inputs.openingResponse,

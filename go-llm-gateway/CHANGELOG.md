@@ -147,10 +147,71 @@
   (`httptest` call creation answered by an in-process pion peer, and the
   sideband WebSocket) and `VirtualNetwork`, an in-memory pion network so the
   loopback tests open no UDP socket. Only `_test.go` files may import it.
+- `pkg/providers/openailive/codexlive`: the `gpt-live-1-codex` session of
+  the `openai-live` provider, on a ChatGPT login (PR 9 of
+  docs/architecture/gpt-live-provider.md). `ConnectSession` creates the
+  WebRTC offer, creates the call through `codexrtc.CallClient` with the
+  client version (`WithClientVersion`, sent as the `version` header),
+  applies the answer, attaches the sideband (five attempts, 200 ms apart and
+  doubling) and waits for the media connection. The session runs on the same
+  state machine as the `gpt-live-1` session: the same speech segments,
+  ordered outbox, `FullDuplex` capability and close handshake. Input PCM at
+  the session rate (24 kHz, or 16 kHz) is resampled to 48 kHz, cut into 20 ms
+  Opus frames and paced at 20 ms on the injected clock; the end of a user
+  turn sends the held partial frame. Peer audio is resampled back; silence
+  never opens or extends a segment. Transcripts, `turn.done`,
+  `output_audio_buffer.cleared` (the segment ends `cancelled` and local
+  playback is interrupted) and errors map onto the harness stream. A client
+  `delegation.created` becomes `DELEGATION.CREATED` with its input_text as
+  `Task`, and `CONTEXT.APPEND` becomes `delegation.context.append` or
+  `session.context.append` (commentary on the speakable channel, thinking on
+  the commentary channel), with the public route's settle window and
+  500-byte split. A lost sideband is redialed with the Codex backoff (200 ms
+  doubling to 5 s, reset after 30 s up); held control events are flushed in
+  order before new writes, and a call that ended (HTTP 404/410) ends the
+  session with reason `call_ended`. `expires_at` from `session.started` or
+  `session.updated` ends the session as `expired`. Credential failures (an
+  error event with `invalid_token`, `authentication_error`, `token_expired`
+  or `invalid_api_key`, top-level or nested, or status 401; HTTP 401; a
+  token manager with no sign-in or one it can no longer refresh) end the
+  session with a terminal `authentication` error wrapping
+  `codexlive.ErrSignInAgain` ("sign in again with `yui auth chatgpt`"); a
+  refresh that only failed on the network is retried. `Transport` overrides the network edges (URLs,
+  HTTP client, sideband dialer, pion settings, ICE servers; none by default),
+  and `ChatGPTCredentials` adapts `chatgptauth.Manager`.
+- `codexrtc.Peer` conceals packet loss: an inbound RTP sequence gap is filled
+  with Opus PLC frames (at most `MaxConcealedFrames`, 100 ms) before the next
+  decoded frame, and a late or repeated packet is dropped
+  (`ConcealedFrames`, `LatePackets`). A sequence jump too large to be loss
+  resynchronizes as RFC 3550 appendix A.1 does. `Peer.Failed` reports a
+  connection that failed after it was up.
+- `quicksilver.ErrorEvent` decodes a top-level `code` and a `status` (top
+  level or nested); `AuthFailure` treats status 401 and a top-level code as
+  credential failures, and `ErrorCode` returns the code.
+- `quicksilver.BoundInitialItems` bounds the startup history as OpenClaw
+  does: the newest `MaxInitialItems` (16) messages, each cut to 800
+  characters, 8000 bytes in total. `BuildSession` applies it.
+- `fakecodex.Backend`: `Send` pushes server events on the connected
+  sideband, `DropSideband` cuts it without a close frame, `HangUp` closes it
+  normally, `RejectSidebands` answers later handshakes with a status, and
+  `Sidebands`/`WaitSidebands` count connections.
 - `go.mod`: `github.com/google/uuid`, `github.com/pion/ice/v4`,
   `github.com/pion/logging` and `github.com/pion/transport/v4` are now
   direct requirements (all were
   already indirect at the same versions).
+
+### Changed
+
+- `openailive`: the session state machine (speech segments, the ordered
+  outbox, the outbound mapping, the close handshake, the delegation tracker
+  and the CONTEXT.APPEND split) moved to
+  `pkg/providers/openailive/internal/livesession`, behind a `Dialect`, so the
+  `gpt-live-1` and `gpt-live-1-codex` sessions share it. The public API and
+  behaviour of `openailive` are unchanged.
+- `codexrtc.Credential` redacts the account id as well as the token in
+  `String`, `GoString` and `LogValue`.
+- `quicksilver.ParseOptions` no longer rejects more than 128 startup
+  messages; `BuildSession` keeps the newest that fit the bounds instead.
 
 ### Fixed
 

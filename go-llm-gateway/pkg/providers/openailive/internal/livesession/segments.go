@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"fmt"
@@ -69,7 +69,7 @@ type segmenter struct {
 	lastSuppressedAt time.Time
 }
 
-func newSegmenter(gap time.Duration, format AudioFormat) *segmenter {
+func newSegmenter(gap time.Duration, format Format) *segmenter {
 	bytesPerSecond := int64(format.Rate)
 	if format.Type == AudioTypePCM {
 		bytesPerSecond *= 2
@@ -98,8 +98,49 @@ func (s *segmenter) outputAudio(now time.Time, audio []byte, mediaType string) (
 	return out, false
 }
 
+// outputSilence maps one chunk of silent output audio, as a transport that
+// streams continuously (WebRTC media) delivers between speech. Silence never
+// opens a segment, never extends one and never refreshes a suppression: it
+// only keeps an open segment's audio continuous for playback.
+func (s *segmenter) outputSilence(audio []byte, mediaType string) []messages.StreamMessage {
+	if s.suppressing || s.seg == nil || !s.seg.audioStarted {
+		return nil
+	}
+	return []messages.StreamMessage{{
+		Type: messages.StreamTypeAudioDelta, ResponseID: s.seg.id,
+		Value: messages.NewAudioDeltaValueWithMediaType(audio, mediaType),
+	}}
+}
+
+// endSegment closes the open segment with status: completed when the
+// provider reports the end of its turn, cancelled when it cleared the
+// segment's queued audio (a server-side barge-in). Later output opens a new
+// segment; nothing is suppressed, because the provider already stopped.
+func (s *segmenter) endSegment(status string) []messages.StreamMessage {
+	return s.closeSegment(status)
+}
+
+// endUtterance closes the open user utterance at the provider's end of the
+// user's turn. A non-empty final transcript replaces the accumulated text;
+// a final transcript with no open utterance is reported as a whole
+// utterance.
+func (s *segmenter) endUtterance(now time.Time, final string) []messages.StreamMessage {
+	var out []messages.StreamMessage
+	if s.utt == nil {
+		if final == "" {
+			return nil
+		}
+		out = s.inputTranscript(now, Transcript{Delta: final})
+	}
+	if final != "" {
+		s.utt.text.Reset()
+		s.utt.text.WriteString(final)
+	}
+	return append(out, s.closeUtterance()...)
+}
+
 // outputTranscript maps one assistant transcript fragment.
-func (s *segmenter) outputTranscript(now time.Time, fragment TranscriptDelta) []messages.StreamMessage {
+func (s *segmenter) outputTranscript(now time.Time, fragment Transcript) []messages.StreamMessage {
 	if s.suppress(now) {
 		return nil
 	}
@@ -124,7 +165,7 @@ func (s *segmenter) outputTranscript(now time.Time, fragment TranscriptDelta) []
 
 // inputTranscript maps one user transcript fragment. User transcripts never
 // touch the open segment: full-duplex overlap is not an interruption.
-func (s *segmenter) inputTranscript(now time.Time, fragment TranscriptDelta) []messages.StreamMessage {
+func (s *segmenter) inputTranscript(now time.Time, fragment Transcript) []messages.StreamMessage {
 	out := s.closeUtteranceBefore(fragment.StartMS)
 	if s.utt == nil {
 		s.utterances++

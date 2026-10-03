@@ -19,7 +19,7 @@
 // (go-llm-gateway/pkg/providers/openai/chatgptauth) returns a credential whose
 // AccessToken and AccountID map one to one onto Credential.
 //
-// No production session reaches this package yet. Tests run it against the
-// fakecodex subpackage: an httptest call-creation endpoint backed by an
+// The gpt-live-1-codex session (package codexlive) drives this transport.
+// Tests run it against the fakecodex subpackage: an httptest call-creation endpoint backed by an
 // in-process pion answerer on a virtual network, and a fake sideband.
 package codexrtc

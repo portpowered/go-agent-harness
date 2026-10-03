@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/internal/realtime"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/internal/livesession"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -123,14 +124,17 @@ func (p *Provider) ConnectSession(ctx context.Context, cfg models.SessionConfig)
 	if err != nil {
 		return nil, errors.Join(err, conn.Close())
 	}
-	session := newLiveSession(conn, p.logger, sessionSettings{
-		format:           *start.Session.Audio.Format,
-		clock:            p.clock,
-		segmentGap:       p.segmentGap,
-		delegationSettle: p.delegationSettle,
-		closeTimeout:     p.closeTimeout,
-	})
-	session.open(ctx, started.Session)
+	format := *start.Session.Audio.Format
+	session := livesession.New(conn, p.logger, livesession.Settings{
+		Name:             "openai live",
+		MediaName:        "OpenAI Live",
+		Format:           livesession.Format{Type: format.Type, Rate: format.Rate},
+		Clock:            p.clock,
+		SegmentGap:       p.segmentGap,
+		DelegationSettle: p.delegationSettle,
+		CloseTimeout:     p.closeTimeout,
+	}, publicDialect{})
+	session.Open(ctx, started.Session.ID, started.Session.Model)
 	return session, nil
 }
 

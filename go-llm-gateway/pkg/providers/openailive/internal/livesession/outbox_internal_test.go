@@ -1,4 +1,4 @@
-package openailive
+package livesession
 
 import (
 	"errors"
@@ -28,10 +28,10 @@ func (c *idleConn) Close() error                      { c.once.Do(func() { close
 // handshake released the session) is still delivered, never stranded.
 func TestTerminalEmittedAfterThePumpExitedIsDelivered(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		s := newLiveSession(&idleConn{closed: make(chan struct{})}, nil, sessionSettings{
-			format: AudioFormat{Type: AudioTypePCM, Rate: RatePCM24k}, clock: clock.Real{},
-			segmentGap: DefaultSegmentGap, closeTimeout: time.Second,
-		})
+		s := New(&idleConn{closed: make(chan struct{})}, nil, Settings{
+			Name: "test live", Format: Format{Type: AudioTypePCM, Rate: 24000}, Clock: clock.Real{},
+			SegmentGap: testSegmentGap, CloseTimeout: time.Second,
+		}, nil)
 		go s.pump(t.Context())
 		if err := s.base.Close(); err != nil {
 			t.Fatalf("close: %v", err)

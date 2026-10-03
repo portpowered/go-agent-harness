@@ -20,7 +20,8 @@
 // whose unknown types decode to UnknownEvent (codec.go), and the session
 // builder used for call creation and session.update (session.go). The
 // transport (call creation, the sideband and the WebRTC peer) is the
-// sibling codexrtc package. No production session reaches either yet.
+// sibling codexrtc package, and the session that runs them is the sibling
+// codexlive package.
 //
 // Sources: Codex codex-rs (revision 1e6185e522)
 // codex-api/src/endpoint/realtime_websocket/{protocol.rs,

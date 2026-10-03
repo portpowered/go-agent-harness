@@ -1,9 +1,7 @@
-package openailive
+package livesession
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -22,30 +20,31 @@ const MaxAppendTokens = 500
 // undercounts by up to twice the limit).
 const maxAppendBytes = MaxAppendTokens
 
-// appendEventIDPrefix numbers the event ids of context appends, so an error
-// or acknowledgement can be matched to the append it answers.
-const appendEventIDPrefix = "evt_ctx_"
+// ContextAppender is the Dialect extension that carries CONTEXT.APPEND. A
+// dialect without it refuses CONTEXT.APPEND with ErrNoWireEvent.
+type ContextAppender interface {
+	// ContextAppend builds the wire event of one chunk of value's content.
+	// seq numbers the session's append events from 1, for event ids. ok is
+	// false for a kind the dialect has no event for.
+	ContextAppend(value *messages.ContextAppendValue, chunk string, seq int64) (event models.SessionEvent, ok bool, err error)
+}
 
-// contextAppend sends one CONTEXT.APPEND as GPT-Live append commands, with
-// delegation_id the value's id or null. Content over maxAppendBytes is split
-// at sentence or word boundaries into appends that each fit, sent in order
-// under the same delegation id (design open question Q6: the backend is told
-// to summarize, and this split is the safety net). Success means the appends
-// were queued; GPT-Live acknowledges them later, and a rejection arrives as
-// an ERROR carrying the append's event id.
+// contextAppend sends one CONTEXT.APPEND as the dialect's append events.
+// Content over maxAppendBytes is split at sentence or word boundaries into
+// chunks that each fit, sent in order under the same delegation id (design
+// open question Q6: the backend is told to summarize, and this split is the
+// safety net). Success means the events were queued; the provider
+// acknowledges or rejects them later.
 //
 // appendMu serializes appends, so the chunks of two concurrent appends never
 // interleave on the wire. A multi-chunk append is not atomic: if a chunk is
 // not admitted, the earlier chunks are already queued and the outcome
 // reports the failure, so a sender that retries the whole append repeats
 // them.
-func (s *liveSession) contextAppend(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	value, ok := msg.Value.(*messages.ContextAppendValue)
-	if !ok || value == nil || strings.TrimSpace(value.Content) == "" {
-		return s.noWireEvent(msg)
-	}
-	eventType, ok := appendEventType(value.Kind)
-	if !ok {
+func (s *Session) contextAppend(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	appender, ok := s.dialect.(ContextAppender)
+	value, isAppend := msg.Value.(*messages.ContextAppendValue)
+	if !ok || !isAppend || value == nil || strings.TrimSpace(value.Content) == "" {
 		return s.noWireEvent(msg)
 	}
 	s.appendMu.Lock()
@@ -53,32 +52,16 @@ func (s *liveSession) contextAppend(ctx context.Context, msg messages.StreamMess
 	chunks := splitAppendContent(value.Content, maxAppendBytes)
 	events := make([]models.SessionEvent, 0, len(chunks))
 	for _, chunk := range chunks {
-		body := ContextAppend{
-			EventID:      fmt.Sprintf("%s%d", appendEventIDPrefix, s.appends.Add(1)),
-			DelegationID: value.DelegationID,
-			Content:      chunk,
-		}
-		data, err := json.Marshal(body)
+		event, known, err := appender.ContextAppend(value, chunk, s.appends.Add(1))
 		if err != nil {
 			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 		}
-		events = append(events, models.SessionEvent{Type: models.SessionEventType(eventType), Data: data})
+		if !known {
+			return s.noWireEvent(msg)
+		}
+		events = append(events, event)
 	}
 	return s.base.EnqueueEvents(ctx, events)
-}
-
-// appendEventType maps a CONTEXT.APPEND kind to its append command.
-func appendEventType(kind messages.ContextAppendKind) (string, bool) {
-	switch kind {
-	case messages.ContextAppendInstructions:
-		return TypeInstructionsAppend, true
-	case messages.ContextAppendThinking:
-		return TypeThinkingAppend, true
-	case messages.ContextAppendCommentary:
-		return TypeCommentaryAppend, true
-	default:
-		return "", false
-	}
 }
 
 // splitAppendContent splits content into chunks of at most limit bytes, each

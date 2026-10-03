@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
@@ -12,6 +13,7 @@ import (
 	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 )
 
 const (
@@ -118,6 +120,29 @@ func TestResolveDeviceProbeProviderOpenAILive(t *testing.T) {
 	}
 	if _, err := resolveDeviceProbeProvider(probeRequest(t, config.ProviderOpenAILive, "", "")); err == nil || !strings.Contains(err.Error(), "requires an OpenAI API key") {
 		t.Fatalf("missing GPT-Live key error = %v, want the API-key diagnostic", err)
+	}
+}
+
+// With a ChatGPT login and no --model, a GPT-Live probe runs
+// gpt-live-1-codex on the login with no API key; --model gpt-live-1-codex
+// without a login fails before any session is built.
+func TestResolveDeviceProbeProviderOpenAILiveOnAChatGPTLogin(t *testing.T) {
+	clearProbeCredentials(t)
+	request := probeRequest(t, config.ProviderOpenAILive, probeOpenAIKey, "")
+	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(request.ConfigDir)).Save(chatgptauth.Credential{
+		AccessToken: "token", AccountID: "acct", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := resolveDeviceProbeProvider(request)
+	if err != nil {
+		t.Fatalf("resolve GPT-Live probe on a login: %v", err)
+	}
+	if resolved.model != runtimeProviders.OpenAILiveCodexModel || resolved.apiKey != "" || resolved.chatGPTAuthPath != config.ChatGPTAuthStorePath(request.ConfigDir) {
+		t.Fatalf("GPT-Live probe on a login = %+v, want gpt-live-1-codex on the store", resolved)
+	}
+	if _, err := resolveDeviceProbeProvider(probeRequest(t, config.ProviderOpenAILive, probeOpenAIKey, runtimeProviders.OpenAILiveCodexModel)); err == nil || !strings.Contains(err.Error(), "yui auth chatgpt") {
+		t.Fatalf("codex probe without a login = %v, want the sign-in instruction", err)
 	}
 }
 

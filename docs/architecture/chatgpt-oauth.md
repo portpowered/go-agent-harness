@@ -475,6 +475,11 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
    With only a ChatGPT login, `--model gpt-live-1` fails fast, before any
    dial, with that message.
 
+   **As built (PR 9):** `--model gpt-live-1-codex` takes only the ChatGPT
+   store, with no Platform-key fallback, and the CLI reads the key from
+   `--api-key`, `model.openai.api_key` or `AGENT_MODEL__OPENAI__API_KEY`
+   (not a bare `OPENAI_API_KEY`). See `gpt-live-provider.md` 2.14.
+
    OpenClaw uses the opposite order ("A configured Platform credential takes
    precedence over ChatGPT sign-in"). The order here follows
    `gpt-live-provider.md` and the request. It matters only when both
@@ -627,7 +632,9 @@ not a new provider name:
   route C headers (`OpenAI-Alpha: quicksilver=v2`, `originator`). The provider
   calls it on every dial, including sideband reconnects, so a refreshed token
   is used without restarting the session. `validateSessionCredential`
-  accepts either an API key or the auth store.
+  accepts the auth store for `gpt-live-1-codex` and an API key for
+  `gpt-live-1` (as built in PR 9, the model picks one credential class; the
+  `model.openai.auth` setting below is not built).
 - Text inference: the Chat Completions `openai` provider cannot use the token
   (section 2). Add a provider name **`openai-chatgpt`**. It is a different
   wire protocol (Responses SSE) and a different host, which follows the same

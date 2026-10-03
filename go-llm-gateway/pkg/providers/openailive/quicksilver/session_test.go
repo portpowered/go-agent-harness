@@ -3,6 +3,7 @@ package quicksilver_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -94,7 +95,6 @@ func TestBuildSessionRejectsInvalidConfig(t *testing.T) {
 		"ack filler true":      {Model: qs.ModelCodex, Config: json.RawMessage(`{"ack_filler":true}`)},
 		"unknown role":         {Model: qs.ModelCodex, Config: json.RawMessage(`{"initial_items":[{"role":"system","text":"x"}]}`)},
 		"empty history text":   {Model: qs.ModelCodex, Config: json.RawMessage(`{"initial_items":[{"role":"user","text":" "}]}`)},
-		"too much history":     {Model: qs.ModelCodex, Config: json.RawMessage(`{"initial_items":[` + strings.Repeat(`{"role":"user","text":"x"},`, openailive.MaxInitialItems) + `{"role":"user","text":"x"}]}`)},
 		"options not a object": {Model: qs.ModelCodex, Config: json.RawMessage(`[]`)},
 	} {
 		if _, err := qs.BuildSession(cfg); !errors.Is(err, qs.ErrInvalidSessionConfig) {
@@ -155,4 +155,70 @@ func equalEvent(got, want qs.Event) bool {
 	}
 	right, err := qs.EncodeEvent(want)
 	return err == nil && string(left) == string(right)
+}
+
+// Startup history is bounded as OpenClaw bounds it: the newest 16 messages,
+// each cut to 800 characters on a character boundary, 8000 bytes in all,
+// in their original order.
+func TestInitialItemsKeepTheNewestWithinTheBounds(t *testing.T) {
+	var items []qs.InitialText
+	for i := range 20 {
+		items = append(items, qs.InitialText{Role: qs.RoleUser, Text: fmt.Sprintf("message %02d", i)})
+	}
+	bounded := qs.BoundInitialItems(items)
+	if len(bounded) != qs.MaxInitialItems || bounded[0].Text != "message 04" || bounded[15].Text != "message 19" {
+		t.Fatalf("bounded = %d items from %q to %q, want the newest 16 in order", len(bounded), bounded[0].Text, bounded[len(bounded)-1].Text)
+	}
+
+	long := strings.Repeat("é", 1000) // two bytes per character
+	bounded = qs.BoundInitialItems([]qs.InitialText{{Role: qs.RoleUser, Text: "oldest"}, {Role: qs.RoleAssistant, Text: long}})
+	if len(bounded) != 2 || utf8.RuneCountInString(bounded[1].Text) != qs.MaxInitialItemRunes || !utf8.ValidString(bounded[1].Text) {
+		t.Fatalf("long item = %d characters, want %d", utf8.RuneCountInString(bounded[1].Text), qs.MaxInitialItemRunes)
+	}
+
+	var heavy []qs.InitialText
+	for range 12 {
+		heavy = append(heavy, qs.InitialText{Role: qs.RoleUser, Text: strings.Repeat("x", 800)})
+	}
+	bounded = qs.BoundInitialItems(heavy)
+	total := 0
+	for _, item := range bounded {
+		total += len(item.Text)
+	}
+	if len(bounded) != 10 || total != qs.MaxInitialItemsBytes {
+		t.Fatalf("heavy history = %d items, %d bytes; want 10 items and the %d-byte budget", len(bounded), total, qs.MaxInitialItemsBytes)
+	}
+
+	session, err := qs.BuildSession(models.SessionConfig{Model: qs.ModelCodex, Config: json.RawMessage(`{"initial_items":[` +
+		strings.Repeat(`{"role":"user","text":"x"},`, 130) + `{"role":"user","text":"last"}]}`)})
+	if err != nil || len(session.InitialItems) != qs.MaxInitialItems || session.InitialItems[15].Content[0].Text != "last" {
+		t.Fatalf("BuildSession with long history = %d items, %v", len(session.InitialItems), err)
+	}
+}
+
+// The byte budget cuts the last kept item on a character boundary, and an
+// older item whose first character no longer fits is dropped.
+func TestInitialItemsCutTheLastItemOnACharacterBoundary(t *testing.T) {
+	items := []qs.InitialText{{Role: qs.RoleUser, Text: "é"}, {Role: qs.RoleUser, Text: strings.Repeat("€", 800)}}
+	for range 4 {
+		items = append(items, qs.InitialText{Role: qs.RoleAssistant, Text: strings.Repeat("é", 800)})
+	}
+	bounded := qs.BoundInitialItems(items)
+	if len(bounded) != 5 || len(bounded[0].Text) != 1599 || !utf8.ValidString(bounded[0].Text) {
+		t.Fatalf("bounded = %d items, first %d bytes; want the euro item cut to 533 characters and the oldest dropped", len(bounded), len(bounded[0].Text))
+	}
+}
+
+// Context appends over the byte limit split on character boundaries.
+func TestContextAppendsSplitOnCharacterBoundaries(t *testing.T) {
+	events := qs.ContextAppends(strings.Repeat("€", 200), qs.ChannelSpeakable, "")
+	if len(events) != 2 {
+		t.Fatalf("appends = %d, want 2", len(events))
+	}
+	for _, event := range events {
+		appendEvent, ok := event.(qs.SessionContextAppend)
+		if !ok || !utf8.ValidString(appendEvent.Content[0].Text) || len(appendEvent.Content[0].Text) > qs.ContextAppendMaxBytes {
+			t.Fatalf("append = %#v", event)
+		}
+	}
 }

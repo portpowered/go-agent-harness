@@ -3,9 +3,11 @@ package livehost
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 )
 
 func openAIConfig(provider string) config.Config {
@@ -76,5 +78,68 @@ func TestOpenAILiveIgnoresARealtimeSessionModel(t *testing.T) {
 	cfg.Session = &config.SessionConfig{Model: "gpt-realtime-2.1-mini"}
 	if _, model, _, _, err := ProviderValues(cfg, serviceSession.Request{}, nil); err != nil || model != "gpt-realtime-2.1-mini" {
 		t.Fatalf("openai session.model = %q, %v; want it honoured", model, err)
+	}
+}
+
+// With a ChatGPT login and no --model, openai-live runs gpt-live-1-codex on
+// the login, ahead of a configured API key, and the live request names the
+// store; an explicit --model gpt-live-1 still takes the API key.
+func TestProviderValuesPickTheCodexModelOnAChatGPTLogin(t *testing.T) {
+	configDir := t.TempDir()
+	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(configDir)).Save(chatgptauth.Credential{
+		AccessToken: "token", AccountID: "acct", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := openAIConfig(config.ProviderOpenAILive)
+	provider, model, apiKey, _, err := ProviderValues(cfg, serviceSession.Request{ConfigDir: configDir}, nil)
+	if err != nil || provider != config.ProviderOpenAILive || model != config.OpenAILiveChatGPTModel || apiKey != "" {
+		t.Fatalf("ProviderValues with a login = %q %q %q, %v; want gpt-live-1-codex without the API key", provider, model, apiKey, err)
+	}
+	if path := chatGPTAuthPath(provider, model, configDir); path != config.ChatGPTAuthStorePath(configDir) {
+		t.Fatalf("ChatGPT store = %q", path)
+	}
+	explicit := serviceSession.Request{ConfigDir: configDir, Model: config.OpenAILiveAPIKeyModel, ModelProvided: true}
+	if _, model, apiKey, _, err := ProviderValues(cfg, explicit, nil); err != nil || model != config.OpenAILiveAPIKeyModel || apiKey != "sk-openai" {
+		t.Fatalf("ProviderValues --model gpt-live-1 = %q %q, %v; want the API key", model, apiKey, err)
+	}
+	if path := chatGPTAuthPath(config.ProviderOpenAILive, config.OpenAILiveAPIKeyModel, configDir); path != "" {
+		t.Fatalf("an API-key model names the store %q", path)
+	}
+	withoutLogin := serviceSession.Request{ConfigDir: t.TempDir(), Model: config.OpenAILiveChatGPTModel, ModelProvided: true}
+	if _, _, _, _, err := ProviderValues(cfg, withoutLogin, nil); err == nil || !strings.Contains(err.Error(), "yui auth chatgpt") {
+		t.Fatalf("ProviderValues --model gpt-live-1-codex without a login = %v", err)
+	}
+}
+
+// A recorded or replayed openai-live session never picks gpt-live-1-codex,
+// which has no provider capture: with no --model it runs gpt-live-1 on the
+// API key even when a ChatGPT login exists, without a key it says why, and an
+// explicit gpt-live-1-codex is refused before any session is built.
+func TestRecordAndReplayPreferTheAPIKeyModel(t *testing.T) {
+	configDir := t.TempDir()
+	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(configDir)).Save(chatgptauth.Credential{
+		AccessToken: "token", AccountID: "acct", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	withKey := openAIConfig(config.ProviderOpenAILive)
+	for name, request := range map[string]serviceSession.Request{
+		"record":           {ConfigDir: configDir, RecordPath: "capture.json"},
+		"record directory": {ConfigDir: configDir, RecordDirectory: "evidence"},
+		"replay":           {ConfigDir: configDir, ReplayPath: "capture.json"},
+	} {
+		if _, model, _, _, err := ProviderValues(withKey, request, nil); err != nil || model != config.OpenAILiveAPIKeyModel {
+			t.Fatalf("%s: model = %q, %v; want gpt-live-1", name, model, err)
+		}
+	}
+	noKey := config.Config{Model: config.ModelConfig{Provider: config.ProviderOpenAILive}}
+	_, _, _, _, err := ProviderValues(noKey, serviceSession.Request{ConfigDir: configDir, RecordPath: "capture.json"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "requires an OpenAI API key") || !strings.Contains(err.Error(), "no provider capture") {
+		t.Fatalf("record without a key = %v, want the API-key requirement and why", err)
+	}
+	explicit := serviceSession.Request{ConfigDir: configDir, ReplayPath: "capture.json", Model: config.OpenAILiveChatGPTModel, ModelProvided: true}
+	if _, _, _, _, err := ProviderValues(withKey, explicit, nil); err == nil || !strings.Contains(err.Error(), "--model gpt-live-1") {
+		t.Fatalf("replay --model gpt-live-1-codex = %v, want the refusal", err)
 	}
 }

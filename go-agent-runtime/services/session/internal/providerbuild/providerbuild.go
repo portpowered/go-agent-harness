@@ -29,6 +29,10 @@ type Dependencies struct {
 	Credentials     session.LiveCredentialResolver
 	Dialer          transport.Dialer
 	ToolDefinitions []messages.ToolDefinition
+	// CodexTransport optionally replaces the network edges of the ChatGPT
+	// GPT-Live route, as Dialer does for WebSocket providers. See
+	// providers.SessionConfig.CodexTransport.
+	CodexTransport any
 }
 
 // NewFactory returns the live inferencer factory backed by the provider
@@ -45,6 +49,7 @@ func NewFactory(deps Dependencies) session.LiveInferencerFactory {
 		}
 		config := SessionConfig(request, apiKey, tools)
 		config.WebSocketDialer = deps.Dialer
+		config.CodexTransport = deps.CodexTransport
 		return deps.Providers.BuildSession(ctx, config)
 	}
 }
@@ -85,6 +90,8 @@ func SessionConfig(request session.LiveRequest, apiKey string, defaultTools []me
 		ReplayTiming:                  replayTiming(request.Replay.Timing),
 		RecordPath:                    request.Replay.OutputCapturePath,
 		SessionMessageReplay:          request.Replay.Kind == session.LiveReplayKindTurn,
+		ChatGPTAuthPath:               request.ChatGPTAuthPath,
+		ClientVersion:                 request.ClientVersion,
 	}
 	if request.InputTranscription {
 		config.InputTranscription = &models.InputAudioTranscriptionConfig{Enabled: true, Model: request.InputTranscriptionModel}
