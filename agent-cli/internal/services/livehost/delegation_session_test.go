@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	live "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/fakelive"
 	"go.uber.org/goleak"
@@ -57,6 +58,13 @@ func TestDelegationRunsASessionToolAndSpeaksTheResult(t *testing.T) {
 			t.Fatalf("client events = %v, want no response request", types)
 		}
 		assertVoiceLoopUntouched(t, run.eventKinds())
+		wantEvidence := []string{
+			"delegation_tool_call del_order call_1 lookup_order",
+			"delegation_tool_result del_order call_1 lookup_order",
+		}
+		if got := run.delegationToolEvents(); !slices.Equal(got, wantEvidence) {
+			t.Fatalf("delegation tool evidence = %v, want %v", got, wantEvidence)
+		}
 		if task := backend.requests[0].Messages; !strings.Contains(lastUserText(task), "Where is order forty-two?") {
 			t.Fatalf("backend task = %q, want the transcript window", lastUserText(task))
 		}
@@ -254,7 +262,7 @@ func TestDelegationFailuresAreSpoken(t *testing.T) {
 		{
 			name:    "backend error",
 			replies: []backendReply{{err: errors.New("usage limit reached for this plan")}},
-			want:    "The delegated task failed and has no result: usage limit reached for this plan",
+			want:    "The delegated task failed: the backend returned an error.",
 		},
 		{
 			name: "turn budget",
@@ -304,6 +312,9 @@ func TestDelegationFailuresAreSpoken(t *testing.T) {
 				got := commentaries(fake)
 				if len(got) != 1 || got[0].delegationID != "del_fail" || !strings.HasPrefix(got[0].content, tt.want) {
 					t.Fatalf("commentaries = %+v, want one for del_fail starting %q", got, tt.want)
+				}
+				if strings.Contains(got[0].content, "usage limit") {
+					t.Fatalf("commentary %q speaks the backend's error text", got[0].content)
 				}
 			})
 		})
@@ -373,4 +384,75 @@ func assertVoiceLoopUntouched(t *testing.T, kinds []string) {
 	if delegations != 1 {
 		t.Fatalf("voice loop observed %d DELEGATION.CREATED, want 1 (events %v)", delegations, kinds)
 	}
+}
+
+// fastReadPolicy is an interactive tool policy that classes every tool
+// fast/read, as a host binds one to an explicit capability.
+type fastReadPolicy struct{}
+
+func (fastReadPolicy) Settings() tools.InteractiveToolPolicySettings {
+	return tools.InteractiveToolPolicySettings{}
+}
+func (fastReadPolicy) ClassForTool(string) tools.InteractiveToolClass {
+	return tools.InteractiveToolClassFastRead
+}
+func (fastReadPolicy) TimeoutForTool(string) time.Duration  { return time.Minute }
+func (p fastReadPolicy) Clone() tools.InteractiveToolPolicy { return p }
+func (fastReadPolicy) Validate() error                      { return nil }
+
+// A delegation's backend can call only the tools the session advertises.
+// With an explicit participant capability (and its tool policy), a call to a
+// tool the executor has but the capability does not offer never runs: the
+// backend gets the capability refusal as the tool result.
+func TestDelegationCannotRunAnUnadvertisedTool(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := fakelive.New(fakelive.WithAPIKey(delegationLiveKey), fakelive.WithScript(
+			fakelive.AwaitStarted(),
+			fakelive.Send(userSaid("Clean up my files.", 0, 1000), delegationAt("del_clean", 900)),
+			fakelive.AwaitClient(live.TypeCommentaryAppend, 1),
+			fakelive.CloseSession("close_requested"),
+		))
+		backend := newScriptedBackend(map[string][]backendReply{
+			"Clean up": {callReply("call_rm", "delete_everything", `{}`), textReply("I cannot delete files.")},
+		})
+		executor := &sessionTools{tools: map[string]sessionTool{
+			"lookup_order":      func(context.Context, messages.ToolCall) (string, error) { return "ok", nil },
+			"delete_everything": func(context.Context, messages.ToolCall) (string, error) { return "deleted", nil },
+		}}
+		run := startDelegationSession(t, fake, backend, nil, livedelegation.Limits{}, func(request *session.LiveRequest) {
+			request.Capabilities = &session.LiveCapabilities{
+				Executor:    executor,
+				Definitions: []messages.ToolDefinition{{Name: "lookup_order", Description: "Look up an order."}},
+				ToolPolicy:  fastReadPolicy{},
+			}
+		})
+		if err := run.wait(t); err != nil {
+			t.Fatalf("session: %v", err)
+		}
+
+		if calls, _ := executor.snapshot(); len(calls) != 0 {
+			t.Fatalf("executor calls = %+v, want none: delete_everything is not advertised", calls)
+		}
+		if refusal := toolResultText(backend.requests); !strings.Contains(refusal, `tool "delete_everything" is not available`) {
+			t.Fatalf("tool result sent to the backend = %q, want the capability refusal", refusal)
+		}
+		if got := commentaries(fake); len(got) != 1 || got[0].content != "I cannot delete files." {
+			t.Fatalf("commentaries = %+v", got)
+		}
+	})
+}
+
+// toolResultText is the text of the tool results in the backend's last
+// request.
+func toolResultText(requests []messages.InferenceRequest) string {
+	if len(requests) == 0 {
+		return ""
+	}
+	var out []string
+	for _, message := range requests[len(requests)-1].Messages {
+		if message.Role == messages.RoleTool {
+			out = append(out, message.TextContent())
+		}
+	}
+	return strings.Join(out, "\n")
 }

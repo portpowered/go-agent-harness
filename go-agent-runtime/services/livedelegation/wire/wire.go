@@ -16,6 +16,6 @@ import (
 // NewService assembles the live delegation executor service behind its
 // public contract.
 func NewService(deps Dependencies) livedelegation.Service {
-	wire.Build(wire.FieldsOf(new(Dependencies), "Providers", "Credentials", "Scheduler"), service.New, wire.Bind(new(livedelegation.Service), new(*service.Service)))
+	wire.Build(wire.FieldsOf(new(Dependencies), "Providers", "Credentials", "Scheduler", "Logger"), service.New, wire.Bind(new(livedelegation.Service), new(*service.Service)))
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -39,6 +40,7 @@ func (h *handle) openDelegations(ctx context.Context, loop *agentloop.AgentLoop,
 		Serialized:  serializedTools(toolPolicy),
 		History:     loop.GetConversationHistory,
 		Append:      h.appendDelegationContext,
+		OnTool:      h.recordDelegationTool,
 		Scheduler:   h.scheduler,
 	})
 	if err != nil {
@@ -121,4 +123,20 @@ func (h *handle) appendDelegationContext(ctx context.Context, value *messages.Co
 		h.media.CancelAck(ackID)
 		return ctx.Err()
 	}
+}
+
+// recordDelegationTool publishes a delegation's tool call as session
+// evidence, so the call is auditable like the voice loop's: the event stream
+// and the invocation recorder both receive it, tagged with the delegation
+// id. It is a distinct kind, never a TOOLCALL message, so no observer counts
+// it as a provider tool call that owes a result.
+func (h *handle) recordDelegationTool(event livedelegation.ToolEvent) {
+	kind := session.LiveEventDelegationToolCall
+	if event.Done {
+		kind = session.LiveEventDelegationToolResult
+	}
+	h.publish(session.LiveEvent{
+		Kind: string(kind), SessionID: h.request.SessionID, Critical: true,
+		ItemID: event.DelegationID, ToolCallID: event.Call.ID, Text: event.Call.Name, Error: event.Err,
+	}, false)
 }

@@ -1264,8 +1264,23 @@ above):
   before each further inference, so the turn that crosses it completes) and
   wall time on the injected clock (default 2 minutes) are enforced per
   delegation. A backend error, a spent budget, or an empty answer each
-  becomes a short `commentary`. The splitting safety net is the provider's
-  (PR 3); the backend prompt asks for at most about 300 words.
+  becomes a short `commentary`. A failure is spoken only as a category ("The
+  delegated task failed: the backend returned an error."): error text can
+  carry provider detail or a host credential reference, so the detail goes to
+  the service's logger. The splitting safety net is the provider's (PR 3);
+  the backend prompt asks for at most about 300 words.
+- **Backend build and retry.** A failed build is not cached, so the next
+  delegation retries it. The backend's credential reference is resolved once
+  and its value kept for those retries, because the CLI's vault hands out
+  each reference once.
+- **Evidence.** Every session tool call a delegation makes is published on
+  the live event stream, and so to the invocation recorder, as
+  `delegation_tool_call` and `delegation_tool_result` events (`ItemID` is the
+  delegation id, `ToolCallID` and `Text` the call id and tool name, `Error`
+  a failed call). They are a distinct kind, never `TOOLCALL.*` messages, so
+  nothing counts them as provider tool calls that owe a result. The tool
+  executor's own diagnostics (interactive timeouts and failures) are emitted
+  as for any session tool call, because it is the same executor.
 - **Progress.** Before each tool call the worker sends a `thinking` append
   ("Delegated task in progress: running the X tool."). If an append is
   rejected, the worker sends no more progress for that delegation.
@@ -1292,8 +1307,13 @@ above):
   `.model` when set; otherwise `openai-chatgpt` (model
   `model.openai_chatgpt.model`, else the account's default) when
   `<config-dir>/auth/chatgpt.json` exists; otherwise `model.provider`, or
-  `openai` when that is a voice-only provider (its key is then the GPT-Live
-  key). `session.delegation.max_concurrency`, `max_turns`,
+  `openai` when that is a voice-only provider. A Realtime or GPT-Live model
+  (`model.openai.model` often names one) is never inherited: without
+  `session.delegation.model` such a backend is reported unconfigured, and
+  each delegation is answered with a spoken failure while the log names the
+  setting. The GPT-Live key is reused for an `openai` backend only when the
+  backend's base URL is the voice key's own endpoint; a key for a custom
+  voice endpoint never goes to another one. `session.delegation.max_concurrency`, `max_turns`,
   `max_duration_seconds` and `max_tokens` override the limits. API keys
   travel as one-time credential references, never in the live request. The
   backend is built at the first delegation, so a session that never
@@ -1310,10 +1330,19 @@ above):
   cannot join a bubble), where the delegation carries `Task` and the answer
   arrives as `delegation.context.append` on the `speakable` channel (progress
   `thinking` maps to the codex `commentary` channel).
-- **Session instructions are unchanged.** The executor sets no voice-session
-  instructions, so describing the codex channels to the voice model
-  (`commentary` is silent background, `speakable` is the answer to deliver,
-  as OpenClaw does) remains a follow-up for the codex session prompt.
+- **Voice-session instructions.** The CLI appends a "Delegated work"
+  section to every `openai-live` session's instructions (tell the user the
+  work is under way, do not guess while waiting, deliver the result in your
+  own words, report a failure and offer to retry). On `gpt-live-1-codex` it
+  also describes the channels: `commentary` is silent background and must
+  never be read aloud; `speakable` is the answer to deliver (wording after
+  OpenClaw, as reported in the #643 review; not checked against its source).
+  The backend's task instructions are the session instructions without this
+  section.
+- **Known gaps (follow-ups).** Serialization is per tool name, so two
+  delegations can still drive shared browser state through different tools
+  at once, and delegations are not serialized against the voice loop's own
+  call of the same tool.
 
 ## 2.6 Event mapping onto the harness session contract
 

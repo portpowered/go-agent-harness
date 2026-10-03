@@ -1,11 +1,14 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
 
 const (
@@ -13,8 +16,6 @@ const (
 	historyMessages = 12
 	// historyMessageBytes bounds one quoted history message.
 	historyMessageBytes = 1000
-	// failureDetailBytes bounds the error text in a failure commentary.
-	failureDetailBytes = 300
 	// partialResultBytes bounds the partial result quoted when a budget ends a
 	// delegation.
 	partialResultBytes = 1200
@@ -103,14 +104,22 @@ func truncate(text string, limit int) string {
 }
 
 // failureCommentary is what GPT-Live is told when a delegation fails, so it
-// never waits forever for a result (GPT-Live has no delegation timeout).
+// never waits forever for a result (GPT-Live has no delegation timeout). It
+// names only a category: error text can carry provider detail or a host
+// credential reference, so the detail is logged, never spoken.
 func failureCommentary(err error) string {
-	detail := "unknown error"
-	if err != nil {
-		detail = truncate(strings.TrimSpace(err.Error()), failureDetailBytes)
+	return "The delegated task failed: " + failureCategory(err) + ". Tell the user it did not work and offer to try again."
+}
+
+func failureCategory(err error) string {
+	switch {
+	case errors.Is(err, livedelegation.ErrBackendUnavailable):
+		return "the delegation backend is not available"
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "the backend stopped before answering"
+	default:
+		return "the backend returned an error"
 	}
-	return "The delegated task failed and has no result: " + detail +
-		". Tell the user it did not work and offer to try again."
 }
 
 // budgetCommentary is the answer to a delegation stopped by its budget.

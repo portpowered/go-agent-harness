@@ -19,6 +19,7 @@ func NewService(deps Dependencies) livedelegation.Service {
 	providersService := deps.Providers
 	credentialResolver := deps.Credentials
 	scheduler := deps.Scheduler
-	serviceService := service.New(providersService, credentialResolver, scheduler)
+	logger := deps.Logger
+	serviceService := service.New(providersService, credentialResolver, scheduler, logger)
 	return serviceService
 }

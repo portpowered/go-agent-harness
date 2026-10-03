@@ -239,7 +239,7 @@ type delegationSession struct {
 	done    chan error
 	drained chan struct{}
 	mu      sync.Mutex
-	kinds   []string
+	events  []session.LiveEvent
 }
 
 // eventKinds lists the kinds of the session events published so far: the
@@ -247,12 +247,30 @@ type delegationSession struct {
 func (s *delegationSession) eventKinds() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]string(nil), s.kinds...)
+	kinds := make([]string, 0, len(s.events))
+	for _, event := range s.events {
+		kinds = append(kinds, event.Kind)
+	}
+	return kinds
+}
+
+// delegationToolEvents returns the delegation tool evidence the session
+// published, as "kind delegation_id call_id tool".
+func (s *delegationSession) delegationToolEvents() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, event := range s.events {
+		if event.Kind == string(session.LiveEventDelegationToolCall) || event.Kind == string(session.LiveEventDelegationToolResult) {
+			out = append(out, event.Kind+" "+event.ItemID+" "+event.ToolCallID+" "+event.Text)
+		}
+	}
+	return out
 }
 
 // startDelegationSession starts an openai-live session against fake with the
 // delegation executor answering on backend.
-func startDelegationSession(t *testing.T, fake *fakelive.Server, backend *scriptedBackend, tools *sessionTools, limits livedelegation.Limits) *delegationSession {
+func startDelegationSession(t *testing.T, fake *fakelive.Server, backend *scriptedBackend, tools *sessionTools, limits livedelegation.Limits, configure ...func(*session.LiveRequest)) *delegationSession {
 	t.Helper()
 	scheduler := platformclock.Real{}
 	factory := sessionwire.NewProviderInferencerFactory(sessionwire.ProviderInferenceDependencies{
@@ -272,7 +290,7 @@ func startDelegationSession(t *testing.T, fake *fakelive.Server, backend *script
 		dependencies.ToolExecutor = tools
 		dependencies.ToolDefinitions = tools.definitions()
 	}
-	handle, err := sessionwire.NewLiveService(dependencies).OpenLive(t.Context(), session.LiveRequest{
+	request := session.LiveRequest{
 		SessionID: "delegation", Provider: delegationProvider, Model: live.Model1, CredentialReference: "live-key",
 		InputAudioFormat: "pcm16", OutputAudioFormat: "pcm16", InputAudioSampleRate: 24000, OutputAudioSampleRate: 24000,
 		Instructions: "Be brief.",
@@ -280,7 +298,11 @@ func startDelegationSession(t *testing.T, fake *fakelive.Server, backend *script
 			Backend: livedelegation.Backend{Provider: scriptedBackendName, Model: "backend-model"},
 			Limits:  limits,
 		},
-	})
+	}
+	for _, apply := range configure {
+		apply(&request)
+	}
+	handle, err := sessionwire.NewLiveService(dependencies).OpenLive(t.Context(), request)
 	if err != nil {
 		t.Fatalf("OpenLive: %v", err)
 	}
@@ -292,7 +314,7 @@ func startDelegationSession(t *testing.T, fake *fakelive.Server, backend *script
 		defer close(run.drained)
 		for event := range handle.Events() {
 			run.mu.Lock()
-			run.kinds = append(run.kinds, event.Kind)
+			run.events = append(run.events, event)
 			run.mu.Unlock()
 		}
 	}()

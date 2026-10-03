@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
 
 // toolGate serializes the tools that are not safe to run concurrently. Each
@@ -50,9 +51,14 @@ type delegationTools struct {
 	inner    messages.ToolExecutor
 	gate     *toolGate
 	progress func(context.Context, messages.ToolCall)
+	observe  func(livedelegation.ToolEvent)
 }
 
-func (t delegationTools) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+// Execute runs one call. The host observes its start and its end, including
+// a call that never ran because its delegation ended while it waited.
+func (t delegationTools) Execute(ctx context.Context, call messages.ToolCall) (response messages.ToolCallResponse, err error) {
+	t.notify(livedelegation.ToolEvent{Call: call})
+	defer func() { t.notify(livedelegation.ToolEvent{Call: call, Done: true, Response: response, Err: err}) }()
 	release, err := t.gate.acquire(ctx, call.Name)
 	if err != nil {
 		return messages.ToolCallResponse{}, err
@@ -62,4 +68,10 @@ func (t delegationTools) Execute(ctx context.Context, call messages.ToolCall) (m
 		t.progress(ctx, call)
 	}
 	return t.inner.Execute(ctx, call)
+}
+
+func (t delegationTools) notify(event livedelegation.ToolEvent) {
+	if t.observe != nil {
+		t.observe(event)
+	}
 }

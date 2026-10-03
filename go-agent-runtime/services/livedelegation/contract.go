@@ -75,6 +75,10 @@ type Backend struct {
 	BaseURL             string
 	ChatGPTAuthPath     string
 	CredentialReference string
+	// Unconfigured is a host-detected reason the backend cannot run, such as
+	// a missing text model. Every delegation is then answered with a
+	// configuration failure, and the reason is logged, not spoken.
+	Unconfigured string
 }
 
 // Policy is the host-resolved delegation configuration of one live session.
@@ -86,6 +90,17 @@ type Policy struct {
 	Instructions string
 }
 
+// ToolEvent reports one session tool call a delegation made: once when it
+// starts (Done false) and once when it ends (Done true, with Response or
+// Err). Hosts record it as session evidence tagged with the delegation id.
+type ToolEvent struct {
+	DelegationID string
+	Call         messages.ToolCall
+	Done         bool
+	Response     messages.ToolCallResponse
+	Err          error
+}
+
 // Binding connects one executor to its live session. Tools is the session's
 // own tool executor, already restricted to the session's tool surface and
 // policy, and Definitions samples that surface at each delegation. Append
@@ -93,8 +108,9 @@ type Policy struct {
 // admitted. History samples the session's conversation so short replies
 // stay resolvable. Serialized reports the tools that are not safe to run
 // concurrently; each such tool runs one call at a time across every
-// delegation of the session. Scheduler measures time budgets; nil selects
-// the host clock.
+// delegation of the session. OnTool, when set, observes every tool call a
+// delegation makes. Scheduler measures time budgets; nil selects the host
+// clock.
 type Binding struct {
 	SessionID   string
 	Policy      Policy
@@ -103,6 +119,7 @@ type Binding struct {
 	Serialized  func(toolName string) bool
 	History     func() []messages.Message
 	Append      func(context.Context, *messages.ContextAppendValue) error
+	OnTool      func(ToolEvent)
 	Scheduler   platformclock.Scheduler
 }
 

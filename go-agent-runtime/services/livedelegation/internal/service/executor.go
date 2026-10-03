@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
@@ -29,6 +30,7 @@ type executor struct {
 	backend *backendBuilder
 	limits  livedelegation.Limits
 	tools   *toolGate
+	logger  logging.Logger
 
 	mu      sync.Mutex
 	closed  bool
@@ -38,10 +40,10 @@ type executor struct {
 	wg      sync.WaitGroup
 }
 
-func newExecutor(ctx context.Context, binding livedelegation.Binding, backend *backendBuilder) *executor {
+func newExecutor(ctx context.Context, binding livedelegation.Binding, backend *backendBuilder, logger logging.Logger) *executor {
 	sessionCtx, stop := context.WithCancel(ctx)
 	return &executor{
-		ctx: sessionCtx, stop: stop, binding: binding, backend: backend,
+		ctx: sessionCtx, stop: stop, binding: binding, backend: backend, logger: logger,
 		limits:  effectiveLimits(binding.Policy.Limits),
 		tools:   newToolGate(binding.Serialized),
 		running: make(map[uint64]*job),

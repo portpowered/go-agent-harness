@@ -73,6 +73,9 @@ type requestInputs struct {
 	turnCapture     bool
 	openImages      ImageOpener
 	delegation      *livedelegation.Policy
+	// taskInstructions are the session instructions without the voice
+	// model's delegation guidance: the delegation backend's task rules.
+	taskInstructions string
 }
 
 func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -115,7 +118,7 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 		// A replay never reaches a live backend; replaying delegations is
 		// PR 6 of gpt-live-provider.md.
 		delegation = delegationPolicy(delegationInputs{
-			loaded: loaded, configDir: request.ConfigDir, voiceProvider: provider, voiceAPIKey: apiKey,
+			loaded: loaded, configDir: request.ConfigDir, voiceProvider: provider, voiceAPIKey: apiKey, voiceBaseURL: baseURL,
 			credentialReference: deps.CredentialReference,
 		})
 	}
@@ -148,7 +151,8 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	replayPlan, requestPrompt, promptPresent := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
 	inputRate, outputRate := replayRates(replayPlan, request, inspection)
 	turnCapture := inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn
-	inputs.instructions = instructions
+	inputs.instructions = withDelegationGuidance(instructions, inputs.provider, inputs.model)
+	inputs.taskInstructions = instructions
 	inputs.requestPrompt = requestPrompt
 	inputs.promptPresent = promptPresent
 	inputs.openingParts = openingParts
@@ -310,7 +314,7 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 	}
 	if inputs.delegation != nil {
 		policy := *inputs.delegation
-		policy.Instructions = inputs.instructions
+		policy.Instructions = inputs.taskInstructions
 		result.Delegation = &policy
 	}
 	appendToolNames(&result, inputs.capabilities)

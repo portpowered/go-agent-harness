@@ -7,7 +7,9 @@ import (
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
 
 // run answers one delegation.
@@ -42,6 +44,15 @@ func (r *run) send(ctx context.Context, kind messages.ContextAppendKind, content
 	}
 }
 
+// observeTool reports a tool event of this delegation to the host.
+func (r *run) observeTool(event livedelegation.ToolEvent) {
+	if r.e.binding.OnTool == nil {
+		return
+	}
+	event.DelegationID = r.value.ID
+	r.e.binding.OnTool(event)
+}
+
 // sendProgress delivers a quiet progress note unless an append failed.
 func (r *run) sendProgress(ctx context.Context, call messages.ToolCall) {
 	if !r.appendFailed.Load() {
@@ -53,7 +64,7 @@ func (r *run) sendProgress(ctx context.Context, call messages.ToolCall) {
 func (r *run) answer(ctx context.Context) string {
 	inferencer, err := r.e.backend.get(ctx)
 	if err != nil {
-		return failureCommentary(err)
+		return r.failure(err)
 	}
 	limits := r.e.limits
 	spent := newBudget(inferencer, limits)
@@ -61,11 +72,13 @@ func (r *run) answer(ctx context.Context) string {
 	defer stop()
 	loop, err := agentloop.New(r.loopOptions(spent)...)
 	if err != nil {
-		return failureCommentary(fmt.Errorf("create delegation loop: %w", err))
+		return r.failure(fmt.Errorf("create delegation loop: %w", err))
 	}
 	result, execErr := loop.Execute(runCtx, agentloop.NewExecuteInput(taskText(r.value, r.history())))
 	final := result.FinalText()
 	if exceeded := spent.exceeded(); exceeded != nil {
+		r.e.logger.Warn("live delegation exceeded its budget",
+			logging.Field{Key: "delegation_id", Value: r.value.ID}, logging.Field{Key: "error", Value: exceeded})
 		return budgetCommentary(exceeded, final.Text)
 	}
 	switch final.Status {
@@ -74,9 +87,19 @@ func (r *run) answer(ctx context.Context) string {
 	case agentloop.FinalTextEmptySuccess, agentloop.FinalTextNoFinalMessage:
 		return emptyCommentary
 	case agentloop.FinalTextCanceled, agentloop.FinalTextFailed:
-		return failureCommentary(firstError(final.Err, execErr))
+		return r.failure(firstError(final.Err, execErr))
 	}
-	return failureCommentary(firstError(final.Err, execErr))
+	return r.failure(firstError(final.Err, execErr))
+}
+
+// failure logs the detail of a failed delegation and returns the generic
+// commentary GPT-Live speaks.
+func (r *run) failure(err error) string {
+	r.e.logger.Error("live delegation failed",
+		logging.Field{Key: "delegation_id", Value: r.value.ID},
+		logging.Field{Key: "category", Value: failureCategory(err)},
+		logging.Field{Key: "error", Value: err})
+	return failureCommentary(err)
 }
 
 func firstError(errs ...error) error {
@@ -107,6 +130,6 @@ func (r *run) loopOptions(spent *budget) []agentloop.Option {
 	if r.e.binding.Tools == nil || len(definitions) == 0 {
 		return append(options, agentloop.WithToolExecutionDisabled())
 	}
-	tools := delegationTools{inner: r.e.binding.Tools, gate: r.e.tools, progress: r.sendProgress}
+	tools := delegationTools{inner: r.e.binding.Tools, gate: r.e.tools, progress: r.sendProgress, observe: r.observeTool}
 	return append(options, agentloop.WithToolExecutor(tools), agentloop.WithTools(definitions))
 }

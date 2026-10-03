@@ -24,6 +24,16 @@
   them, the session end cancels and joins all of them, and
   `Executor.Cancel` is there for task revisions. Delegations never become
   loop tool calls and never request a response.
+- Delegation failures are spoken only as a category; the detail goes to
+  `livedelegation/wire.Dependencies.Logger`. A backend whose build failed is
+  rebuilt at the next delegation with the credential resolved the first time.
+  `livedelegation.Backend.Unconfigured` lets a host report a backend it cannot
+  run (for example, no text model); each delegation is then answered with a
+  spoken failure and the reason is logged.
+- `session.LiveEventDelegationToolCall` and
+  `session.LiveEventDelegationToolResult`: each session tool call a
+  delegation makes is published on the live event stream and to the
+  invocation recorder, tagged with the delegation id (`ItemID`).
 - `session.LiveRequest.Delegation` (`*livedelegation.Policy`) and
   `wire.LiveDependencies.Delegations`: the backend and limits of one session
   and the executor service of the live session owner. Without both, a

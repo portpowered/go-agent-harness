@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	looplogging "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	livedelegationwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation/wire"
@@ -48,9 +49,10 @@ func provideLiveService(
 // provideLiveDelegationService runs GPT-Live client delegations on a
 // backend built by the provider service. A backend's API key travels as a
 // one-time credential reference, resolved like the voice session's.
-func provideLiveDelegationService(providerService runtimeproviders.Service, clockSource Clock, credentialVault *liveCredentialVault) livedelegation.Service {
+func provideLiveDelegationService(providerService runtimeproviders.Service, clockSource Clock, credentialVault *liveCredentialVault, logger looplogging.Logger) livedelegation.Service {
 	return livedelegationwire.NewService(livedelegationwire.Dependencies{
 		Providers: providerService,
+		Logger:    logger,
 		Credentials: func(_ context.Context, reference string) (string, error) {
 			return resolveLiveCredential(reference, credentialVault)
 		},

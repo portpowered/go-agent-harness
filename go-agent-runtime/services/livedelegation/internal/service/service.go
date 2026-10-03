@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -18,14 +19,19 @@ type Service struct {
 	providers   providers.Service
 	credentials livedelegation.CredentialResolver
 	scheduler   platformclock.Scheduler
+	logger      logging.Logger
 }
 
 var _ livedelegation.Service = (*Service)(nil)
 
 // New returns a service. scheduler is the default time domain for bindings
-// that carry none; nil selects the host clock.
-func New(providerService providers.Service, credentials livedelegation.CredentialResolver, scheduler platformclock.Scheduler) *Service {
-	return &Service{providers: providerService, credentials: credentials, scheduler: scheduler}
+// that carry none; nil selects the host clock. logger receives failure
+// detail; nil discards it.
+func New(providerService providers.Service, credentials livedelegation.CredentialResolver, scheduler platformclock.Scheduler, logger logging.Logger) *Service {
+	if logger == nil {
+		logger = logging.DummyLogger()
+	}
+	return &Service{providers: providerService, credentials: credentials, scheduler: scheduler, logger: logger}
 }
 
 // Open starts an executor for one session. Nothing is built or dialed until
@@ -44,5 +50,5 @@ func (s *Service) Open(ctx context.Context, binding livedelegation.Binding) (liv
 		binding.Scheduler = platformclock.Real{}
 	}
 	backend := &backendBuilder{providers: s.providers, credentials: s.credentials, backend: binding.Policy.Backend}
-	return newExecutor(ctx, binding, backend), nil
+	return newExecutor(ctx, binding, backend, s.logger), nil
 }

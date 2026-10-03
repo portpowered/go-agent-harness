@@ -133,7 +133,7 @@ func open(t *testing.T, ctx context.Context, b *backend, binding livedelegation.
 	if binding.Policy.Backend.Provider == "" {
 		binding.Policy.Backend.Provider = "unit-backend"
 	}
-	executor, err := New(b, credentials, nil).Open(ctx, binding)
+	executor, err := New(b, credentials, nil, nil).Open(ctx, binding)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -145,7 +145,7 @@ func delegation(id, task string) messages.DelegationCreatedValue {
 }
 
 func TestOpenRequiresAContextAndAnAppendPort(t *testing.T) {
-	service := New(&backend{}, nil, nil)
+	service := New(&backend{}, nil, nil, nil)
 	//nolint:staticcheck // A nil context is the input under test.
 	if _, err := service.Open(nil, livedelegation.Binding{Append: newAppends().append}); err == nil {
 		t.Fatal("Open(nil context) succeeded")
@@ -260,20 +260,23 @@ func TestBackendIsBuiltOnceWithTheResolvedCredential(t *testing.T) {
 	})
 }
 
+// An unavailable backend is answered with a generic failure; the detail,
+// which can name a host credential reference, is logged and never spoken.
 func TestUnavailableBackendIsAnsweredAsAFailure(t *testing.T) {
 	tests := []struct {
-		name    string
-		backend livedelegation.Backend
-		want    string
+		name       string
+		backend    livedelegation.Backend
+		wantLogged string
 	}{
-		{name: "no provider", backend: livedelegation.Backend{Provider: " "}, want: livedelegation.ErrBackendUnavailable.Error()},
-		{name: "no resolver", backend: livedelegation.Backend{Provider: "unit-backend", CredentialReference: "ref"}, want: `credential "ref" is unavailable`},
+		{name: "no provider", backend: livedelegation.Backend{Provider: " "}, wantLogged: livedelegation.ErrBackendUnavailable.Error()},
+		{name: "no resolver", backend: livedelegation.Backend{Provider: "unit-backend", CredentialReference: "cli-credential:7"}, wantLogged: "no resolver for the backend credential"},
+		{name: "unconfigured", backend: livedelegation.Backend{Provider: "openai", Unconfigured: "set session.delegation.model"}, wantLogged: "set session.delegation.model"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				sent := newAppends()
-				executor, err := New(&backend{}, nil, nil).Open(t.Context(), livedelegation.Binding{Append: sent.append, Policy: livedelegation.Policy{Backend: tt.backend}})
+				sent, logs := newAppends(), &recordingLogger{}
+				executor, err := New(&backend{}, nil, nil, logs).Open(t.Context(), livedelegation.Binding{Append: sent.append, Policy: livedelegation.Policy{Backend: tt.backend}})
 				if err != nil {
 					t.Fatalf("Open: %v", err)
 				}
@@ -284,8 +287,12 @@ func TestUnavailableBackendIsAnsweredAsAFailure(t *testing.T) {
 				if err := executor.Close(); err != nil {
 					t.Fatalf("Close: %v", err)
 				}
-				if got := sent.commentary()["del"]; !strings.Contains(got, tt.want) || !strings.HasPrefix(got, "The delegated task failed") {
-					t.Fatalf("answer = %q, want a failure naming %q", got, tt.want)
+				want := "The delegated task failed: the delegation backend is not available. Tell the user it did not work and offer to try again."
+				if got := sent.commentary()["del"]; got != want {
+					t.Fatalf("answer = %q, want %q", got, want)
+				}
+				if logged := logs.text(); !strings.Contains(logged, tt.wantLogged) || !strings.Contains(logged, "delegation_id=del") {
+					t.Fatalf("log = %q, want the detail %q for del", logged, tt.wantLogged)
 				}
 			})
 		})

@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/livedelegation"
 )
@@ -84,23 +86,88 @@ func TestHistoryKeepsTheRecentConversationBounded(t *testing.T) {
 	}
 }
 
-// A backend the provider service cannot build is answered as a failure.
-func TestBackendBuildFailureIsAnswered(t *testing.T) {
+// A backend the provider service cannot build is answered with a generic
+// failure, the build error is logged, and the next delegation retries the
+// build with the credential resolved the first time: a host reference may be
+// single-use, so it is not resolved again.
+func TestFailedBackendBuildIsRetriedWithTheResolvedCredential(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sent := newAppends()
-		executor := open(t, t.Context(), &backend{buildErr: errors.New("run `yui auth chatgpt`")}, livedelegation.Binding{Append: sent.append}, nil)
-		if err := executor.Submit(delegation("del", "task")); err != nil {
+		vault := map[string]string{"cli-credential:1": "sk-backend"}
+		take := func(_ context.Context, reference string) (string, error) {
+			value, ok := vault[reference]
+			if !ok {
+				return "", errors.New("credential reference " + reference + " is unavailable")
+			}
+			delete(vault, reference)
+			return value, nil
+		}
+		b := &backend{buildErr: errors.New("run `yui auth chatgpt`"), answer: func(context.Context, string, int) []messages.StreamMessage { return text("built") }}
+		sent, logs := newAppends(), &recordingLogger{}
+		executor, err := New(b, take, nil, logs).Open(t.Context(), livedelegation.Binding{
+			Append: sent.append,
+			Policy: livedelegation.Policy{Backend: livedelegation.Backend{Provider: "unit-backend", CredentialReference: "cli-credential:1"}},
+		})
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		if err := executor.Submit(delegation("first", "task one")); err != nil {
 			t.Fatalf("Submit: %v", err)
 		}
 		sent.awaitCommentaries(1)
+		b.mu.Lock()
+		b.buildErr = nil
+		b.mu.Unlock()
+		if err := executor.Submit(delegation("second", "task two")); err != nil {
+			t.Fatalf("Submit: %v", err)
+		}
+		sent.awaitCommentaries(2)
 		if err := executor.Close(); err != nil {
 			t.Fatalf("Close: %v", err)
 		}
-		if got := sent.commentary()["del"]; !strings.Contains(got, "build delegation backend unit-backend: run `yui auth chatgpt`") {
-			t.Fatalf("answer = %q, want the build failure", got)
+		got := sent.commentary()
+		if got["first"] != failureCommentary(errBuildFailed) || strings.Contains(got["first"], "yui auth") {
+			t.Fatalf("first answer = %q, want the generic build failure", got["first"])
+		}
+		if got["second"] != "built" {
+			t.Fatalf("second answer = %q, want the retried backend's result", got["second"])
+		}
+		if len(b.configs) != 2 || b.configs[1].APIKey != "sk-backend" {
+			t.Fatalf("builds = %+v, want a retry with the key resolved once", b.configs)
+		}
+		if !strings.Contains(logs.text(), "run `yui auth chatgpt`") {
+			t.Fatalf("log = %q, want the build error", logs.text())
 		}
 	})
 }
+
+// recordingLogger keeps every log line as "message key=value ...".
+type recordingLogger struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *recordingLogger) record(msg string, fields []logging.Field) {
+	line := msg
+	for _, field := range fields {
+		line += fmt.Sprintf(" %s=%v", field.Key, field.Value)
+	}
+	l.mu.Lock()
+	l.lines = append(l.lines, line)
+	l.mu.Unlock()
+}
+
+func (l *recordingLogger) text() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.lines, "\n")
+}
+
+func (l *recordingLogger) Debug(msg string, fields ...logging.Field) { l.record(msg, fields) }
+func (l *recordingLogger) Info(msg string, fields ...logging.Field)  { l.record(msg, fields) }
+func (l *recordingLogger) Warn(msg string, fields ...logging.Field)  { l.record(msg, fields) }
+func (l *recordingLogger) Error(msg string, fields ...logging.Field) { l.record(msg, fields) }
+func (l *recordingLogger) Fatal(msg string, fields ...logging.Field) { l.record(msg, fields) }
+func (l *recordingLogger) Panic(msg string, fields ...logging.Field) { l.record(msg, fields) }
 
 // rejectingAppends rejects every append and counts the attempts by kind.
 type rejectingAppends struct {
