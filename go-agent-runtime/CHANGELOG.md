@@ -116,12 +116,20 @@
   swapped in between the check and the open can no longer redirect a read or
   a write into `~/.ssh` and the other credential stores under a broad
   `--allow-path`.
-
 - Security: the `--record-dir` evidence recorder redacts the session
-  credentials (raw and JSON-escaped) from every voice-loop `TOOLCALL.*` and
-  tool-result payload before spooling it. Transcript payloads are base64, so
-  the bundle's byte redaction never reached them, and a credential in a
-  voice-loop tool call or result reached the bundle.
+  credentials from every voice-loop `TOOLCALL.START`/`TOOLCALL.END` and
+  tool-result payload, and from recorded event error text, before spooling
+  them. Transcript payloads are base64, so the bundle's byte redaction never
+  reached them, and a credential in a voice-loop tool call or result reached
+  the bundle. With credentials configured, a streamed `TOOLCALL.DELTA` keeps
+  no argument text in the bundle or the trace, since a credential split
+  across two deltas escapes any per-message redaction; `TOOLCALL.END` keeps
+  the whole arguments, redacted.
+- Security: every form go-agent-loop's `transcript.CredentialForms` lists
+  is redacted: raw, JSON-escaped, URL-query-escaped, and base64 (standard
+  and URL, padded and unpadded). The bundle recorder and the trace (its
+  payloads, error text and delegation tool payloads) both redact all of
+  them.
 - Breaking (unreleased API): `livedelegation.Binding.Serialized`, a per-tool
   lock private to the delegations, is replaced by `Binding.ToolLock`, shared
   with the voice loop. Two delegations can no longer drive the browser at

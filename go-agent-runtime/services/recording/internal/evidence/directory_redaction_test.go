@@ -2,7 +2,10 @@ package evidence
 
 import (
 	"bytes"
+	"encoding/base64"
+	"errors"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,17 +16,20 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
-// A session credential in the voice loop's own tool call (its streamed and
-// final arguments), in a tool result, or in a delegation tool call (once
-// whole and once across the 4 KiB cut) never reaches the bundle: not in a
-// file and not in a base64 transcript payload, raw or JSON-escaped. The
-// credential has a character JSON escapes, so both of its forms are covered.
+// A session credential in the voice loop's own tool call (split across two
+// streamed deltas, and whole in the final arguments), in a tool result, or
+// in a delegation tool call (once whole and once across the 4 KiB cut, and
+// in its error text) never reaches the bundle: not in a file and not in a
+// base64 transcript payload, in any form transcript.CredentialForms lists. The
+// credential has characters JSON and URLs escape; the tool result also
+// carries it base64 (standard and URL) and URL-query-escaped.
 func TestDirectoryRecorderRedactsCredentialsFromToolPayloads(t *testing.T) {
 	t.Parallel()
 	const secret = "sk-tool<secret>-0123"
 	r := newEvidenceRecorder(t)
 	r.options.Credentials = []string{secret}
 	arguments := `{"token":"` + secret + `"}`
+	split := len(`{"token":"sk-to`)
 	record := func(direction session.LiveRecordDirection, msg messages.StreamMessage) {
 		t.Helper()
 		if err := r.RecordMessage(t.Context(), session.LiveRecord{Direction: direction, Timestamp: evidenceTime(), Message: msg}); err != nil {
@@ -31,15 +37,19 @@ func TestDirectoryRecorderRedactsCredentialsFromToolPayloads(t *testing.T) {
 		}
 	}
 	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallStart, ToolCallId: "call-1", Value: messages.NewToolCallStartValue("call-1", "lookup")})
-	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ToolCallId: "call-1", Value: messages.NewToolCallDeltaValue(arguments)})
+	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ToolCallId: "call-1", Value: messages.NewToolCallDeltaValue(arguments[:split])})
+	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ToolCallId: "call-1", Value: messages.NewToolCallDeltaValue(arguments[split:])})
 	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ToolCallId: "call-1", Value: messages.NewToolCallEndValue("call-1", "lookup", arguments)})
 	record(session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
-	record(session.LiveRecordClient, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextDeltaValue("key is " + secret)})
+	record(session.LiveRecordClient, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleTool, ToolCallId: "call-1", Value: messages.NewTextDeltaValue(strings.Join([]string{
+		"key is " + secret, base64.StdEncoding.EncodeToString([]byte(secret)), base64.URLEncoding.EncodeToString([]byte(secret)), url.QueryEscape(secret),
+	}, " "))})
 	straddle := strings.Repeat("m", session.LiveDelegationToolPayloadLimit-len(session.LiveDelegationToolTruncated)-4) + secret + " tail"
 	for _, kind := range []session.LiveEventKind{session.LiveEventDelegationToolCall, session.LiveEventDelegationToolResult} {
 		if err := r.RecordEvent(t.Context(), session.LiveEvent{
 			Kind: string(kind), Timestamp: evidenceTime(), ItemID: "del", ToolCallID: "call-2", Text: "lookup",
 			DelegationTool: &session.LiveDelegationTool{Name: "lookup", Arguments: arguments, Result: straddle},
+			Error:          errors.New("backend refused " + secret),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -49,7 +59,7 @@ func TestDirectoryRecorderRedactsCredentialsFromToolPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	leaks := []string{secret, `sk-tool\u003csecret\u003e`, "sk-tool"}
+	leaks := append(transcript.CredentialForms([]string{secret}), "sk-to", "-0123")
 	if toolPayloads := assertBundleOmits(t, r.destination, leaks); toolPayloads == 0 {
 		t.Fatal("the bundle holds no tool payload to check")
 	}

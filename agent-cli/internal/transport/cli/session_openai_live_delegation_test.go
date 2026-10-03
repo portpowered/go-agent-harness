@@ -82,9 +82,11 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 // hold the tool name, the arguments and the result, the result bounded to
 // 4 KiB with a truncation marker and the session key redacted. The key
 // appears twice, the second time across the 4 KiB cut: redaction runs on the
-// whole result before the cut, so not even its first bytes are kept.
+// whole result before the cut, so not even its first bytes are kept. The
+// delegation backend's own credentials, the ChatGPT sign-in's access and
+// refresh tokens, are redacted too.
 func TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult(t *testing.T) {
-	prefix := "order 42: packed; courier key " + delegationCLIKey + "; "
+	prefix := "order 42: packed; courier key " + delegationCLIKey + "; backend " + chatGPTTestToken + " " + delegationCLIRefresh + "; "
 	straddle := session.LiveDelegationToolPayloadLimit - len(session.LiveDelegationToolTruncated) - 4
 	result := prefix + strings.Repeat("m", straddle-len(prefix)) + delegationCLIKey + strings.Repeat(" manifest line", 100)
 	recordDir := filepath.Join(t.TempDir(), "bundle")
@@ -105,7 +107,7 @@ func TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult(t *testi
 		if !strings.Contains(result, "order 42: packed; courier key ") || !strings.Contains(result, "REDACTED") || !strings.Contains(result, "[truncated]") {
 			t.Fatalf("%s delegation tool result = %s, want the redacted result cut with a truncation marker", name, result)
 		}
-		if strings.Contains(call+result, delegationCLIKey[:4]) || strings.Contains(result, "manifest line") {
+		if strings.Contains(call+result, delegationCLIKey[:4]) || strings.Contains(call+result, chatGPTTestToken) || strings.Contains(call+result, delegationCLIRefresh) {
 			t.Fatalf("%s delegation tool records leak the key or exceed the bound:\ncall %s\nresult %s", name, call, result)
 		}
 	}
@@ -118,6 +120,8 @@ const (
 	delegationCLIKey    = "sk-live-cli"
 	delegationCLIID     = "del_cli"
 	defaultLookupResult = "order 42: packed, ships tomorrow"
+	// delegationCLIRefresh is the ChatGPT sign-in's refresh token.
+	delegationCLIRefresh = "chatgpt-refresh-delegation-cli"
 )
 
 // delegationCommandRun is one finished delegation session command.
@@ -152,7 +156,7 @@ func runDelegationSessionCommand(t *testing.T, lookupResult string, extraArgs ..
 		t.Fatalf("write config: %v", err)
 	}
 	if err := chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(configDir)).Save(chatgptauth.Credential{
-		AccessToken: chatGPTTestToken, RefreshToken: "refresh", AccountID: chatGPTTestAccount,
+		AccessToken: chatGPTTestToken, RefreshToken: delegationCLIRefresh, AccountID: chatGPTTestAccount,
 		ExpiresAt: time.Now().Add(time.Hour), LastRefresh: time.Now(),
 	}); err != nil {
 		t.Fatalf("save ChatGPT login: %v", err)

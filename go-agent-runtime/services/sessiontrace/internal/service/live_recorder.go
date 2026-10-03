@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sort"
-	"strings"
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
@@ -23,25 +22,15 @@ func NewLiveRecorder(options sessiontrace.LiveRecorderOptions) session.LiveRecor
 	}
 }
 
-// traceRedactor replaces each credential, longest first, with the trace's
-// redaction marker; nil without credentials.
+// traceRedactor replaces each credential, in every form
+// transcript.CredentialForms lists, with the trace's redaction marker; nil
+// without credentials.
 func traceRedactor(credentials []string) func(string) string {
-	secrets := make([]string, 0, len(credentials))
-	for _, credential := range credentials {
-		if credential != "" {
-			secrets = append(secrets, credential)
-		}
-	}
-	if len(secrets) == 0 {
+	forms := transcript.CredentialForms(credentials)
+	if len(forms) == 0 {
 		return nil
 	}
-	sort.SliceStable(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
-	return func(value string) string {
-		for _, secret := range secrets {
-			value = strings.ReplaceAll(value, secret, traceRedactionMarker)
-		}
-		return value
-	}
+	return func(value string) string { return transcript.RedactCredentialForms(value, forms, traceRedactionMarker) }
 }
 
 type liveRecorder struct {
@@ -105,7 +94,7 @@ func (r *liveRecorder) Finalize(ctx context.Context, runErr error) error {
 }
 
 func (r *liveRecorder) observeMessage(record session.LiveRecord) {
-	payload, marshalErr := json.Marshal(record.Message)
+	payload, marshalErr := json.Marshal(traceMessage(record.Message, r.redact != nil))
 	clean := marshalErr == nil
 	if marshalErr != nil {
 		payload = nil
@@ -247,4 +236,20 @@ func traceErrorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// traceMessage is the message the trace keeps. With credentials to redact, a
+// streamed TOOLCALL.DELTA keeps no argument text: a credential can be split
+// across two deltas where the per-payload redaction never sees it whole,
+// and TOOLCALL.END carries the whole arguments.
+func traceMessage(message messages.StreamMessage, redacting bool) messages.StreamMessage {
+	if !redacting || message.Type != messages.StreamTypeToolCallDelta {
+		return message
+	}
+	if delta, ok := message.Value.(*messages.ToolCallDeltaValue); ok && delta != nil {
+		blanked := *delta
+		blanked.PartialJSON = ""
+		message.Value = &blanked
+	}
+	return message
 }

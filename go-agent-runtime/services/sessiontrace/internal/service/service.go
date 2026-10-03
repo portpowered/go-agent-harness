@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -56,7 +57,7 @@ func (*Service) Prepare(request sessiontrace.Request) (sessiontrace.Prepared, er
 	if err != nil {
 		return nil, err
 	}
-	observer := &traceObserver{trace: trace, credentials: append([]string(nil), request.Credentials...)}
+	observer := &traceObserver{trace: trace, credentials: transcript.CredentialForms(request.Credentials)}
 	runtime := combineObservers(request.RuntimeObserver, observer)
 	return &prepared{
 		path:        path,
@@ -207,7 +208,9 @@ func closeTimeout(timeout time.Duration) time.Duration {
 }
 
 type traceObserver struct {
-	trace       *recording.Trace
+	trace *recording.Trace
+	// credentials are the session credentials in every form
+	// transcript.CredentialForms lists.
 	credentials []string
 }
 

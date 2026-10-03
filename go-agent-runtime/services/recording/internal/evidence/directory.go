@@ -8,7 +8,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"io"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
@@ -153,12 +152,13 @@ func (r *directoryRecorder) RecordMessage(ctx context.Context, record session.Li
 	if record.Timestamp.IsZero() {
 		r.latch(recordingWriteError("observe message clock", errors.New("message timestamp is unavailable")))
 	}
-	payload, err := marshalEvidenceStreamMessage(record.Message)
+	message, redact := redactToolMessage(record.Message, r.options.Credentials)
+	payload, err := marshalEvidenceStreamMessage(message)
 	if err != nil {
 		r.latch(recordingWriteError("encode stream message", err))
 		return nil
 	}
-	payload = redactToolMessage(payload, record.Message, r.options.Credentials)
+	payload = redact(payload)
 	item := directoryEvidenceItem{
 		kind: evidenceMessage, direction: record.Direction, timestamp: record.Timestamp,
 		payload: payload, bytes: int64(len(payload)) * 2,
@@ -221,6 +221,7 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		errorText = event.Error.Error()
 	}
 	event.Error = nil
+	errorText = redactEventError(errorText, r.options.Credentials)
 	event.DelegationTool = redactDelegationTool(event.DelegationTool, r.options.Credentials)
 	payload, err := encodeRuntimeEvent(event, errorText)
 	if err != nil {
@@ -262,53 +263,55 @@ func (r *directoryRecorder) RecordBrowserArtifact(ctx context.Context, artifact 
 }
 
 // redactDelegationTool keeps a delegation tool call's audit payload with the
-// session credentials redacted from the whole arguments and result before
-// they are bounded, as the trace does: transcript payloads are base64, so
-// the bundle's byte redaction cannot reach them.
+// session credentials, in each form transcript.CredentialForms lists, redacted
+// from the whole arguments and result before they are bounded, as the trace
+// does: transcript payloads are base64, so the bundle's byte redaction
+// cannot reach them.
 func redactDelegationTool(tool *session.LiveDelegationTool, credentials []string) *session.LiveDelegationTool {
 	if tool == nil {
 		return nil
 	}
-	forms := credentialForms(credentials)
-	audited := tool.Audited(func(value string) string { return string(redactRecordingBytes([]byte(value), forms)) })
+	forms := transcript.CredentialForms(credentials)
+	audited := tool.Audited(func(value string) string {
+		return transcript.RedactCredentialForms(value, forms, transcript.RecordingRedactionMarker)
+	})
 	return &audited
 }
 
-// redactToolMessage redacts the session credentials from the encoded payload
-// of a tool call (its name and arguments) or a tool result before it is
-// spooled. Like the delegation tool payloads, transcript payloads are base64,
-// out of reach of the bundle's byte redaction. Each credential is replaced
-// raw and in its JSON string form, so one that JSON escapes is redacted too.
-func redactToolMessage(payload []byte, message messages.StreamMessage, credentials []string) []byte {
-	switch {
-	case len(credentials) == 0:
-		return payload
-	case message.Type == messages.StreamTypeToolCallStart || message.Type == messages.StreamTypeToolCallDelta || message.Type == messages.StreamTypeToolCallEnd:
-	case message.Role == messages.RoleTool:
-	default:
-		return payload
+// redactEventError redacts the session credentials from the error text an
+// event is recorded with; it reaches the bundle inside a base64 payload too.
+func redactEventError(errorText string, credentials []string) string {
+	if errorText == "" || len(credentials) == 0 {
+		return errorText
 	}
-	return redactRecordingBytes(payload, credentialForms(credentials))
+	return transcript.RedactCredentialForms(errorText, transcript.CredentialForms(credentials), transcript.RecordingRedactionMarker)
 }
 
-// credentialForms lists each credential raw and in its JSON string form
-// when that differs, longest first, so a credential that contains another
-// is never left partly visible.
-func credentialForms(credentials []string) []string {
-	forms := make([]string, 0, 2*len(credentials))
-	for _, credential := range credentials {
-		if credential == "" {
-			continue
+// redactToolMessage redacts the session credentials, in each form
+// transcript.CredentialForms lists, from the encoded payload of a tool call
+// (its name and arguments) or a tool result before it is spooled: transcript
+// payloads are base64, out of reach of the bundle's byte redaction. A
+// streamed TOOLCALL.DELTA keeps no argument text at all, because a
+// credential can be split across two deltas where no per-message redaction
+// sees it whole; TOOLCALL.END carries the whole arguments, redacted.
+func redactToolMessage(message messages.StreamMessage, credentials []string) (messages.StreamMessage, func([]byte) []byte) {
+	keep := func(payload []byte) []byte { return payload }
+	switch {
+	case len(credentials) == 0:
+		return message, keep
+	case message.Type == messages.StreamTypeToolCallDelta:
+		if delta, ok := message.Value.(*messages.ToolCallDeltaValue); ok && delta != nil {
+			blanked := *delta
+			blanked.PartialJSON = ""
+			message.Value = &blanked
 		}
-		forms = append(forms, credential)
-		if encoded, err := json.Marshal(credential); err == nil {
-			if escaped := string(encoded[1 : len(encoded)-1]); escaped != credential {
-				forms = append(forms, escaped)
-			}
-		}
+	case message.Type == messages.StreamTypeToolCallStart || message.Type == messages.StreamTypeToolCallEnd:
+	case message.Role == messages.RoleTool:
+	default:
+		return message, keep
 	}
-	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) })
-	return forms
+	forms := transcript.CredentialForms(credentials)
+	return message, func(payload []byte) []byte { return redactRecordingBytes(payload, forms) }
 }
 
 func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {

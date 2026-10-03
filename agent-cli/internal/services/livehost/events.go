@@ -53,8 +53,14 @@ func chatGPTAuthPath(provider, model, configDir string) string {
 	return config.ChatGPTAuthStorePath(configDir)
 }
 
-// CredentialValues resolves the raw provider credential a live invocation
-// uses, so evidence and rendered failures can redact it.
+// CredentialValues resolves every secret a live invocation can use, so the
+// recording bundle, the trace and rendered failures redact them: the voice
+// provider's key, every API key the configuration holds (any of them can
+// back a delegation, whose backend defaults to model.provider), and the
+// ChatGPT sign-in's tokens (the gpt-live-1-codex route and an
+// openai-chatgpt delegation backend sign with them). The tokens are read
+// when the session starts; a token refreshed during the session is not
+// known here.
 func CredentialValues(request serviceSession.Request) ([]string, error) {
 	if request.LoadedConfig == nil {
 		return nil, errors.New("live session configuration is unavailable")
@@ -64,10 +70,25 @@ func CredentialValues(request serviceSession.Request) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(apiKey) == "" {
+	values := append([]string{apiKey}, request.LoadedConfig.ConfiguredAPIKeys()...)
+	values = append(values, effective.ConfiguredAPIKeys()...)
+	values = append(values, config.ChatGPTLoginSecrets(request.ConfigDir)...)
+	seen := make(map[string]struct{}, len(values))
+	secrets := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		secrets = append(secrets, value)
+	}
+	if len(secrets) == 0 {
 		return nil, nil
 	}
-	return []string{apiKey}, nil
+	return secrets, nil
 }
 
 func selectProvider(cfg config.Config, request serviceSession.Request, inspection *runtimeReplay.CaptureInspection) (string, string) {

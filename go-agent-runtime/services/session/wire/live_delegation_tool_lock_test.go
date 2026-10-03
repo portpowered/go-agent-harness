@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -24,6 +25,14 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		provider := newRecordingLiveSession()
 		writeProvider(t, provider, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("provider-session", "audio_inference")})
 		voiceTool := &releasedTool{started: make(chan struct{}), release: make(chan struct{})}
+		releaseVoice := sync.OnceFunc(func() { close(voiceTool.release) })
+		calls := &lockCalls{}
+		// A failed assertion must not strand the bubble: the cleanup releases
+		// the voice call and every acquisition, and ends those still waiting.
+		t.Cleanup(func() {
+			releaseVoice()
+			calls.releaseAll()
+		})
 		delegations := &bindingCapture{opened: make(chan livedelegation.Binding, 1)}
 		service := NewLiveService(LiveDependencies{
 			InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
@@ -44,6 +53,11 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("OpenLive: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := handle.Close(); err != nil {
+				t.Logf("close live handle: %v", err)
+			}
+		})
 		if err := handle.Start(t.Context()); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
@@ -59,10 +73,10 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		writeProvider(t, provider, toolCallResponse("call_voice", "webmcp_open_tab")...)
 		<-voiceTool.started
 
-		browser := acquireAsync(t, binding.ToolLock, "webmcp_list_tabs")
-		page := acquireAsync(t, binding.ToolLock, pageTool)
-		lookup := acquireAsync(t, binding.ToolLock, "lookup_order")
-		write := acquireAsync(t, binding.ToolLock, "write_file")
+		browser := calls.acquire(binding.ToolLock, "webmcp_list_tabs")
+		page := calls.acquire(binding.ToolLock, pageTool)
+		lookup := calls.acquire(binding.ToolLock, "lookup_order")
+		write := calls.acquire(binding.ToolLock, "write_file")
 		synctest.Wait()
 		if browser.held() || page.held() {
 			t.Fatalf("while the voice loop's webmcp_open_tab ran, webmcp_list_tabs held=%t, %s held=%t; want both waiting", browser.held(), pageTool, page.held())
@@ -70,7 +84,7 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		if !lookup.held() || !write.held() {
 			t.Fatalf("ungrouped lookup held=%t, filesystem write held=%t; want both admitted at once", lookup.held(), write.held())
 		}
-		edit := acquireAsync(t, binding.ToolLock, "edit_file")
+		edit := calls.acquire(binding.ToolLock, "edit_file")
 		synctest.Wait()
 		if edit.held() {
 			t.Fatal("a second delegation's edit_file ran during another's write_file")
@@ -81,7 +95,7 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 			t.Fatal("edit_file still waits after write_file ended")
 		}
 
-		close(voiceTool.release)
+		releaseVoice()
 		synctest.Wait()
 		if browser.held() == page.held() {
 			t.Fatalf("after the voice loop's call: webmcp_list_tabs held=%t, %s held=%t; want exactly one browser call admitted", browser.held(), pageTool, page.held())
@@ -95,11 +109,9 @@ func TestDelegationsAndTheVoiceLoopShareToolResourceGroupLocks(t *testing.T) {
 		if !second.held() {
 			t.Fatal("the second browser call still waits after the first ended")
 		}
-		for _, call := range []*heldLock{second, lookup, edit} {
-			call.release()
-		}
-		if err := handle.Close(); err != nil {
-			t.Fatalf("Close: %v", err)
+		calls.releaseAll()
+		if err := calls.err(); err != nil {
+			t.Fatal(err)
 		}
 	})
 }
@@ -130,9 +142,11 @@ func (idleExecutor) Close() error                                 { return nil }
 
 // heldLock is one asynchronous ToolLock acquisition.
 type heldLock struct {
-	mu      sync.Mutex
-	done    bool
-	release func()
+	mu       sync.Mutex
+	done     bool
+	failure  error
+	release  func()
+	released chan struct{}
 }
 
 func (h *heldLock) held() bool {
@@ -141,22 +155,56 @@ func (h *heldLock) held() bool {
 	return h.done
 }
 
-func acquireAsync(t *testing.T, lock livedelegation.ToolLock, name string) *heldLock {
-	t.Helper()
-	call := &heldLock{}
-	released := make(chan struct{})
-	call.release = sync.OnceFunc(func() { close(released) })
+// lockCalls owns the test's acquisitions. Its goroutines never touch the
+// test: a failed acquisition is kept and reported by err, and releaseAll
+// ends every acquisition, a waiting one by cancelling its context.
+type lockCalls struct {
+	mu     sync.Mutex
+	calls  []*heldLock
+	cancel []context.CancelFunc
+}
+
+func (c *lockCalls) acquire(lock livedelegation.ToolLock, name string) *heldLock {
+	ctx, cancel := context.WithCancel(context.Background())
+	call := &heldLock{released: make(chan struct{})}
+	call.release = sync.OnceFunc(func() { close(call.released) })
+	c.mu.Lock()
+	c.calls, c.cancel = append(c.calls, call), append(c.cancel, cancel)
+	c.mu.Unlock()
 	go func() {
-		unlock, err := lock(t.Context(), name)
+		unlock, err := lock(ctx, name)
+		call.mu.Lock()
+		call.done, call.failure = err == nil, err
+		call.mu.Unlock()
 		if err != nil {
-			t.Errorf("acquire %s: %v", name, err)
 			return
 		}
-		call.mu.Lock()
-		call.done = true
-		call.mu.Unlock()
-		<-released
+		<-call.released
 		unlock()
 	}()
 	return call
+}
+
+func (c *lockCalls) releaseAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for index, call := range c.calls {
+		call.release()
+		c.cancel[index]()
+	}
+}
+
+// err reports the first acquisition that failed.
+func (c *lockCalls) err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, call := range c.calls {
+		call.mu.Lock()
+		failure := call.failure
+		call.mu.Unlock()
+		if failure != nil && !errors.Is(failure, context.Canceled) {
+			return failure
+		}
+	}
+	return nil
 }

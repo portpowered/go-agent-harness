@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- `transcript.CredentialForms` and `transcript.RedactCredentialForms`: the
+  forms a credential can take in encoded evidence (raw, JSON-escaped,
+  URL-query-escaped, and base64 in the standard and URL alphabets, padded
+  and unpadded), longest first, and their replacement with a marker. The
+  runtime's recording bundle and session trace redact tool payloads with
+  them before encoding.
+
 ### Removed
 
 Redundant alias forwarders were deleted. Each one has a direct replacement

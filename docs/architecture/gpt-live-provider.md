@@ -1291,12 +1291,27 @@ above):
   `TOOLCALL.*` messages, so nothing counts them as provider tool calls that
   owe a result.
 - **Voice-loop tool payloads in the bundle.** The `--record-dir` recorder
-  also redacts the session's credentials, raw and JSON-escaped, from the
-  encoded payload of every `TOOLCALL.*` message and every tool-role message
-  (the voice loop's tool arguments and results) before spooling it.
-  Transcript payloads are base64, so the bundle's byte redaction never
-  reached them; before this, a credential in a voice-loop tool call or
-  result was written to the bundle. The tool
+  also redacts the session's credentials from the encoded payload of every
+  `TOOLCALL.START`/`TOOLCALL.END` message and every tool-role message (the
+  voice loop's tool arguments and results), and from each event's error
+  text, before spooling it. Transcript payloads are base64, so the bundle's
+  byte redaction never reached them; before this, a credential in a
+  voice-loop tool call or result was written to the bundle. A streamed
+  `TOOLCALL.DELTA` keeps no argument text in the bundle or the trace while
+  credentials are configured: openai and grok stream arguments in chunks,
+  and a credential split across two deltas escapes a per-message
+  redaction. `TOOLCALL.END` keeps the whole arguments, redacted.
+- **Redacted forms and credentials.** Every recorder redacts each credential
+  in each form `transcript.CredentialForms` lists: raw, JSON-escaped,
+  URL-query-escaped and base64 (standard and URL alphabets, padded and
+  unpadded). The CLI's credential list (`livehost.CredentialValues`, fed to
+  the bundle, the trace and rendered failures) holds the voice key, every
+  API key the configuration holds (any of them can back a delegation, the
+  delegation backend's own key included) and the ChatGPT sign-in's access,
+  refresh and ID tokens (the `gpt-live-1-codex` route and an
+  `openai-chatgpt` delegation backend sign with them). The tokens are read
+  at session start, so a token refreshed during the session is not
+  redacted. The tool
   executor's own diagnostics (interactive timeouts and failures) are emitted
   as for any session tool call, because it is the same executor.
 - **Progress.** Before each tool call the worker sends a `thinking` append
