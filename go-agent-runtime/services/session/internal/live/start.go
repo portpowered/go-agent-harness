@@ -106,16 +106,22 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		options = append(options, agentloop.WithToolExecutionDisabled())
 		return agentloop.New(options...)
 	}
-	if h.providerLivenessEnabled() {
-		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
-	}
 	h.mu.Lock()
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
 	var toolPolicy tools.InteractiveToolPolicy
 	if h.request.Capabilities != nil {
 		toolPolicy = h.request.Capabilities.ToolPolicy
 	}
+	if h.delegationService != nil && h.request.Delegation != nil {
+		// Delegations share the session's tools with the voice loop: both
+		// take the same resource-group locks.
+		h.toolLocks = newToolLocks(toolPolicy)
+		toolExecutor = lockedToolExecutor{inner: toolExecutor, locks: h.toolLocks}
+	}
 	h.mu.Unlock()
+	if h.providerLivenessEnabled() {
+		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
+	}
 	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
 	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn, observe: h.observeExecutedToolCall}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))

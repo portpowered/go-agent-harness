@@ -232,7 +232,9 @@ func (o *traceObserver) ObserveSessionRuntime(observation sessiontrace.RuntimeOb
 
 func runtimePayloadNeedsRedaction(kind sessiontrace.SessionRuntimeObservationKind) bool {
 	switch kind {
-	case runtimeObservationKindToolCall, runtimeObservationKindToolResult, "provider_wire_send", "provider_wire_receive":
+	case runtimeObservationKindToolCall, runtimeObservationKindToolResult, "provider_wire_send", "provider_wire_receive",
+		sessiontrace.SessionRuntimeObservationKind(session.LiveEventDelegationToolCall),
+		sessiontrace.SessionRuntimeObservationKind(session.LiveEventDelegationToolResult):
 		return true
 	case sessiontrace.SessionRuntimeObservationAudioOutput,
 		sessiontrace.SessionRuntimeObservationAudioInput,

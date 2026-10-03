@@ -45,6 +45,11 @@ type Sideband struct {
 	closeOnce sync.Once
 	closeErr  error
 	closed    atomic.Bool
+	// aborted holds the cause Abort was given; abortOnce drops the
+	// connection once.
+	aborted   atomic.Pointer[error]
+	abortOnce sync.Once
+	abortErr  error
 }
 
 func newSideband(conn *websocket.Conn, writeTimeout time.Duration) *Sideband {
@@ -108,6 +113,9 @@ func (s *Sideband) write(eventType string, frame []byte, timeout time.Duration) 
 func (s *Sideband) Receive() (quicksilver.Event, error) {
 	messageType, frame, err := s.conn.ReadMessage()
 	if err != nil {
+		if cause := s.aborted.Load(); cause != nil {
+			return nil, fmt.Errorf("codexrtc: sideband aborted: %w", *cause)
+		}
 		if s.closed.Load() || websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 			return nil, fmt.Errorf("%w: %w", ErrSidebandClosed, err)
 		}
@@ -117,6 +125,26 @@ func (s *Sideband) Receive() (quicksilver.Event, error) {
 		return nil, fmt.Errorf("%w: binary sideband frame", quicksilver.ErrMalformedEvent)
 	}
 	return quicksilver.DecodeServerEvent(frame)
+}
+
+// Abort drops the connection as a lost transport, without the close
+// handshake: a blocked Receive returns an error wrapping cause, never
+// ErrSidebandClosed, so its reader treats it as a loss and reconnects. It is
+// for a sideband whose write side broke while its read side stays healthy
+// (gorilla fails every write after the first failure, but reads go on). It
+// is idempotent and leaves Close to release the rest.
+func (s *Sideband) Abort(cause error) error {
+	s.abortOnce.Do(func() {
+		s.aborted.Store(&cause)
+		// Expire the write deadline first so a writer still stuck returns
+		// and a TLS close alert cannot wait on it.
+		netConn := s.conn.NetConn()
+		err := errors.Join(netConn.SetWriteDeadline(time.Now()), netConn.Close())
+		if err != nil && !errors.Is(err, net.ErrClosed) {
+			s.abortErr = fmt.Errorf("codexrtc: abort sideband: %w", err)
+		}
+	})
+	return s.abortErr
 }
 
 // Close ends the sideband. It first expires the write deadline so a Send
@@ -129,6 +157,9 @@ func (s *Sideband) Close() error {
 	s.closeOnce.Do(func() {
 		s.closed.Store(true)
 		unstickErr := s.conn.NetConn().SetWriteDeadline(time.Now())
+		if errors.Is(unstickErr, net.ErrClosed) {
+			unstickErr = nil // Abort already dropped the connection
+		}
 		frameErr := s.sendCloseFrames()
 		if peerGone(frameErr) {
 			frameErr = nil

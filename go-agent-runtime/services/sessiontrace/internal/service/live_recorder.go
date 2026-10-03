@@ -148,6 +148,13 @@ func (r *liveRecorder) observeAudio(record session.LiveAudioRecord) error {
 }
 
 func (r *liveRecorder) observeEvent(event session.LiveEvent) {
+	// A delegation tool event names its tool and carries the bounded
+	// arguments and result; the trace observer redacts them as it redacts
+	// tool_call and tool_result payloads.
+	var tool session.LiveDelegationTool
+	if event.DelegationTool != nil {
+		tool = *event.DelegationTool
+	}
 	payload, marshalErr := json.Marshal(struct {
 		Sequence      uint64 `json:"sequence"`
 		Kind          string `json:"kind"`
@@ -156,10 +163,16 @@ func (r *liveRecorder) observeEvent(event session.LiveEvent) {
 		ResponseID    string `json:"response_id,omitempty"`
 		ItemID        string `json:"item_id,omitempty"`
 		ToolCallID    string `json:"tool_call_id,omitempty"`
+		ToolName      string `json:"tool_name,omitempty"`
+		ToolArguments string `json:"tool_arguments,omitempty"`
+		ToolResult    string `json:"tool_result,omitempty"`
 		State         string `json:"state,omitempty"`
 		Reason        string `json:"reason,omitempty"`
 		Dropped       uint64 `json:"dropped,omitempty"`
-	}{event.Sequence, event.Kind, event.SessionID, event.ParticipantID, event.ResponseID, event.ItemID, event.ToolCallID, event.State, event.Reason, event.Dropped})
+	}{
+		event.Sequence, event.Kind, event.SessionID, event.ParticipantID, event.ResponseID, event.ItemID, event.ToolCallID,
+		tool.Name, tool.Arguments, tool.Result, event.State, event.Reason, event.Dropped,
+	})
 	if event.Kind == string(session.LiveEventTerminal) {
 		return
 	}

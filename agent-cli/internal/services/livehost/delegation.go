@@ -44,7 +44,7 @@ func delegationPolicy(in delegationInputs) *livedelegation.Policy {
 	if provider == "" {
 		provider = defaultDelegationProvider(in)
 	}
-	backend := delegationBackend(in, provider)
+	backend, apiKey := delegationBackend(in, provider)
 	if model := strings.TrimSpace(settings.Model); model != "" {
 		backend.Model = model
 	}
@@ -53,6 +53,11 @@ func delegationPolicy(in delegationInputs) *livedelegation.Policy {
 		// from the provider block was dropped, so name the setting to fix.
 		backend.Unconfigured = "no text model for delegation provider " + provider +
 			": set session.delegation.model (model." + strings.ReplaceAll(provider, "-", "_") + ".model is unset or a voice model)"
+	}
+	// An unconfigured backend never runs, so its key never enters the
+	// credential vault.
+	if apiKey != "" && backend.Unconfigured == "" && in.credentialReference != nil {
+		backend.CredentialReference = in.credentialReference(apiKey)
 	}
 	return &livedelegation.Policy{
 		Backend: backend,
@@ -86,9 +91,10 @@ func chatGPTLoginExists(configDir string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// delegationBackend fills the provider's model, endpoint and credential from
-// its configuration block.
-func delegationBackend(in delegationInputs, provider string) livedelegation.Backend {
+// delegationBackend fills the provider's model and endpoint from its
+// configuration block and returns the raw key the backend would sign with.
+// The caller registers the key only for a backend that can run.
+func delegationBackend(in delegationInputs, provider string) (livedelegation.Backend, string) {
 	backend := livedelegation.Backend{Provider: provider}
 	model := in.loaded.Model
 	var block *config.OpenAIConfig
@@ -98,7 +104,7 @@ func delegationBackend(in delegationInputs, provider string) livedelegation.Back
 			backend.Model, backend.BaseURL = model.OpenAIChatGPT.Model, model.OpenAIChatGPT.BaseURL
 		}
 		backend.ChatGPTAuthPath = config.ChatGPTAuthStorePath(in.configDir)
-		return backend
+		return backend, ""
 	case config.ProviderOpenAI:
 		block = model.OpenAI
 	case config.ProviderOpenRouter:
@@ -118,10 +124,7 @@ func delegationBackend(in delegationInputs, provider string) livedelegation.Back
 		// key issued for a custom voice endpoint never goes anywhere else.
 		apiKey = in.voiceAPIKey
 	}
-	if apiKey != "" && in.credentialReference != nil {
-		backend.CredentialReference = in.credentialReference(apiKey)
-	}
-	return backend
+	return backend, apiKey
 }
 
 // isVoiceModel reports a Realtime or GPT-Live model, which cannot serve a
@@ -149,11 +152,17 @@ func sameOpenAIEndpoint(a, b string) bool {
 
 // delegationGuidance tells a GPT-Live voice model how delegated work comes
 // back (gpt-live-provider.md 1.10.1: results are appended to its context
-// tagged with the delegation, and it must not guess while it waits).
+// tagged with the delegation, and it must not guess while it waits). The
+// delegate-once and never-mention rules are OpenClaw's
+// (extensions/openai/realtime-quicksilver-instructions.ts): a model that
+// re-delegates a receipt or a result loops on its own answers.
 const delegationGuidance = "## Delegated work\n" +
 	"When you delegate a request, tell the user briefly that you are working on it and keep the conversation going. " +
 	"Do not guess the result while waiting. The result arrives later as context for that delegation: " +
-	"deliver it in your own words, and if it reports a failure, say so and offer to try again."
+	"deliver it in your own words, and if it reports a failure, say so and offer to try again. " +
+	"Delegate each user request once and wait for its result. New user follow-ups, corrections, and explicit retries are new requests. " +
+	"Receipts and backend results are not user requests: do not delegate them, and do not repeat the original request when they arrive. " +
+	"Never mention the channel or the delegation."
 
 // codexChannelGuidance describes the gpt-live-1-codex context channels, as
 // OpenClaw does: commentary is silent background and speakable is the answer.

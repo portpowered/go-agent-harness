@@ -25,17 +25,19 @@ import (
 // lookupOrderTool is the session tool the delegation tests' backend calls.
 const lookupOrderTool = "lookup_order"
 
-// recordingLookupTool is the session's lookup_order tool.
+// recordingLookupTool is the session's lookup_order tool; it answers
+// content.
 type recordingLookupTool struct {
-	mu    sync.Mutex
-	calls []messages.ToolCall
+	content string
+	mu      sync.Mutex
+	calls   []messages.ToolCall
 }
 
 func (r *recordingLookupTool) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, call)
 	r.mu.Unlock()
-	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "order 42: packed, ships tomorrow"}, nil
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: r.content}, nil
 }
 
 func (r *recordingLookupTool) snapshot() []messages.ToolCall {
@@ -53,10 +55,79 @@ func (r *recordingLookupTool) snapshot() []messages.ToolCall {
 // append for that delegation before it speaks. It runs on the host clock
 // like the other composed CLI tests, but nothing waits on a timer.
 func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) {
-	const (
-		apiKey       = "sk-live-cli"
-		delegationID = "del_cli"
-	)
+	run := runDelegationSessionCommand(t, defaultLookupResult)
+
+	if calls := run.tool.snapshot(); len(calls) != 1 || calls[0].Name != lookupOrderTool || calls[0].Arguments != `{"order":"42"}` {
+		t.Fatalf("tool calls = %+v, want one lookup_order for order 42", calls)
+	}
+	var commentary []live.CommentaryAppend
+	for _, event := range run.fake.ClientEvents() {
+		if appended, ok := event.(live.CommentaryAppend); ok {
+			commentary = append(commentary, appended)
+		}
+	}
+	if len(commentary) != 1 || commentary[0].DelegationID == nil || *commentary[0].DelegationID != delegationCLIID || commentary[0].Content != "Order 42 ships tomorrow." {
+		t.Fatalf("commentary appends = %+v, want the backend's answer for %s", commentary, delegationCLIID)
+	}
+	assertBackendUsedTheLogin(t, run.backend, chatGPTTestToken)
+	if errs := run.fake.Errors(); len(errs) != 0 {
+		t.Fatalf("fake GPT-Live errors: %v", errs)
+	}
+}
+
+// TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult runs
+// the same delegation with --record-dir. The delegation's tool call is
+// audited like the voice loop's: the recording bundle and the trace both
+// hold the tool name, the arguments and the result, the result bounded to
+// 4 KiB with a truncation marker and the session key redacted.
+func TestSessionCommandRecordsDelegationToolCallsWithArgumentsAndResult(t *testing.T) {
+	result := "order 42: packed; courier key " + delegationCLIKey + "; " + strings.Repeat("manifest line ", 600)
+	recordDir := filepath.Join(t.TempDir(), "bundle")
+	run := runDelegationSessionCommand(t, result, "--record-dir", recordDir)
+
+	bundle, trace := readDelegationEvidence(t, recordDir)
+	for name, records := range map[string][]string{"bundle": bundle, "trace": trace} {
+		call, result := delegationToolRecord(records, "delegation_tool_call"), delegationToolRecord(records, "delegation_tool_result")
+		if call == "" || result == "" {
+			t.Fatalf("%s has no delegation tool call and result; records:\n%s", name, strings.Join(records, "\n"))
+		}
+		for _, want := range []string{lookupOrderTool, `{\"order\":\"42\"}`, delegationCLIID} {
+			if !strings.Contains(call, want) || !strings.Contains(result, want) {
+				t.Fatalf("%s delegation tool records lack %q:\ncall %s\nresult %s", name, want, call, result)
+			}
+		}
+		// The bundle and the trace each use their own redaction marker.
+		if !strings.Contains(result, "order 42: packed; courier key ") || !strings.Contains(result, "REDACTED") || !strings.Contains(result, "[truncated]") {
+			t.Fatalf("%s delegation tool result = %s, want the redacted result cut with a truncation marker", name, result)
+		}
+		if strings.Contains(call+result, delegationCLIKey) || strings.Count(result, "manifest line") > 4096/len("manifest line ") {
+			t.Fatalf("%s delegation tool records leak the key or exceed the bound:\ncall %s\nresult %s", name, call, result)
+		}
+	}
+	if errs := run.fake.Errors(); len(errs) != 0 {
+		t.Fatalf("fake GPT-Live errors: %v", errs)
+	}
+}
+
+const (
+	delegationCLIKey    = "sk-live-cli"
+	delegationCLIID     = "del_cli"
+	defaultLookupResult = "order 42: packed, ships tomorrow"
+)
+
+// delegationCommandRun is one finished delegation session command.
+type delegationCommandRun struct {
+	fake    *fakelive.Server
+	backend *fakechatgpt.Server
+	tool    *recordingLookupTool
+}
+
+// runDelegationSessionCommand runs `session --provider openai-live` with a
+// ChatGPT login against a fake GPT-Live that delegates "where is order 42"
+// once; the backend calls lookup_order (answering lookupResult) and then
+// answers.
+func runDelegationSessionCommand(t *testing.T, lookupResult string, extraArgs ...string) delegationCommandRun {
+	t.Helper()
 	root := t.TempDir()
 	configDir := filepath.Join(root, "config")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
@@ -70,7 +141,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	)
 	server := httptest.NewServer(backend)
 	t.Cleanup(server.Close)
-	configYAML := "model:\n  provider: openai\n  openai:\n    model: gpt-realtime\n    api_key: " + apiKey +
+	configYAML := "model:\n  provider: openai\n  openai:\n    model: gpt-realtime\n    api_key: " + delegationCLIKey +
 		"\n  openai_chatgpt:\n    base_url: " + server.URL + "/backend-api/codex\n"
 	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -85,11 +156,11 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	if err := os.WriteFile(audioIn, bytes.Repeat([]byte{0x10, 0x27, 0xf0, 0xd8}, 1200), 0o600); err != nil {
 		t.Fatalf("write audio-in: %v", err)
 	}
-	fake := fakelive.New(fakelive.WithAPIKey(apiKey), fakelive.WithScript(
+	fake := fakelive.New(fakelive.WithAPIKey(delegationCLIKey), fakelive.WithScript(
 		fakelive.AwaitClient(live.TypeInputAudioAppend, 1),
 		fakelive.Send(
 			live.InputTranscriptDelta{EventID: "evt_in", Delta: "Where is order forty-two?", StartMS: 0, EndMS: 1500},
-			live.DelegationCreated{EventID: "evt_del", OffsetMS: 1400, Delegation: live.DelegationInfo{ID: delegationID, Type: "delegation", Target: live.DelegationClient}},
+			live.DelegationCreated{EventID: "evt_del", OffsetMS: 1400, Delegation: live.DelegationInfo{ID: delegationCLIID, Type: "delegation", Target: live.DelegationClient}},
 		),
 		fakelive.AwaitClient(live.TypeCommentaryAppend, 1),
 		fakelive.Send(
@@ -98,7 +169,7 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 			live.OutputTranscriptDelta{Delta: "Anything else?", StartMS: 3500, EndMS: 3800},
 		),
 	))
-	tool := &recordingLookupTool{}
+	tool := &recordingLookupTool{content: lookupResult}
 	capabilities := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
 			Executor:    tool,
@@ -114,29 +185,13 @@ func TestSessionCommandAnswersGPTLiveDelegationsOnTheChatGPTLogin(t *testing.T) 
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
-	command.SetArgs([]string{"--provider", config.ProviderOpenAILive, "--model", live.Model1, "--audio-in", audioIn})
+	command.SetArgs(append([]string{"--provider", config.ProviderOpenAILive, "--model", live.Model1, "--audio-in", audioIn}, extraArgs...))
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	if err := command.ExecuteContext(ctx); err != nil {
 		t.Fatalf("session --provider openai-live: %v\nstdout=%q\nstderr=%q\nfake errors=%v", err, stdout.String(), stderr.String(), fake.Errors())
 	}
-
-	if calls := tool.snapshot(); len(calls) != 1 || calls[0].Name != lookupOrderTool || calls[0].Arguments != `{"order":"42"}` {
-		t.Fatalf("tool calls = %+v, want one lookup_order for order 42", calls)
-	}
-	var commentary []live.CommentaryAppend
-	for _, event := range fake.ClientEvents() {
-		if appended, ok := event.(live.CommentaryAppend); ok {
-			commentary = append(commentary, appended)
-		}
-	}
-	if len(commentary) != 1 || commentary[0].DelegationID == nil || *commentary[0].DelegationID != delegationID || commentary[0].Content != "Order 42 ships tomorrow." {
-		t.Fatalf("commentary appends = %+v, want the backend's answer for %s", commentary, delegationID)
-	}
-	assertBackendUsedTheLogin(t, backend, chatGPTTestToken)
-	if errs := fake.Errors(); len(errs) != 0 {
-		t.Fatalf("fake GPT-Live errors: %v", errs)
-	}
+	return delegationCommandRun{fake: fake, backend: backend, tool: tool}
 }
 
 // assertBackendUsedTheLogin checks that both backend turns ran on the
@@ -168,4 +223,46 @@ func assertBackendUsedTheLogin(t *testing.T, backend *fakechatgpt.Server, token 
 	if turns != 2 {
 		t.Fatalf("backend turns = %d, want the tool call and the answer", turns)
 	}
+}
+
+// readDelegationEvidence returns the decoded payloads of the bundle's agent
+// transcript and of its trace timeline.
+func readDelegationEvidence(t *testing.T, dir string) (bundle, trace []string) {
+	t.Helper()
+	return decodedPayloads(t, filepath.Join(dir, "agent.transcript.jsonl")), decodedPayloads(t, filepath.Join(dir, "audio-trace", "timeline.jsonl"))
+}
+
+// decodedPayloads decodes the base64 payload of every JSONL record in path.
+func decodedPayloads(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var payloads []string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+		var record struct {
+			Payload string `json:"payload"`
+		}
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("decode %s record %q: %v", path, line, err)
+		}
+		payload, err := base64.StdEncoding.DecodeString(record.Payload)
+		if err != nil {
+			t.Fatalf("decode %s payload: %v", path, err)
+		}
+		payloads = append(payloads, string(payload))
+	}
+	return payloads
+}
+
+// delegationToolRecord returns the first record of the given delegation
+// tool event kind.
+func delegationToolRecord(records []string, kind string) string {
+	for _, record := range records {
+		if strings.Contains(record, `"`+kind+`"`) {
+			return record
+		}
+	}
+	return ""
 }

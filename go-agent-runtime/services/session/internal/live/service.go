@@ -221,6 +221,7 @@ type handle struct {
 	continuationErr                                  error
 	delegationService                                livedelegation.Service
 	delegations                                      livedelegation.Executor
+	toolLocks                                        *toolLocks
 }
 
 func (h *handle) observeRuntimeMessage(msg messages.StreamMessage) {

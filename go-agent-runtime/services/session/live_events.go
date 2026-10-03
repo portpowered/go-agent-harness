@@ -59,6 +59,10 @@ type LiveEvent struct {
 	// publishes this event before its terminal event so room owners can retire
 	// only the affected participant while preserving the causal fields.
 	Liveness *LiveLivenessFailure
+	// DelegationTool carries the tool name and the bounded arguments and
+	// result of a delegation's tool call (LiveEventDelegationToolCall and
+	// LiveEventDelegationToolResult).
+	DelegationTool *LiveDelegationTool
 	// Terminal carries the provider/session terminal taxonomy when the
 	// observation is a SESSION.CLOSE or when the live owner publishes its
 	// final lifecycle event. Hosts can render or persist the typed value
@@ -71,6 +75,25 @@ type LiveEvent struct {
 	// and overflow events are critical by definition; callers may use this bit
 	// when forwarding provider-specific lifecycle events.
 	Critical bool
+}
+
+// LiveDelegationToolPayloadLimit bounds the Arguments and Result a
+// LiveDelegationTool carries; a longer value keeps its first bytes and ends
+// with LiveDelegationToolTruncated.
+const LiveDelegationToolPayloadLimit = 4 << 10
+
+// LiveDelegationToolTruncated marks a LiveDelegationTool value cut at
+// LiveDelegationToolPayloadLimit.
+const LiveDelegationToolTruncated = "…[truncated]"
+
+// LiveDelegationTool is the audit payload of one delegation tool call. A
+// call event carries the arguments; a result event carries them again with
+// the result content. Values are not redacted here: recorders redact the
+// session credentials as they do for the voice loop's TOOLCALL messages.
+type LiveDelegationTool struct {
+	Name      string
+	Arguments string
+	Result    string
 }
 
 // LiveLivenessFailure is the provider-neutral terminal evidence for a

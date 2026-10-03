@@ -74,20 +74,25 @@ func (p *fakePeer) frames() []sentFrame {
 }
 
 // fakeControl is one sideband connection. The test feeds server events or a
-// read error through events; Send records client events.
+// read error through events; Send records client events. Like a gorilla
+// connection, a failed write leaves the read side healthy: only Abort or
+// Close ends Receive.
 type fakeControl struct {
 	events chan any
 	// gate, when set, holds every Send until it is closed.
-	gate    chan struct{}
-	mu      sync.Mutex
-	sent    []quicksilver.Event
-	sendErr error
-	done    chan struct{}
-	once    sync.Once
+	gate       chan struct{}
+	mu         sync.Mutex
+	sent       []quicksilver.Event
+	sendErr    error
+	abortCause error
+	done       chan struct{}
+	aborted    chan struct{}
+	once       sync.Once
+	abortOnce  sync.Once
 }
 
 func newFakeControl() *fakeControl {
-	return &fakeControl{events: make(chan any, 16), done: make(chan struct{})}
+	return &fakeControl{events: make(chan any, 16), done: make(chan struct{}), aborted: make(chan struct{})}
 }
 
 func (c *fakeControl) Send(event quicksilver.Event) error {
@@ -114,9 +119,19 @@ func (c *fakeControl) Receive() (quicksilver.Event, error) {
 			return nil, fmt.Errorf("fake sideband: %T is not an event", next)
 		}
 		return event, nil
+	case <-c.aborted:
+		return nil, fmt.Errorf("fake sideband aborted: %w", c.abortCause)
 	case <-c.done:
 		return nil, codexrtc.ErrSidebandClosed
 	}
+}
+
+func (c *fakeControl) Abort(cause error) error {
+	c.abortOnce.Do(func() {
+		c.abortCause = cause
+		close(c.aborted)
+	})
+	return nil
 }
 
 func (c *fakeControl) Close() error {
@@ -173,11 +188,17 @@ type harness struct {
 
 func newHarness(t *testing.T, dial *dialer) *harness {
 	t.Helper()
+	return newHarnessOn(t, dial, clock.Real{})
+}
+
+// newHarnessOn is newHarness with the transport's timers on source.
+func newHarnessOn(t *testing.T, dial *dialer, source clock.TimerSource) *harness {
+	t.Helper()
 	peer, side := newFakePeer(), newFakeControl()
 	if dial == nil {
 		dial = &dialer{}
 	}
-	transport, err := newConn(t.Context(), peer, side, dial.dial, connConfig{rate: 24000, clock: clock.Real{}, logger: logging.DummyLogger(), policy: defaultReconnectPolicy()})
+	transport, err := newConn(t.Context(), peer, side, dial.dial, connConfig{rate: 24000, clock: source, logger: logging.DummyLogger(), policy: defaultReconnectPolicy()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,4 +257,45 @@ func valueOf[T any](t *testing.T, msg messages.StreamMessage) T {
 func wait(d time.Duration) {
 	timer := time.NewTimer(d)
 	<-timer.C
+}
+
+// timerCount is the host clock, counting the timers of at least a second
+// that are armed: created and not yet stopped. The transport's expiry
+// timers are the only ones that long.
+type timerCount struct {
+	clock.Real
+	mu    sync.Mutex
+	armed int
+}
+
+func (c *timerCount) NewTimer(d time.Duration) clock.Timer {
+	timer := c.Real.NewTimer(d)
+	if d < time.Second {
+		return timer
+	}
+	c.mu.Lock()
+	c.armed++
+	c.mu.Unlock()
+	return &countedTimer{Timer: timer, count: c}
+}
+
+func (c *timerCount) armedTimers() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.armed
+}
+
+type countedTimer struct {
+	clock.Timer
+	count *timerCount
+	once  sync.Once
+}
+
+func (t *countedTimer) Stop() bool {
+	t.once.Do(func() {
+		t.count.mu.Lock()
+		t.count.armed--
+		t.count.mu.Unlock()
+	})
+	return t.Timer.Stop()
 }

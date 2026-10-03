@@ -29,12 +29,11 @@ func signedInConfigDir(t *testing.T) string {
 // configured), otherwise to model.provider, falling back to openai for a
 // voice-only provider; session.delegation overrides the provider, model and
 // limits. A Realtime or GPT-Live model is never inherited as the text model:
-// without session.delegation.model the backend is reported unconfigured. The
-// voice key is reused only on the voice key's own endpoint. Raw keys become
-// credential references.
+// without session.delegation.model the backend is reported unconfigured, and
+// its key never enters the credential vault. The voice key is reused only on
+// the voice key's own endpoint. Raw keys become credential references.
 func TestDelegationPolicyPicksTheBackendForGPTLive(t *testing.T) {
 	signedIn := signedInConfigDir(t)
-	reference := func(key string) string { return "ref:" + key }
 	withChatGPTModel := openAIConfig(config.ProviderOpenAI)
 	withChatGPTModel.Model.OpenAIChatGPT = &config.ChatGPTConfig{Model: "gpt-chosen", BaseURL: "https://chatgpt.test/codex"}
 	textModel := openAIConfig(config.ProviderOpenAI)
@@ -67,7 +66,7 @@ func TestDelegationPolicyPicksTheBackendForGPTLive(t *testing.T) {
 		},
 		"no login, a realtime model is never inherited": {
 			cfg: openAIConfig(config.ProviderOpenAI), configDir: t.TempDir(),
-			want: livedelegation.Policy{Backend: livedelegation.Backend{Provider: config.ProviderOpenAI, BaseURL: "https://api.openai.com/v1", CredentialReference: "ref:sk-openai", Unconfigured: unconfigured}},
+			want: livedelegation.Policy{Backend: livedelegation.Backend{Provider: config.ProviderOpenAI, BaseURL: "https://api.openai.com/v1", Unconfigured: unconfigured}},
 		},
 		"no login, a text model is inherited": {
 			cfg: textModel, configDir: t.TempDir(),
@@ -95,6 +94,11 @@ func TestDelegationPolicyPicksTheBackendForGPTLive(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := tc.cfg
+			var vaulted []string
+			reference := func(key string) string {
+				vaulted = append(vaulted, key)
+				return "ref:" + key
+			}
 			got := delegationPolicy(delegationInputs{
 				loaded: &cfg, configDir: tc.configDir, voiceProvider: config.ProviderOpenAILive, voiceAPIKey: "sk-voice",
 				voiceBaseURL: tc.voiceBaseURL, credentialReference: reference,
@@ -102,16 +106,29 @@ func TestDelegationPolicyPicksTheBackendForGPTLive(t *testing.T) {
 			if got == nil || *got != tc.want {
 				t.Fatalf("policy = %+v, want %+v", got, tc.want)
 			}
+			if wantVaulted := strings.TrimPrefix(tc.want.Backend.CredentialReference, "ref:"); len(vaulted) > 1 || strings.Join(vaulted, "") != wantVaulted {
+				t.Fatalf("vaulted keys = %q, want only the key the backend signs with (%q)", vaulted, wantVaulted)
+			}
 		})
 	}
 }
 
-// GPT-Live sessions learn how delegated work comes back; the codex route
+// GPT-Live sessions learn how delegated work comes back and OpenClaw's
+// delegate-once and never-mention rules; the codex route
 // also learns its channels. Other providers' instructions are unchanged.
 func TestDelegationGuidanceIsAddedToGPTLiveInstructions(t *testing.T) {
 	live := withDelegationGuidance("Be brief.\n", config.ProviderOpenAILive, "gpt-live-1")
 	if !strings.HasPrefix(live, "Be brief.\n\n## Delegated work\n") || !strings.Contains(live, "Do not guess the result while waiting.") || strings.Contains(live, "Speakable") {
 		t.Fatalf("gpt-live-1 instructions = %q", live)
+	}
+	for _, rule := range []string{
+		"Never mention the channel or the delegation.",
+		"Delegate each user request once and wait for its result.",
+		"Receipts and backend results are not user requests: do not delegate them, and do not repeat the original request when they arrive.",
+	} {
+		if !strings.Contains(live, rule) {
+			t.Fatalf("gpt-live-1 instructions = %q, want OpenClaw's rule %q", live, rule)
+		}
 	}
 	codex := withDelegationGuidance("", config.ProviderOpenAILive, config.OpenAILiveChatGPTModel)
 	if !strings.HasPrefix(codex, "## Delegated work") || !strings.Contains(codex, "Commentary is silent background") || !strings.Contains(codex, "never read it aloud") || !strings.Contains(codex, "Speakable is the answer to deliver") {

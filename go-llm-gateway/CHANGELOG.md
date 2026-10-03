@@ -4,6 +4,11 @@
 
 ### Added
 
+- `codexrtc.Sideband.Abort(cause)`: drops the sideband as a lost transport,
+  without the close handshake, so a blocked `Receive` returns an error that
+  wraps `cause` (never `ErrSidebandClosed`). `fakecodex.WithStalledSidebands(n)`
+  stalls only the first n sidebands' reads.
+
 - `openailive` delegation surface (PR 3 of
   docs/architecture/gpt-live-provider.md). A client
   `session.delegation.created` becomes `DELEGATION.CREATED` with no
@@ -215,6 +220,12 @@
 
 ### Fixed
 
+- `codexlive`: a failed sideband send aborts that sideband, so the read loop
+  ends as a loss and the transport reconnects. Before, a sideband whose write
+  side broke (gorilla fails every later write) while its read side stayed
+  healthy never reconnected, and its control events stayed held.
+- `codexlive`: repeated `session.started`/`session.updated` events carrying
+  `expires_at` reset one expiry timer instead of each starting a worker.
 - `openai-chatgpt` replays each earlier model turn in its original item
   order, OpenClaw's block order: a response shaped reasoning, message,
   function_call goes back in that order (the assistant text used to go first

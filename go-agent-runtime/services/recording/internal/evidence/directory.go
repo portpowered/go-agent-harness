@@ -219,6 +219,7 @@ func (r *directoryRecorder) RecordEvent(ctx context.Context, event session.LiveE
 		errorText = event.Error.Error()
 	}
 	event.Error = nil
+	event.DelegationTool = redactDelegationTool(event.DelegationTool, r.options.Credentials)
 	payload, err := encodeRuntimeEvent(event, errorText)
 	if err != nil {
 		r.latch(recordingWriteError("encode runtime event", err))
@@ -256,6 +257,20 @@ func (r *directoryRecorder) RecordBrowserArtifact(ctx context.Context, artifact 
 	cloned.Data = append([]byte(nil), artifact.Data...)
 	r.browserArtifact = &cloned
 	return nil
+}
+
+// redactDelegationTool replaces the session credentials in a delegation
+// tool call's arguments and result, as the trace does for tool payloads:
+// transcript payloads are base64, so the bundle's byte redaction cannot
+// reach them.
+func redactDelegationTool(tool *session.LiveDelegationTool, credentials []string) *session.LiveDelegationTool {
+	if tool == nil {
+		return nil
+	}
+	redacted := *tool
+	redacted.Arguments = string(redactRecordingBytes([]byte(tool.Arguments), credentials))
+	redacted.Result = string(redactRecordingBytes([]byte(tool.Result), credentials))
+	return &redacted
 }
 
 func encodeRuntimeEvent(event session.LiveEvent, errorText string) ([]byte, error) {

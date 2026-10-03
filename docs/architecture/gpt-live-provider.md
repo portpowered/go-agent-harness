@@ -1229,8 +1229,9 @@ continuation and interrupt handling would still need special cases.
   - its own budget (iterations, wall time on the injected clock, tokens).
 
   PR 4 must verify that the tool executor is safe to call from concurrent
-  workers. Tools that are not are serialized by a per-tool lock in the
-  executor, never by the voice loop.
+  workers. Tools that are not are serialized by a lock, never by blocking
+  the voice loop (as built: a resource-group lock the voice loop's tool
+  calls share, see "Tool concurrency" below).
 - **Lifetime.** Each worker's context comes from the session lifetime, not
   from the loop's tool execution context. `InterruptHandler`'s
   `toolCanceller.CancelCurrentExecution()` therefore cannot reach it. Workers
@@ -1249,7 +1250,7 @@ continuation and interrupt handling would still need special cases.
 above):
 
 - **Where it lives.** `go-agent-runtime/services/livedelegation` (contract),
-  `internal/service` (pool, nested loop, budgets, tool gate) and `wire`. The
+  `internal/service` (pool, nested loop, budgets) and `wire`. The
   live session owner takes the service as
   `wire.LiveDependencies.Delegations`, and a session opts in with
   `session.LiveRequest.Delegation` (backend and limits). The handle opens one
@@ -1277,8 +1278,19 @@ above):
   the live event stream, and so to the invocation recorder, as
   `delegation_tool_call` and `delegation_tool_result` events (`ItemID` is the
   delegation id, `ToolCallID` and `Text` the call id and tool name, `Error`
-  a failed call). They are a distinct kind, never `TOOLCALL.*` messages, so
-  nothing counts them as provider tool calls that owe a result. The tool
+  a failed call). `DelegationTool` carries the tool name, the arguments
+  (both events) and the result content (the result event), each cut to
+  4 KiB (`session.LiveDelegationToolPayloadLimit`) on a UTF-8 boundary and
+  ending with `…[truncated]` when cut. Recorders redact them as the voice
+  loop's `TOOLCALL` recording is redacted, with the session's credentials:
+  the trace redacts the `delegation_tool_*` payloads (which also name the
+  tool: `tool_name`, `tool_arguments`, `tool_result`) as it redacts
+  `tool_call` and `tool_result`, and the `--record-dir` recorder redacts the
+  two fields before it spools the event (transcript payloads are base64, out
+  of the bundle's byte redaction). A credential that straddles the 4 KiB cut
+  is redacted only in full, so its leading bytes can remain. They are a
+  distinct kind, never `TOOLCALL.*` messages, so nothing counts them as
+  provider tool calls that owe a result. The tool
   executor's own diagnostics (interactive timeouts and failures) are emitted
   as for any session tool call, because it is the same executor.
 - **Progress.** Before each tool call the worker sends a `thinking` append
@@ -1289,11 +1301,19 @@ above):
   live control, so a provider without the channel is a reported failure,
   not a silent drop. A rejected append is not retried.
 - **Tool concurrency (Q11).** The session's tool executor already runs the
-  calls of one batch in parallel. The executor additionally serializes, per
-  tool name, the tools the session's interactive policy classifies as
-  `bounded-long-running` (browser, display and remote operations, which share
-  host state); `fast/read` tools run concurrently. With no policy nothing is
-  serialized.
+  calls of one batch in parallel. A session with delegations adds
+  resource-group locks (`internal/live/tool_locks.go`) that the voice loop's
+  tool executor and the delegation executor (`Binding.ToolLock`) both take:
+  every `webmcp_*`, `browser_*` and `show_page` call shares one browser lock,
+  `write_file` and `edit_file` share one filesystem-write lock, and each
+  other tool the interactive policy classifies as `bounded-long-running`
+  (display, exec, remote operations) has its own lock. Other tools run
+  concurrently. A call holds at most one lock, and a waiting call gives up
+  when its context ends (a voice interrupt, a delegation's end), so the locks
+  cannot deadlock each other or the voice loop: its `ToolRunner` is a
+  participant of its own, and a delegation holding a lock waits only on the
+  loop's ingress, never on the tool runner. A session without delegations
+  takes no locks.
 - **Prompt.** The 1.10.1 prefix, with the session's composed instructions as
   the task instructions. The user turn is `Task` when present, otherwise the
   transcript window, followed by the last 12 user and assistant messages of
@@ -1337,12 +1357,17 @@ above):
   also describes the channels: `commentary` is silent background and must
   never be read aloud; `speakable` is the answer to deliver (wording after
   OpenClaw, as reported in the #643 review; not checked against its source).
+  The section also carries OpenClaw's rules
+  (`extensions/openai/realtime-quicksilver-instructions.ts`): delegate each
+  user request once and wait for its result (follow-ups, corrections and
+  explicit retries are new requests); receipts and backend results are not
+  user requests, so they are never delegated and the original request is not
+  repeated when they arrive; never mention the channel or the delegation.
   The backend's task instructions are the session instructions without this
   section.
-- **Known gaps (follow-ups).** Serialization is per tool name, so two
-  delegations can still drive shared browser state through different tools
-  at once, and delegations are not serialized against the voice loop's own
-  call of the same tool.
+- **Unconfigured backend.** When the backend is reported unconfigured (no
+  text model), its API key is never registered in the CLI credential vault:
+  the backend never runs, so it gets no credential reference.
 
 ## 2.6 Event mapping onto the harness session contract
 
@@ -1773,7 +1798,12 @@ plan above:
    written while the sideband is down, or whose send failed, are held (up to
    64) and flushed in order on the new sideband before it is published, so a
    write that arrives during the flush is held behind them and the chunks of
-   a split `CONTEXT.APPEND` keep their order. A sideband that fails during
+   a split `CONTEXT.APPEND` keep their order. A failed send aborts its
+   sideband (`codexrtc.Sideband.Abort`, separate from `Close`): gorilla
+   fails every write after the first failure while reads go on, so without
+   the abort a sideband whose write side broke and whose read side stayed
+   healthy would never reconnect. The abort drops the connection without the
+   close handshake and ends the read loop with a non-close error, a loss. A sideband that fails during
    the flush is another loss; the unsent events stay held, first. Every dial
    asks the credential source, so a refreshed token is used.
 6. **Credential failures.** As OpenClaw's `isFatalQuicksilverAuthError`: an
@@ -1833,7 +1863,8 @@ plan above:
 13. **Session expiry.** `session.started` or `session.updated` with
     `expires_at` schedules the end of the session (reason `expired`, a
     provider close) at that time on the session clock, as OpenClaw schedules
-    its lease; a later value replaces an earlier one.
+    its lease; a later value resets the session's one expiry timer (one
+    worker, however many updates carry `expires_at`).
 
 Unverified until a live run: whether the backend sends `session.started` or
 audio copies on a WebRTC sideband, whether it streams silence or uses DTX,

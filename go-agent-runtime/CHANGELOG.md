@@ -4,6 +4,20 @@
 
 ### Added
 
+- `session.LiveEvent.DelegationTool` (`session.LiveDelegationTool`): the
+  `delegation_tool_call` and `delegation_tool_result` events carry the tool
+  name, the arguments and (on the result) the result content, each bounded
+  to `session.LiveDelegationToolPayloadLimit` (4 KiB) with the
+  `session.LiveDelegationToolTruncated` marker. The sessiontrace live
+  recorder adds `tool_name`, `tool_arguments` and `tool_result` to their
+  payload and redacts it as it redacts `tool_call`; the `--record-dir`
+  evidence recorder redacts the two fields with the session credentials.
+- `livedelegation.ToolLock` and `Binding.ToolLock`: the session's
+  resource-group lock. A live session with delegations locks its tools by
+  resource group for both the voice loop and its delegations: all
+  `webmcp_*`, `browser_*` and `show_page` calls share one lock, `write_file`
+  and `edit_file` another, and each other long-running tool its own.
+
 - `services/livedelegation`: the GPT-Live client-delegation executor
   (docs/architecture/gpt-live-provider.md 2.5, PR 4). A live session whose
   `session.LiveRequest.Delegation` names a backend hands every
@@ -96,6 +110,11 @@
   a write into `~/.ssh` and the other credential stores under a broad
   `--allow-path`.
 
+- Breaking (unreleased API): `livedelegation.Binding.Serialized`, a per-tool
+  lock private to the delegations, is replaced by `Binding.ToolLock`, shared
+  with the voice loop. Two delegations can no longer drive the browser at
+  once through different browser tools, nor alongside the voice loop's own
+  browser call.
 - HTTP recordings drop the `chatgpt-account-id` request header, as they
   already drop `Authorization` and cookies.
 - Security: a broad scope root such as `--allow-path /` or a parent of the

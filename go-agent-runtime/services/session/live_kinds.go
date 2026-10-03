@@ -15,7 +15,8 @@ const (
 	// LiveEventDelegationToolCall and LiveEventDelegationToolResult record a
 	// session tool call made by a client delegation's backend loop (not the
 	// voice loop). ItemID is the delegation id, ToolCallID and Text the call
-	// id and tool name; a result carries Error when the call failed.
+	// id and tool name, and DelegationTool the bounded arguments and result;
+	// a result carries Error when the call failed.
 	LiveEventDelegationToolCall   LiveEventKind = "delegation_tool_call"
 	LiveEventDelegationToolResult LiveEventKind = "delegation_tool_result"
 )
