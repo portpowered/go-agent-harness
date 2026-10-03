@@ -12,7 +12,9 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io/fs"
 	"mime"
+	"os"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -55,9 +57,10 @@ var (
 	ErrReadImageInvalidResult = errors.New("read_image preparer returned invalid image content")
 )
 
-// ImagePartPreparer and SessionImagePreparerBinder are aliases for the public
+// ImageSource, ImagePartPreparer and SessionImagePreparerBinder are aliases for the public
 // service contracts. The filesystem implementation stays private while the
 // session can bind its provider-aware image policy through the service edge.
+type ImageSource = public.ImageSource
 type ImagePartPreparer = public.ImagePartPreparer
 type SessionImagePreparerBinder = public.SessionImagePreparerBinder
 
@@ -68,6 +71,9 @@ type ReadImageTool struct {
 	preparer       ImagePartPreparer
 	policy         *FilesystemPolicy
 	policyRequired bool
+	// fs reads the image under policy, checked at open time; nil reads the
+	// host filesystem (a tool built without a policy).
+	fs *sandboxFs
 }
 
 func NewReadImageTool(preparer ImagePartPreparer) *ReadImageTool {
@@ -83,7 +89,14 @@ func NewReadImageToolWithPolicy(policy *FilesystemPolicy, preparer ...ImagePartP
 	if len(preparer) > 0 {
 		imagePreparer = preparer[0]
 	}
-	return &ReadImageTool{preparer: imagePreparer, policy: policy, policyRequired: true}
+	return &ReadImageTool{preparer: imagePreparer, policy: policy, policyRequired: true, fs: policySandbox(policy)}
+}
+
+func policySandbox(policy *FilesystemPolicy) *sandboxFs {
+	if policy == nil {
+		return nil
+	}
+	return newSandboxFs(policy)
 }
 
 // WithSessionImagePreparer returns a copy bound to one session-owned image
@@ -93,7 +106,7 @@ func (t *ReadImageTool) WithSessionImagePreparer(preparer ImagePartPreparer) *Re
 	if t == nil {
 		return &ReadImageTool{preparer: preparer}
 	}
-	return &ReadImageTool{preparer: preparer, policy: t.policy, policyRequired: t.policyRequired}
+	return &ReadImageTool{preparer: preparer, policy: t.policy, policyRequired: t.policyRequired, fs: t.fs}
 }
 
 // SessionImagePreparer exposes the currently bound callback to the owning
@@ -136,22 +149,19 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 	if t == nil {
 		return readImageErrorMessage(ErrReadImagePreparerUnavailable)
 	}
-	if t.policyRequired {
-		var err error
-		if t.policy == nil {
-			err = newFilesystemAccessDeniedWithContext("", FilesystemRefusalInvalidScope, ErrInvalidFilesystemRoot.Error())
-		} else {
-			err = t.policy.AuthorizeRead(path)
-		}
-		if err != nil {
-			return readImageErrorMessageForPath(path, err)
-		}
+	if t.policyRequired && t.policy == nil {
+		err := newFilesystemAccessDeniedWithContext("", FilesystemRefusalInvalidScope, ErrInvalidFilesystemRoot.Error())
+		return readImageErrorMessageForPath(path, err)
 	}
 	if t.preparer == nil {
 		return readImageErrorMessage(ErrReadImagePreparerUnavailable)
 	}
+	data, err := t.read(path)
+	if err != nil {
+		return readImageErrorMessageForPath(path, err)
+	}
 
-	parts, err := t.preparer([]string{path})
+	parts, err := t.preparer([]ImageSource{{Path: path, Bytes: data}})
 	if err != nil {
 		return readImageErrorMessage(err)
 	}
@@ -186,6 +196,30 @@ func (t *ReadImageTool) Execute(_ context.Context, args map[string]any) ([]messa
 			messages.ImagePart{Bytes: append([]byte(nil), imageBytes...), MediaType: mediaType},
 		},
 	}}, nil
+}
+
+// read reads the image once, for the preparer. Under a policy the read is
+// the sandbox's, refused at open time if it reaches a protected root.
+func (t *ReadImageTool) read(path string) ([]byte, error) {
+	var data []byte
+	var err error
+	if t.fs != nil {
+		data, err = t.fs.ReadFile(path)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err == nil || errors.Is(err, ErrFilesystemAccessDenied) {
+		return data, err
+	}
+	cause := err
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		cause = &fs.PathError{Op: "open", Path: path, Err: pathErr.Err}
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("session image %q is missing: %w", path, cause)
+	}
+	return nil, fmt.Errorf("session image %q cannot be read: %w", path, cause)
 }
 
 func readImageErrorMessage(err error) ([]messages.Message, error) {

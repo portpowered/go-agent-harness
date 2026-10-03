@@ -5,15 +5,20 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // ImageOpener validates local image paths and returns their typed parts.
 type ImageOpener func([]string) ([]messages.ContentPart, error)
+
+// ImageDecoder validates images read_image has already read and returns their
+// typed parts. It never reads the paths again: the tools service read the
+// bytes under the session's filesystem policy.
+type ImageDecoder func([]runtimeTools.ImageSource) ([]messages.ContentPart, error)
 
 const imageOpenerUnavailable = "live image opener is unavailable"
 
@@ -106,23 +111,35 @@ func configuredImageInput(model *config.ModelInfo) bool {
 }
 
 // guardImageOpener admits images only when the session model accepts image
-// input. The capability is resolved once, on first use, so sessions that never
-// open an image do not read model metadata.
-func guardImageOpener(resolve func() imageCapability, open ImageOpener) ImageOpener {
-	resolveOnce := sync.OnceValue(resolve)
-	return func(paths []string) ([]messages.ContentPart, error) {
-		capability := resolveOnce()
-		if capability.err != nil {
-			return nil, capability.err
+// input. capability resolves the decision once, on first use, so sessions
+// that never open an image do not read model metadata.
+func guardImageOpener(capability func() imageCapability, open ImageOpener) ImageOpener {
+	return guardImages(capability, open, func(path string) string { return path })
+}
+
+// guardImageDecoder is guardImageOpener for read_image's already-read images.
+func guardImageDecoder(capability func() imageCapability, decode ImageDecoder) ImageDecoder {
+	return guardImages(capability, decode, func(source runtimeTools.ImageSource) string { return source.Path })
+}
+
+func guardImages[T any](capability func() imageCapability, open func([]T) ([]messages.ContentPart, error), pathOf func(T) string) func([]T) ([]messages.ContentPart, error) {
+	return func(images []T) ([]messages.ContentPart, error) {
+		decision := capability()
+		if decision.err != nil {
+			return nil, decision.err
 		}
 		if open == nil {
 			return nil, errors.New(imageOpenerUnavailable)
 		}
-		parts, err := open(paths)
+		parts, err := open(images)
 		if err != nil {
 			return nil, err
 		}
-		if err := capability.admitMIME(paths, parts); err != nil {
+		paths := make([]string, len(images))
+		for index, image := range images {
+			paths[index] = pathOf(image)
+		}
+		if err := decision.admitMIME(paths, parts); err != nil {
 			return nil, err
 		}
 		return parts, nil

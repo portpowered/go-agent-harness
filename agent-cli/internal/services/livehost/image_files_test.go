@@ -14,6 +14,7 @@ import (
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 func writePNG(t *testing.T, dir string) string {
@@ -79,7 +80,7 @@ type plainExecutor struct{ messages.ToolExecutor }
 
 func TestBindImagePreparerLeavesExecutorsWithoutImageRouteUnchanged(t *testing.T) {
 	executor := plainExecutor{}
-	if bound := BindImagePreparer(executor, func([]string) ([]messages.ContentPart, error) { return nil, errors.New("unused") }); bound != executor {
+	if bound := BindImagePreparer(executor, func([]runtimeTools.ImageSource) ([]messages.ContentPart, error) { return nil, errors.New("unused") }); bound != executor {
 		t.Fatalf("BindImagePreparer = %#v, want the original executor", bound)
 	}
 }

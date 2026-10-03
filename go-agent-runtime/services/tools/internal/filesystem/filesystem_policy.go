@@ -204,9 +204,9 @@ func (p *FilesystemPolicy) ProtectedReadRoots() []string {
 }
 
 // AuthorizeRead validates a path against this policy without opening or
-// reading it. Filesystem tools use the same check immediately before their
-// os.Root operation; this method is also the guard used by read_image before
-// invoking a session-owned image preparer.
+// reading it. It is the pre-check filesystem tools run before their os.Root
+// operation; the authoritative decision is made again when the tools open
+// the path (see openGuard).
 func (p *FilesystemPolicy) AuthorizeRead(path string) error {
 	if p == nil {
 		return nil

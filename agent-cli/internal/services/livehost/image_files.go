@@ -58,6 +58,25 @@ func openImage(path string) (messages.ImagePart, error) {
 		}
 		return messages.ImagePart{}, fmt.Errorf("session image %q cannot be read: %w", path, err)
 	}
+	return decodeImage(path, data)
+}
+
+// DecodeImages validates the images read_image read under the session's
+// filesystem policy. It uses only their bytes; each path names its image in
+// messages.
+func DecodeImages(sources []runtimeTools.ImageSource) ([]messages.ContentPart, error) {
+	parts := make([]messages.ContentPart, 0, len(sources))
+	for _, source := range sources {
+		part, err := decodeImage(source.Path, source.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, part)
+	}
+	return parts, nil
+}
+
+func decodeImage(path string, data []byte) (messages.ImagePart, error) {
 	if len(data) == 0 {
 		return messages.ImagePart{}, fmt.Errorf("image %q is empty", path)
 	}
@@ -73,17 +92,18 @@ func openImage(path string) (messages.ImagePart, error) {
 
 // BindImagePreparer gives a live participant's read_image route the same
 // host-side image validation used for opening an initial image turn. The
-// runtime service performs the filesystem authorization before invoking this
-// callback; the callback only resolves the already-authorized bytes into the
-// provider-neutral typed part. open is the capability-guarded opener, so a
-// model without image input yields a correlated tool failure.
-func BindImagePreparer(executor messages.ToolExecutor, open ImageOpener) messages.ToolExecutor {
+// runtime service reads the image under the session's filesystem policy,
+// checked at open time, before invoking this callback; the callback only
+// resolves the already-read bytes into the provider-neutral typed part.
+// decode is the capability-guarded decoder, so a model without image input
+// yields a correlated tool failure.
+func BindImagePreparer(executor messages.ToolExecutor, decode ImageDecoder) messages.ToolExecutor {
 	binder, ok := executor.(runtimeTools.SessionImagePreparerBinder)
 	if !ok {
 		return executor
 	}
-	return binder.WithSessionImagePreparer(func(paths []string) ([]messages.ImagePart, error) {
-		content, err := open(paths)
+	return binder.WithSessionImagePreparer(func(sources []runtimeTools.ImageSource) ([]messages.ImagePart, error) {
+		content, err := decode(sources)
 		if err != nil {
 			return nil, err
 		}

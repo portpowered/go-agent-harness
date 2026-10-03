@@ -6,8 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,18 +19,19 @@ import (
 
 func TestReadImageTool_ReturnsExactlyOneRichImagePart(t *testing.T) {
 	wantBytes := minimalPNG()
-	var gotPaths []string
-	tool := NewReadImageTool(func(paths []string) ([]messages.ImagePart, error) {
-		gotPaths = append([]string(nil), paths...)
-		return []messages.ImagePart{{Bytes: append([]byte(nil), wantBytes...), MediaType: imagePNGMediaType}}, nil
+	path := writeImageFixture(t, "known.png", wantBytes)
+	var got []ImageSource
+	tool := NewReadImageTool(func(sources []ImageSource) ([]messages.ImagePart, error) {
+		got = append([]ImageSource(nil), sources...)
+		return []messages.ImagePart{{Bytes: append([]byte(nil), sources[0].Bytes...), MediaType: imagePNGMediaType}}, nil
 	})
 
-	msgs, err := tool.Execute(context.Background(), map[string]any{"path": "fixtures/known.png"})
+	msgs, err := tool.Execute(context.Background(), map[string]any{"path": path})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
-	if len(gotPaths) != 1 || gotPaths[0] != "fixtures/known.png" {
-		t.Fatalf("preparer paths = %#v, want the exact path argument", gotPaths)
+	if len(got) != 1 || got[0].Path != path || !bytes.Equal(got[0].Bytes, wantBytes) {
+		t.Fatalf("preparer sources = %#v, want the exact path argument and the file's bytes", got)
 	}
 	if len(msgs) != 1 || msgs[0].Role != messages.RoleTool || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("messages = %#v, want one tool message with envelope and image parts", msgs)
@@ -78,10 +82,10 @@ func TestReadImageTool_SuccessEnvelopeSizeIsIndependentOfImageSize(t *testing.T)
 
 func assertImageEnvelopeSize(t *testing.T, name string, imageBytes []byte) {
 	t.Helper()
-	tool := NewReadImageTool(func([]string) ([]messages.ImagePart, error) {
+	tool := NewReadImageTool(func([]ImageSource) ([]messages.ImagePart, error) {
 		return []messages.ImagePart{{Bytes: imageBytes, MediaType: imagePNGMediaType}}, nil
 	})
-	got, err := tool.Execute(context.Background(), map[string]any{"path": name + ".png"})
+	got, err := tool.Execute(context.Background(), map[string]any{"path": writeImageFixture(t, name+".png", imageBytes)})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -150,10 +154,10 @@ func TestReadImageTool_RejectsInvalidPreparerContentWithVersionedError(t *testin
 		"wrong mime": {Bytes: minimalPNG(), MediaType: "text/plain"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tool := NewReadImageTool(func([]string) ([]messages.ImagePart, error) {
+			tool := NewReadImageTool(func([]ImageSource) ([]messages.ImagePart, error) {
 				return []messages.ImagePart{part}, nil
 			})
-			msgs, err := tool.Execute(context.Background(), map[string]any{"path": "fixture.png"})
+			msgs, err := tool.Execute(context.Background(), map[string]any{"path": writeImageFixture(t, "fixture.png", minimalPNG())})
 			if err != nil {
 				t.Fatalf("Execute returned Go error: %v", err)
 			}
@@ -163,6 +167,29 @@ func TestReadImageTool_RejectsInvalidPreparerContentWithVersionedError(t *testin
 			}
 		})
 	}
+}
+
+func writeImageFixture(t *testing.T, name string, data []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write image fixture: %v", err)
+	}
+	return path
+}
+
+func TestReadImageTool_ReportsAMissingImageWithoutCallingThePreparer(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.png")
+	tool := NewReadImageTool(func([]ImageSource) ([]messages.ImagePart, error) {
+		t.Fatal("preparer called for a missing image")
+		return nil, nil
+	})
+	msgs, err := tool.Execute(context.Background(), map[string]any{"path": missing})
+	if err != nil {
+		t.Fatalf("Execute returned Go error: %v", err)
+	}
+	_, readErr := os.ReadFile(missing)
+	assertReadImageErrorEnvelope(t, msgs[0].TextContent(), fmt.Sprintf("session image %q is missing: %v", missing, readErr))
 }
 
 func assertReadImageErrorEnvelope(t *testing.T, encoded, wantError string) ReadImageResult {

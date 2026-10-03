@@ -13,6 +13,7 @@ import (
 	runtimeProvidersWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 type imageAdmissionCase struct {
@@ -60,7 +61,7 @@ func assertImageAdmissionCase(t *testing.T, test imageAdmissionCase) {
 		}
 	}
 	opened := 0
-	var toolOpen ImageOpener
+	var toolOpen ImageDecoder
 	deps := RequestDependencies{
 		InstructionService: runtimeSessionWire.NewInstructionService(),
 		ModelCatalog:       runtimeProvidersWire.NewModelCatalog(),
@@ -75,7 +76,14 @@ func assertImageAdmissionCase(t *testing.T, test imageAdmissionCase) {
 		Capabilities: func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error) {
 			return &runtimeSession.LiveCapabilities{}, nil
 		},
-		BindImagePreparer: func(executor messages.ToolExecutor, bound ImageOpener) messages.ToolExecutor {
+		DecodeImages: func(sources []runtimeTools.ImageSource) ([]messages.ContentPart, error) {
+			parts := make([]messages.ContentPart, len(sources))
+			for index := range sources {
+				parts[index] = messages.ImagePart{Bytes: sources[index].Bytes, MediaType: test.mediaType}
+			}
+			return parts, nil
+		},
+		BindImagePreparer: func(executor messages.ToolExecutor, bound ImageDecoder) messages.ToolExecutor {
 			toolOpen = bound
 			return executor
 		},
@@ -90,7 +98,7 @@ func assertImageAdmissionCase(t *testing.T, test imageAdmissionCase) {
 	if _, err := BuildRequest(context.Background(), request, nil, deps); err != nil || toolOpen == nil {
 		t.Fatalf("BuildRequest without images: err=%v, read_image bound=%t", err, toolOpen != nil)
 	}
-	_, toolErr := toolOpen([]string{"photo.png"})
+	_, toolErr := toolOpen([]runtimeTools.ImageSource{{Path: "photo.png", Bytes: []byte("image")}})
 	assertImageAdmission(t, "read_image", toolErr, test.wantErr)
 
 	opened = 0
