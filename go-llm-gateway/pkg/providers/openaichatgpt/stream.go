@@ -117,13 +117,13 @@ type toolCallState struct {
 // streamState translates one Responses stream into gateway stream messages.
 type streamState struct {
 	ch chan<- messages.StreamMessage
-	// replay keeps reasoning items for the next request; nil keeps none.
-	replay *reasoningReplay
-	// pendingReasoning holds this response's reasoning items until the
-	// function call they precede completes.
-	pendingReasoning []json.RawMessage
-	open             blockKind
-	textItems        map[string]bool // message items whose text arrived as deltas
+	// layout is this response's output items in order, kept for replay when
+	// the response completes.
+	layout turnLayout
+	// pendingText is the text emitted since the last output item ended.
+	pendingText strings.Builder
+	open        blockKind
+	textItems   map[string]bool // message items whose text arrived as deltas
 	// untrackedText marks deltas without an item id since the last message
 	// item completed.
 	untrackedText bool
@@ -143,8 +143,10 @@ type streamState struct {
 // body is watched for idleness: when no byte arrives for idleTimeout (zero
 // disables the watch) the body is closed and the turn fails with
 // ErrStreamIdle, as Codex fails a stream after stream_idle_timeout.
-func translateStream(body io.Reader, closeBody func() error, ch chan<- messages.StreamMessage, idleTimeout time.Duration, replay *reasoningReplay) {
-	state := &streamState{ch: ch, replay: replay, textItems: map[string]bool{}, toolCalls: map[int]*toolCallState{}}
+//
+// A response that completes without error is kept in keep.store for replay.
+func translateStream(body io.Reader, closeBody func() error, ch chan<- messages.StreamMessage, idleTimeout time.Duration, keep replayTarget) {
+	state := &streamState{ch: ch, textItems: map[string]bool{}, toolCalls: map[int]*toolCallState{}}
 	state.emit(messages.StreamTypeMessageStart, messages.NewMessageStartValue())
 	watched := watchIdle(body, closeBody, idleTimeout)
 	readErr := readSSE(watched, state.handleData)
@@ -157,6 +159,8 @@ func translateStream(body io.Reader, closeBody func() error, ch chan<- messages.
 	}
 	if state.err != nil {
 		state.emit(messages.StreamTypeError, providers.NewStreamErrorValue(state.err))
+	} else {
+		keep.store.remember(keep.prefix, state.layout)
 	}
 	if state.refusal.Len() > 0 {
 		state.emit(messages.StreamTypeRefusal, messages.NewRefusalValue(state.refusal.String()))
@@ -278,7 +282,22 @@ func (s *streamState) textDelta(itemID, delta string) {
 		s.untrackedText = true
 	}
 	s.transition(blockText)
-	s.emit(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(delta))
+	s.emitText(delta)
+}
+
+// emitText emits a text delta and keeps it for the turn layout.
+func (s *streamState) emitText(text string) {
+	s.pendingText.WriteString(text)
+	s.emit(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(text))
+}
+
+// endText adds the text emitted since the last output item to the layout.
+func (s *streamState) endText() {
+	if s.pendingText.Len() == 0 {
+		return
+	}
+	s.layout = append(s.layout, replayBlock{kind: replayText, text: s.pendingText.String()})
+	s.pendingText.Reset()
 }
 
 func (s *streamState) startToolCall(index int, item *outputItem) {
@@ -327,15 +346,14 @@ func (s *streamState) itemDone(index int, item *outputItem) {
 			call.args = item.Arguments
 		}
 		s.ch <- messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: index, Value: messages.NewToolCallEndValue(call.callID, call.name, call.args)}
-		if len(s.pendingReasoning) > 0 {
-			s.replay.remember(call.callID, s.pendingReasoning)
-			s.pendingReasoning = nil
-		}
+		s.endText()
+		s.layout = append(s.layout, replayBlock{kind: replayCall, callID: call.callID})
 	case itemTypeMessage:
 		s.messageDone(item)
 	case itemTypeReasoning:
+		s.endText()
 		if replayable := replayableReasoning(item); replayable != nil {
-			s.pendingReasoning = append(s.pendingReasoning, replayable)
+			s.layout = append(s.layout, replayBlock{kind: replayReasoning, reasoning: replayable})
 		}
 		if s.open == blockReasoning {
 			s.transition(blockNone)
@@ -351,7 +369,7 @@ func (s *streamState) messageDone(item *outputItem) {
 		case partTypeOutputText:
 			if !streamed && part.Text != "" {
 				s.transition(blockText)
-				s.emit(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(part.Text))
+				s.emitText(part.Text)
 			}
 		case partTypeRefusal:
 			if !streamed {
@@ -359,6 +377,7 @@ func (s *streamState) messageDone(item *outputItem) {
 			}
 		}
 	}
+	s.endText()
 	if s.open == blockText {
 		s.transition(blockNone)
 	}
@@ -396,6 +415,7 @@ func (s *streamState) incomplete(response *responseObject) {
 // did.
 func (s *streamState) finish(readErr error) {
 	s.transition(blockNone)
+	s.endText()
 	switch {
 	case s.err != nil:
 	case errors.Is(readErr, ErrStreamIdle):

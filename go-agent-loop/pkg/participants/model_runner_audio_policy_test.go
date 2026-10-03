@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -561,4 +562,69 @@ func TestSessionModelRunner_OrdinaryResponseCreateDoesNotArmContinuation(t *test
 	if state.Continuation.Requested() || state.Continuation.Bound() {
 		t.Fatalf("ordinary response.create armed the continuation binding: %+v", state)
 	}
+}
+
+// activePlaybackSession is a provider session whose local playback stays
+// active, so a speech onset with no response in flight would interrupt it.
+// It counts InterruptLocalPlayback calls from the runner goroutine.
+type activePlaybackSession struct {
+	*recordingSession
+	interrupts atomic.Int32
+}
+
+func (*activePlaybackSession) InputAudioSampleRate() int   { return 24000 }
+func (*activePlaybackSession) ProviderTurnDetection() bool { return false }
+func (*activePlaybackSession) LocalPlayback() messages.LocalPlaybackState {
+	return messages.LocalPlaybackState{Active: true, Level: 1500}
+}
+
+func (s *activePlaybackSession) InterruptLocalPlayback(context.Context) bool {
+	s.interrupts.Add(1)
+	return true
+}
+
+// Peer-agent audio (do_not_interrupt) arriving through the running runner
+// while the agent's last reply is still playing locally must not stop that
+// playback, however loud it is. The same frame with the interrupt policy
+// does, which proves the session is in the state where an onset would.
+func TestSessionModelRunner_DoNotInterruptAudioLeavesActivePlaybackPlaying(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := &activePlaybackSession{recordingSession: newRecordingSession()}
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 64, nil)
+		ctx, stop := context.WithCancel(t.Context())
+		ran := make(chan error, 1)
+		go func() { ran <- runner.Run(ctx) }()
+		go func() {
+			for _, ok := runner.DeltaOutbox.ReadBlockingContext(ctx); ok; _, ok = runner.DeltaOutbox.ReadBlockingContext(ctx) {
+			}
+		}()
+		// The response is done but its audio is still playing locally.
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: "resp-done", Value: messages.NewMessageStartValue()})
+		session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp-done", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		synctest.Wait()
+
+		const peerFrames = 20 // one second of loud peer speech
+		for range peerFrames {
+			if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmAtLevel(8000), messages.SessionAudioInputPolicyDoNotInterrupt), SessionAdmitWaiting); err != nil {
+				t.Fatalf("queue peer audio: %v", err)
+			}
+		}
+		synctest.Wait()
+		if got := countSent(session.sentMessages(), messages.StreamTypeAudioDelta); got != peerFrames {
+			t.Fatalf("forwarded %d peer frames, want %d", got, peerFrames)
+		}
+		if got := session.interrupts.Load(); got != 0 {
+			t.Fatalf("do_not_interrupt audio called InterruptLocalPlayback %d times, want 0", got)
+		}
+
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmAtLevel(8000), messages.SessionAudioInputPolicyInterrupt), SessionAdmitWaiting); err != nil {
+			t.Fatalf("queue user audio: %v", err)
+		}
+		synctest.Wait()
+		if got := session.interrupts.Load(); got != 1 {
+			t.Fatalf("interrupting audio called InterruptLocalPlayback %d times, want 1", got)
+		}
+		stop()
+		<-ran
+	})
 }

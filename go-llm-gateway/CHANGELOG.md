@@ -215,6 +215,24 @@
 
 ### Fixed
 
+- `openai-chatgpt` replays each earlier model turn in its original item
+  order, OpenClaw's block order: a response shaped reasoning, message,
+  function_call goes back in that order (the assistant text used to go first
+  and the reasoning after it). The reasoning before a final text-only answer
+  is no longer dropped; it goes back before that answer in the next user
+  turn. Replayed reasoning still carries no `id`. The provider keeps each
+  completed turn's items for the life of the `Provider`, keyed by the first
+  call_id or, for a text-only answer, by its text and a fingerprint of the
+  whole conversation before it (system prompts, text, image URLs or byte
+  digests, tool calls), so conversations sharing one `Provider` (a
+  session's delegations) never replay each other's reasoning; a history that no longer matches the
+  kept turn falls back to text first and each call's reasoning before it.
+  Only a response that completes without error is kept.
+- `fakelive`: a step after `AwaitClient` is now written after the server's
+  ack or error for the awaited event. The waiting step used to be woken when
+  the event was counted, before it was handled, so its `Send` could overtake
+  the ack (`TestAwaitClientBlocksUntilTheEventArrivesOrTheConnectionEnds`
+  saw Info before InputAudioMuted in about 1 run in 370 under load).
 - A text request no longer ends on an assistant message. Claude 4.6 and
   later (including the default `claude-opus-4-6` and `claude-sonnet-4-6`)
   reject a trailing assistant message as a prefill with a 400; a bare

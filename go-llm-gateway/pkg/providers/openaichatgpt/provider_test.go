@@ -581,3 +581,34 @@ func TestReasoningCarriesAcrossAToolStep(t *testing.T) {
 		t.Fatalf("second request input = %v, want user, reasoning(enc-9), function_call, function_call_output", body.Input)
 	}
 }
+
+func TestReasoningBeforeAFinalAnswerCarriesIntoTheNextUserTurn(t *testing.T) {
+	h := newHarness(t)
+	h.fake.Enqueue(fakechatgpt.Reply{Events: []string{
+		`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_7","summary":[],"encrypted_content":"enc-7"}}`,
+		`{"type":"response.output_text.delta","item_id":"msg_7","delta":"Hello."}`,
+		`{"type":"response.output_item.done","output_index":1,"item":{"type":"message","id":"msg_7","role":"assistant","content":[{"type":"output_text","text":"Hello."}]}}`,
+		`{"type":"response.completed","response":{}}`,
+	}}, fakechatgpt.TextReply("bye"))
+
+	first, err := h.provider.Infer(t.Context(), userPrompt("hi"))
+	if err != nil {
+		t.Fatalf("first Infer: %v", err)
+	}
+	conversation := []models.Message{messages.NewTextMessage(models.RoleUser, "hi"), first.Message, messages.NewTextMessage(models.RoleUser, "thanks")}
+	if _, err := h.provider.Infer(t.Context(), providers.InferenceRequest{Messages: conversation}); err != nil {
+		t.Fatalf("second Infer: %v", err)
+	}
+	var body struct {
+		Input []map[string]any `json:"input"`
+	}
+	if err := json.Unmarshal(h.fake.Requests()[1].Body, &body); err != nil {
+		t.Fatalf("decode second request: %v", err)
+	}
+	if len(body.Input) != 4 || body.Input[1]["type"] != "reasoning" || body.Input[1]["encrypted_content"] != "enc-7" || body.Input[2]["role"] != "assistant" {
+		t.Fatalf("second request input = %v, want user, reasoning(enc-7), assistant message, user", body.Input)
+	}
+	if _, hasID := body.Input[1]["id"]; hasID {
+		t.Fatalf("replayed reasoning %v carries an id", body.Input[1])
+	}
+}

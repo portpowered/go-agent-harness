@@ -2,6 +2,7 @@ package fakelive_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -202,6 +203,32 @@ func TestAwaitClientBlocksUntilTheEventArrivesOrTheConnectionEnds(t *testing.T) 
 			t.Fatalf("errors = %v, want a quiet stop", errs)
 		}
 	})
+}
+
+// TestAwaitedStepsFollowTheAckOfTheEventTheyAwaited: a step after
+// AwaitClient is written after the server's answer to the awaited event,
+// never before it. Before the fix the step was woken when the event was
+// counted, ahead of its ack, and overtook it in about 1 run in 370 under
+// load; many connections at once make that window easy to hit.
+func TestAwaitedStepsFollowTheAckOfTheEventTheyAwaited(t *testing.T) {
+	t.Parallel()
+	server := fakelive.New(fakelive.WithScript(
+		fakelive.AwaitClient(live.TypeInputAudioMute, 1),
+		fakelive.Send(live.Info{Code: "muted_seen", Message: "m"}),
+	))
+	const connections = 64
+	for i := range connections {
+		t.Run(fmt.Sprintf("connection %d", i), func(t *testing.T) {
+			t.Parallel()
+			c := dial(t, server)
+			c.start(liveConfig())
+			c.send(live.InputAudioMute{EventID: "m1"})
+			expect[live.InputAudioMuted](c)
+			if info := expect[live.Info](c); info.Code != "muted_seen" {
+				t.Fatalf("info = %#v", info)
+			}
+		})
+	}
 }
 
 func TestScriptedCloseSendsTheReasonThenClosesTheSocket(t *testing.T) {

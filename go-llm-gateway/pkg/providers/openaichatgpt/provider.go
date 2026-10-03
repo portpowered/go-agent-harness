@@ -166,7 +166,7 @@ func (p *Provider) InferStream(ctx context.Context, req providers.InferenceReque
 	if err != nil {
 		return nil, err
 	}
-	body, err := marshalRequest(req, model, p.sessionID, p.replay)
+	body, prefix, err := marshalRequest(req, model, p.sessionID, p.replay)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (p *Provider) InferStream(ctx context.Context, req providers.InferenceReque
 	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		defer close(ch)
-		translateStream(stream, stream.Close, ch, p.idleTimeout, p.replay)
+		translateStream(stream, stream.Close, ch, p.idleTimeout, replayTarget{store: p.replay, prefix: prefix})
 	}()
 	return ch, nil
 }

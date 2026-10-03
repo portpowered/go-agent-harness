@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -36,6 +38,16 @@ const (
 	// linear scale) for recorded reply audio established by the depth-3 proof:
 	// voiced speech measures ~2000, digital silence measures 0.
 	observabilityRMSThreshold = 500.0
+
+	// observabilityMaxDuration bounds the replayed session. An unpaced run
+	// finishes in well under a second, so reaching the bound means the
+	// session hung; --max-duration then ends it cleanly and the recorder
+	// still finalizes the bundle the failure describes.
+	observabilityMaxDuration = 30 * time.Second
+
+	// observabilityShutdownGrace is how long the command may take to return
+	// after the bound before the context deadline cancels it.
+	observabilityShutdownGrace = 30 * time.Second
 )
 
 func observabilityInputTranscripts() []string {
@@ -221,7 +233,7 @@ func observabilityJSONPayload(t *testing.T, value map[string]any) json.RawMessag
 func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [][]byte {
 	t.Helper()
 
-	args := []string{"--replay", fixturePath, "--record-dir", recordDir, "--audio-in-pacing", "unpaced"}
+	args := []string{"--replay", fixturePath, "--record-dir", recordDir, "--audio-in-pacing", "unpaced", "--max-duration", observabilityMaxDuration.String()}
 	references := make([][]byte, 0, observabilityTurnCount)
 	for turn := 1; turn <= observabilityTurnCount; turn++ {
 		wavPath := locateCLIFixture(t, multiturnTurnWAVs()[turn-1])
@@ -233,10 +245,49 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(os.Stderr)
 	cmd.SetArgs(append([]string{"session"}, args...))
-	if err := cmd.ExecuteContext(t.Context()); err != nil {
-		t.Fatalf("multi-turn session command over replay: %v", err)
+	ctx, cancel := context.WithTimeout(t.Context(), observabilityMaxDuration+observabilityShutdownGrace)
+	defer cancel()
+	started := time.Now()
+	err := cmd.ExecuteContext(ctx)
+	elapsed := time.Since(started)
+	if err != nil {
+		t.Fatalf("multi-turn session command over replay after %s: %v\n%s", elapsed, err, describeRecordingBundle(recordDir))
+	}
+	if elapsed >= observabilityMaxDuration {
+		t.Fatalf("multi-turn session hung: --max-duration %s ended it\n%s", observabilityMaxDuration, describeRecordingBundle(recordDir))
 	}
 	return references
+}
+
+// describeRecordingBundle summarizes what a bounded or failed session left
+// in recordDir: its files and the turns its session log recorded.
+func describeRecordingBundle(recordDir string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "recording bundle %s:", recordDir)
+	walkErr := filepath.WalkDir(recordDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(recordDir, path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(&b, "\n  %s (%d bytes)", rel, info.Size())
+		return nil
+	})
+	if walkErr != nil {
+		fmt.Fprintf(&b, "\n  unreadable: %v", walkErr)
+	}
+	if log, err := os.ReadFile(filepath.Join(recordDir, "session-log.jsonl")); err == nil {
+		for _, line := range bytes.Split(bytes.TrimSpace(log), []byte("\n")) {
+			fmt.Fprintf(&b, "\n  session log: %s", line)
+		}
+	}
+	return b.String()
 }
 
 // observabilityReferenceUtterance returns the exact normalized PCM16 byte

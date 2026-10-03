@@ -113,7 +113,11 @@ func (sess *session) handleFrame(payload []byte) bool {
 		return false
 	}
 	sess.server.recordEvent(event)
-	sess.count(event.EventType())
+	// Steps awaiting this event run only after the server has answered it
+	// (its ack or error is written), as steps waiting for the start run only
+	// after session.started is written. Counting first let a waiting step's
+	// Send overtake the ack of the very event it waited for.
+	defer sess.count(event.EventType())
 	if !sess.isStarted() {
 		sess.handleStart(event, payload)
 		return false
