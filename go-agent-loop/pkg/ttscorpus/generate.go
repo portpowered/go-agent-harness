@@ -85,12 +85,16 @@ func NewGenerator(endpoint string) *Generator {
 }
 
 // WaitReady polls /readyz until it answers 200 or the bounded timeout elapses;
-// the observed error is always surfaced so failures are never silent.
+// the observed error is always surfaced so failures are never silent. Each
+// probe is itself bounded by the readiness deadline, so a backend that
+// accepts the probe and never answers cannot stall WaitReady past it.
 func (g *Generator) WaitReady(ctx context.Context) error {
 	deadline := time.Now().Add(g.ReadyTimeout)
+	probeCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
 	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.Endpoint+"/readyz", nil)
+		req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, g.Endpoint+"/readyz", nil)
 		if err != nil {
 			return fmt.Errorf("ttscorpus: build readiness probe: %w", err)
 		}

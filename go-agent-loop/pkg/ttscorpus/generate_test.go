@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
-	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -87,26 +90,64 @@ func TestSynthesizeNeverFabricatesAudioOnBackendFailure(t *testing.T) {
 	}
 }
 
+// roundTripFunc serves readiness probes in memory, so a probe takes no
+// time on the synctest clock and the deadline arithmetic is exact.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func statusResponse(r *http.Request, status int) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader("warming up")),
+		Request:    r,
+	}
+}
+
 // WaitReady surfaces the last observed probe error, and its poll wait is
 // clamped to the readiness deadline: with an hour-long poll interval it
-// still re-probes and fails once the 20ms deadline passes.
+// still re-probes exactly at the 20ms deadline and then fails.
 func TestWaitReadySurfacesObservedError(t *testing.T) {
-	var probes atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		probes.Add(1)
-		http.Error(w, "warming up", http.StatusServiceUnavailable)
-	}))
-	defer server.Close()
-	gen := NewGenerator(server.URL)
-	gen.ReadyTimeout = 20 * time.Millisecond
-	gen.ReadyPollInterval = time.Hour
-	err := gen.WaitReady(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "503") {
-		t.Fatalf("WaitReady() error = %v; want bounded failure naming observed status", err)
-	}
-	if got := probes.Load(); got < 2 {
-		t.Fatalf("readiness probes = %d, want a re-probe at the clamped deadline", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var probes []time.Duration
+		start := time.Now()
+		gen := NewGenerator("http://backend.invalid")
+		gen.Client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			probes = append(probes, time.Since(start))
+			return statusResponse(r, http.StatusServiceUnavailable), nil
+		})}
+		gen.ReadyTimeout = 20 * time.Millisecond
+		gen.ReadyPollInterval = time.Hour
+		err := gen.WaitReady(context.Background())
+		if err == nil || !strings.Contains(err.Error(), "503") {
+			t.Fatalf("WaitReady() error = %v; want bounded failure naming observed status", err)
+		}
+		want := []time.Duration{0, 20 * time.Millisecond}
+		if !slices.Equal(probes, want) {
+			t.Fatalf("readiness probes at %v, want %v (a re-probe at the clamped deadline)", probes, want)
+		}
+	})
+}
+
+// A backend that accepts the readiness probe and never answers cannot hold
+// WaitReady past ReadyTimeout: the probe itself carries the deadline.
+func TestWaitReadyBoundsAHungProbe(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		gen := NewGenerator("http://backend.invalid")
+		gen.Client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		})}
+		gen.ReadyTimeout = 20 * time.Millisecond
+		err := gen.WaitReady(context.Background())
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("WaitReady() error = %v; want the hung probe cut off at the readiness deadline", err)
+		}
+		if elapsed := time.Since(start); elapsed != gen.ReadyTimeout {
+			t.Fatalf("WaitReady() returned after %v, want exactly ReadyTimeout %v", elapsed, gen.ReadyTimeout)
+		}
+	})
 }
 
 func TestEmitManifestHashesClosedSet(t *testing.T) {
